@@ -8,6 +8,7 @@ import {
   IconAcademicCap,
   IconBookOpen,
   IconBriefcase,
+  IconChartBar,
   IconClipboardCheck,
   IconClipboardList,
   IconGraduate,
@@ -33,6 +34,7 @@ const NAV_ICONS: Record<
   "/attendance/history": IconHistory,
   "/my-attendance": IconUserCheck,
   "/staff-attendance": IconClipboardList,
+  "/reports": IconChartBar,
 };
 
 export function AppShell() {

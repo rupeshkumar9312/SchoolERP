@@ -222,3 +222,13 @@ model TeacherAttendance {
   @@unique([teacherId, date])
   @@map("teacher_attendance")
 }
+
+/// A non-teaching day, excluded from attendance % calculations in Reports.
+model Holiday {
+  id        Int      @id @default(autoincrement())
+  date      DateTime @unique @db.Date
+  name      String
+  createdAt DateTime @default(now())
+
+  @@map("holidays")
+}

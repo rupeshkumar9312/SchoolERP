@@ -12,6 +12,7 @@ import { MarkAttendancePage } from './pages/MarkAttendancePage';
 import { MyAttendancePage } from './pages/MyAttendancePage';
 import { MyClassesPage } from './pages/MyClassesPage';
 import { MyStudentsPage } from './pages/MyStudentsPage';
+import { ReportsPage } from './pages/ReportsPage';
 import { StaffAttendancePage } from './pages/StaffAttendancePage';
 import { StudentFormPage } from './pages/StudentFormPage';
 import { StudentsBulkImportPage } from './pages/StudentsBulkImportPage';
@@ -86,6 +87,10 @@ function App() {
               <Route path="/my-attendance" element={<MyAttendancePage />} />
               <Route element={<ProtectedRoute permission="teacher.view" />}>
                 <Route path="/staff-attendance" element={<StaffAttendancePage />} />
+              </Route>
+
+              <Route element={<ProtectedRoute permission="academic.view" />}>
+                <Route path="/reports" element={<ReportsPage />} />
               </Route>
             </Route>
           </Route>

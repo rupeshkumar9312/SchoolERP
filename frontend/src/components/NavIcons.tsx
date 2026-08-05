@@ -106,3 +106,15 @@ export function IconClipboardList(props: IconProps) {
     </svg>
   );
 }
+
+export function IconChartBar(props: IconProps) {
+  return (
+    <svg {...common} {...props}>
+      <path d="M4 20V4" />
+      <path d="M4 20h16" />
+      <rect x="7" y="13" width="3" height="7" rx="0.6" />
+      <rect x="12.5" y="9" width="3" height="11" rx="0.6" />
+      <rect x="17" y="6" width="3" height="14" rx="0.6" />
+    </svg>
+  );
+}

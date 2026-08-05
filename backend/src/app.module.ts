@@ -6,7 +6,9 @@ import { AuthModule } from './auth/auth.module';
 import { validateEnv } from './config/env.validation';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { HealthModule } from './health/health.module';
+import { HolidaysModule } from './holidays/holidays.module';
 import { PrismaModule } from './prisma/prisma.module';
+import { ReportsModule } from './reports/reports.module';
 import { RolesModule } from './roles/roles.module';
 import { StudentsModule } from './students/students.module';
 import { TeachersModule } from './teachers/teachers.module';
@@ -28,6 +30,8 @@ import { UsersModule } from './users/users.module';
     StudentsModule,
     AttendanceModule,
     DashboardModule,
+    HolidaysModule,
+    ReportsModule,
   ],
 })
 export class AppModule {}

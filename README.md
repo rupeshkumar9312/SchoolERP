@@ -1,6 +1,6 @@
 # School ERP
 
-A school management system built module by module. Current state: **Module 8 (Dashboards) complete** — logging in now lands on a populated, role-specific dashboard instead of a placeholder: school-wide stats and quick links for admins, today's classes/attendance status/homeroom shortcuts for teachers. The MVP (Modules 6–7) shipped before this; everything from here improves the experience but isn't blocking.
+A school management system built module by module. Current state: **Module 9 (Reports) complete** — admins can pull an attendance % breakdown by class/student, a below-threshold defaulters list, and a staff attendance summary, each over a filterable date range that excludes holidays. The MVP (Modules 6–7) shipped before this; everything from here improves the experience but isn't blocking.
 
 - **Backend** — NestJS 11 + Prisma 6 + PostgreSQL
 - **Frontend** — React 19 + Vite 6 + TypeScript
@@ -103,6 +103,11 @@ SchoolERP/
 │   │   │                           admin-marks-any-teacher, same-day-restricted for TEACHER
 │   │   ├── dashboard/               GET /dashboard/admin-summary (academic.view-gated),
 │   │   │                            GET /dashboard/teacher-summary (self-scoped "me" route)
+│   │   ├── holidays/                GET/POST/DELETE /holidays (academic.view/manage) — dates
+│   │   │                            excluded from Reports' attendance % calculations
+│   │   ├── reports/                 GET /reports/attendance-summary(?class_id=&section_id=&from=&to=),
+│   │   │                            /reports/defaulters(?threshold=), /reports/staff-attendance-summary
+│   │   │                            — all academic.view-gated, all default to the current UTC month
 │   │   ├── config/           env validation — fails fast on a bad .env
 │   │   ├── health/           GET /api/health
 │   │   ├── prisma/           global PrismaService (+ ping for health)
@@ -121,7 +126,9 @@ SchoolERP/
 │       │                         (+ attendance/useClassSectionScope, AttendanceStatusToggle),
 │       │                         MyAttendancePage (teacher self-mark), StaffAttendancePage
 │       │                         (admin sheet, filterable by date), dashboard/AdminDashboard,
-│       │                         dashboard/TeacherDashboard (DashboardHome picks one by role)
+│       │                         dashboard/TeacherDashboard (DashboardHome picks one by role),
+│       │                         ReportsPage (tabbed: summary/defaulters/staff, CSV export,
+│       │                         AcademicSetupPage grew a Holidays panel to feed it)
 │       └── shell/                topbar + permission-and-role-driven sidebar
 │                                  (nav-config.ts), mobile drawer under 768px
 ├── .github/workflows/ci.yml
@@ -176,6 +183,11 @@ SchoolERP/
 - Dashboard aggregate endpoints follow the same two patterns already established rather than inventing a third: `GET /dashboard/admin-summary` is gated with an existing broad "you're staff, not a bare TEACHER" permission (`academic.view`, same trick as `StaffAttendancePage`'s `teacher.view`) instead of a new `dashboard.*` permission; `GET /dashboard/teacher-summary` is an unguarded "me" route (like `/teachers/me/assignments`) scoped from the caller's own `Teacher` row. `DashboardHome.tsx` picks which dashboard to render the same way `useClassSectionScope` picks a data source: `hasPermission('academic.view')` for admin, else role `=== 'TEACHER'`.
 - `DashboardService.getAdminSummary()` scopes student/class/section headline counts to the `AcademicYear` with `isCurrent: true` (falls back to unscoped if none is set) so stale prior-year data doesn't inflate "how big is the school right now" — but teacher counts and today's staff-attendance breakdown are deliberately *not* year-scoped, since `Teacher` isn't tied to an academic year in the schema. Attendance percentages are computed against records actually marked today (`totalMarked`), not total enrolled — an unmarked section reads as "no data yet," not as a wave of absences.
 - The teacher dashboard's homeroom section list reuses the identical "which sections is this teacher the class teacher of" data as the Module 6.5 fix (`Section.classTeacherId`) to decide which rows get a "Mark attendance" shortcut and an `attendanceMarkedToday` badge — computed the same way `MarkAttendancePage`'s picker is scoped, so the two screens never disagree about which classes a teacher may act on.
+- `ReportsService` reuses the dashboard's exact percentage convention (`present / totalMarked`, rounded, null when nothing's marked) rather than inventing a "% of calendar days in range" definition — a range with gaps (weekends, a day nobody marked) doesn't silently drag every student's score down, and a report and a dashboard card covering the same range never disagree. `getDefaulters()` calls `getAttendanceSummary()` internally and filters the result rather than re-deriving the aggregation.
+- Both `/reports/*` and `/holidays` reuse `academic.view`/`academic.manage` rather than adding `reports.*`/`holiday.*` permission keys — same "reuse an existing broad permission" call as the dashboard and staff-attendance screens. No seed.ts changes were needed for Module 9.
+- `Holiday` (`holidays` table, unique on `date`) exists purely to be subtracted from attendance-% denominators: `ReportsService` fetches holiday dates in range and passes them to Prisma's `notIn` on the attendance query. Manage them from Academic Setup's new "Holidays" panel (date + name, no edit — delete and re-add), not a separate page, since it's calendar config like years/classes/sections.
+- Every `/reports/*` endpoint defaults `from`/`to` to the current UTC calendar month when omitted (`ReportsService.resolveRange()`) — same UTC-not-local-time rule as `todayUtcDate()`, and it's what makes "students below 75% this month" a zero-filter, one-click screen per the Module 9 "done when."
+- CSV export on `ReportsPage` is client-side (`components/csv.ts`, a `Blob` + anchor-download) rather than a backend endpoint — the data's already loaded as JSON for the on-screen table, so exporting it is just a client-side reshape. PDF export was skipped (marked optional in the spec); revisit only if actually requested.
 
 ### Notes on this machine's toolchain
 
@@ -358,7 +370,7 @@ Goal: Give each role a useful landing page (build after data exists, so dashboar
 
 **Done when:** Logging in as each role shows a relevant, populated dashboard instead of a blank page.
 
-## MODULE 9 — Reports
+## MODULE 9 — Reports ✅
 
 Goal: Turn raw attendance data into decisions.
 
@@ -435,7 +447,7 @@ Goal: Production readiness.
 6. Student Attendance     ✅ done ─┐
 7. Teacher Attendance     ✅ done ─┘  Core feature — the reason the app exists
 8. Dashboards               ✅ done
-9. Reports
+9. Reports                  ✅ done
 10. Audit Log
 11. Notifications          (optional, can slot in anytime after Module 6)
 12. Polish & Hardening
