@@ -57,40 +57,44 @@ export function MyAttendancePage() {
         </div>
       )}
 
-      <div className="card-head">
-        <h2>Today ({today})</h2>
-      </div>
-      <AttendanceStatusToggle value={status} onChange={(next) => void onMark(next)} disabled={saving} />
+      <section className="card">
+        <div className="card-head">
+          <h2>Today ({today})</h2>
+        </div>
+        <AttendanceStatusToggle value={status} onChange={(next) => void onMark(next)} disabled={saving} />
+      </section>
 
-      <div className="card-head">
-        <h2>Recent history</h2>
-      </div>
-      {loading ? (
-        <p className="muted">Loading…</p>
-      ) : history.length === 0 ? (
-        <p className="muted">No attendance marked yet.</p>
-      ) : (
-        <table className="data-table">
-          <thead>
-            <tr>
-              <th>Date</th>
-              <th>Status</th>
-              <th>Marked by</th>
-            </tr>
-          </thead>
-          <tbody>
-            {history.slice(0, 14).map((record) => (
-              <tr key={record.id}>
-                <td data-label="Date">{record.date}</td>
-                <td data-label="Status">
-                  <span className={`badge status-badge-${record.status.toLowerCase()}`}>{record.status}</span>
-                </td>
-                <td data-label="Marked by">{record.markedBy.name}</td>
+      <section className="card">
+        <div className="card-head">
+          <h2>Recent history</h2>
+        </div>
+        {loading ? (
+          <p className="muted">Loading…</p>
+        ) : history.length === 0 ? (
+          <p className="muted">No attendance marked yet.</p>
+        ) : (
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Status</th>
+                <th>Marked by</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
+            </thead>
+            <tbody>
+              {history.slice(0, 14).map((record) => (
+                <tr key={record.id}>
+                  <td data-label="Date">{record.date}</td>
+                  <td data-label="Status">
+                    <span className={`badge status-badge-${record.status.toLowerCase()}`}>{record.status}</span>
+                  </td>
+                  <td data-label="Marked by">{record.markedBy.name}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </section>
     </>
   );
 }

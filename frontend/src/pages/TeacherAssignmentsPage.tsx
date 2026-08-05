@@ -175,9 +175,11 @@ export function TeacherAssignmentsPage() {
                   <td data-label="Class">{a.class.name}</td>
                   <td data-label="Section">{a.section.name}</td>
                   <td data-label="Subject">{a.subject.name}</td>
-                  <td data-label="Class teacher?">{a.isClassTeacher ? 'Yes' : '—'}</td>
+                  <td data-label="Class teacher?">
+                    {a.isClassTeacher ? <span className="badge">Yes</span> : '—'}
+                  </td>
                   <td data-label="Actions">
-                    <button onClick={() => void onRemove(a)} disabled={removingId === a.id}>
+                    <button className="danger" onClick={() => void onRemove(a)} disabled={removingId === a.id}>
                       {removingId === a.id ? 'Removing…' : 'Remove'}
                     </button>
                   </td>
@@ -209,6 +211,7 @@ export function TeacherAssignmentsPage() {
                   <td data-label="Section">{c.section.name}</td>
                   <td data-label="Actions">
                     <button
+                      className="danger"
                       onClick={() => void onRemoveClassTeacher(c.section.id)}
                       disabled={removingSectionId === c.section.id}
                     >

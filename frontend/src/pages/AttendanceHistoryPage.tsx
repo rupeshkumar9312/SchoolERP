@@ -151,36 +151,38 @@ export function AttendanceHistoryPage() {
       ) : records.length === 0 ? (
         <p className="muted">No attendance marked for this date yet.</p>
       ) : (
-        <table className="data-table">
-          <thead>
-            <tr>
-              <th>Admission No.</th>
-              <th>Name</th>
-              <th>Status</th>
-              <th>Marked by</th>
-            </tr>
-          </thead>
-          <tbody>
-            {records.map((record) => (
-              <tr key={record.id}>
-                <td data-label="Admission No.">{record.student.admissionNo}</td>
-                <td data-label="Name">{record.student.name}</td>
-                <td data-label="Status">
-                  {canEdit ? (
-                    <AttendanceStatusToggle
-                      value={record.status}
-                      onChange={(status) => void onEdit(record, status)}
-                      disabled={savingId === record.id}
-                    />
-                  ) : (
-                    <span className={`badge status-badge-${record.status.toLowerCase()}`}>{record.status}</span>
-                  )}
-                </td>
-                <td data-label="Marked by">{record.markedBy.name}</td>
+        <div className="card">
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>Admission No.</th>
+                <th>Name</th>
+                <th>Status</th>
+                <th>Marked by</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {records.map((record) => (
+                <tr key={record.id}>
+                  <td data-label="Admission No.">{record.student.admissionNo}</td>
+                  <td data-label="Name">{record.student.name}</td>
+                  <td data-label="Status">
+                    {canEdit ? (
+                      <AttendanceStatusToggle
+                        value={record.status}
+                        onChange={(status) => void onEdit(record, status)}
+                        disabled={savingId === record.id}
+                      />
+                    ) : (
+                      <span className={`badge status-badge-${record.status.toLowerCase()}`}>{record.status}</span>
+                    )}
+                  </td>
+                  <td data-label="Marked by">{record.markedBy.name}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
     </>
   );

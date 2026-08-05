@@ -84,45 +84,53 @@ export function UsersListPage() {
       ) : users.length === 0 ? (
         <p className="muted">No users found.</p>
       ) : (
-        <table className="data-table">
-          <thead>
-            <tr>
-              <th>Name</th>
-              <th>Email</th>
-              <th>Phone</th>
-              <th>Role</th>
-              <th>Status</th>
-              {(hasPermission('user.edit') || hasPermission('user.delete')) && <th>Actions</th>}
-            </tr>
-          </thead>
-          <tbody>
-            {users.map((user) => (
-              <tr key={user.id}>
-                <td data-label="Name">{user.name}</td>
-                <td data-label="Email">{user.email}</td>
-                <td data-label="Phone">{user.phone ?? '—'}</td>
-                <td data-label="Role">{user.role.name}</td>
-                <td data-label="Status">{user.isActive ? 'Active' : 'Inactive'}</td>
-                {(hasPermission('user.edit') || hasPermission('user.delete')) && (
-                  <td data-label="Actions">
-                    <div className="row-actions">
-                      {hasPermission('user.edit') && (
-                        <Link to={`/users/${user.id}/edit`}>
-                          <button>Edit</button>
-                        </Link>
-                      )}
-                      {hasPermission('user.delete') && (
-                        <button onClick={() => void onDelete(user)} disabled={deletingId === user.id}>
-                          {deletingId === user.id ? 'Deleting…' : 'Delete'}
-                        </button>
-                      )}
-                    </div>
-                  </td>
-                )}
+        <div className="card">
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Email</th>
+                <th>Phone</th>
+                <th>Role</th>
+                <th>Status</th>
+                {(hasPermission('user.edit') || hasPermission('user.delete')) && <th>Actions</th>}
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {users.map((user) => (
+                <tr key={user.id}>
+                  <td data-label="Name">{user.name}</td>
+                  <td data-label="Email">{user.email}</td>
+                  <td data-label="Phone">{user.phone ?? '—'}</td>
+                  <td data-label="Role">
+                    <span className="role-chip">{user.role.name}</span>
+                  </td>
+                  <td data-label="Status">
+                    <span className={`badge ${user.isActive ? 'status-badge-present' : 'status-badge-inactive'}`}>
+                      {user.isActive ? 'Active' : 'Inactive'}
+                    </span>
+                  </td>
+                  {(hasPermission('user.edit') || hasPermission('user.delete')) && (
+                    <td data-label="Actions">
+                      <div className="row-actions">
+                        {hasPermission('user.edit') && (
+                          <Link to={`/users/${user.id}/edit`}>
+                            <button className="secondary">Edit</button>
+                          </Link>
+                        )}
+                        {hasPermission('user.delete') && (
+                          <button className="danger" onClick={() => void onDelete(user)} disabled={deletingId === user.id}>
+                            {deletingId === user.id ? 'Deleting…' : 'Delete'}
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  )}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
     </>
   );

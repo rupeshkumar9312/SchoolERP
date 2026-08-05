@@ -137,11 +137,11 @@ export function AcademicSetupPage() {
               {canManage && (
                 <div className="row-actions">
                   {!year.isCurrent && (
-                    <button onClick={() => void setCurrent(year.id)} disabled={busyYearId === year.id}>
+                    <button className="secondary" onClick={() => void setCurrent(year.id)} disabled={busyYearId === year.id}>
                       Set current
                     </button>
                   )}
-                  <button onClick={() => void deleteYear(year)} disabled={busyYearId === year.id}>
+                  <button className="danger" onClick={() => void deleteYear(year)} disabled={busyYearId === year.id}>
                     {busyYearId === year.id ? 'Deleting…' : 'Delete'}
                   </button>
                 </div>

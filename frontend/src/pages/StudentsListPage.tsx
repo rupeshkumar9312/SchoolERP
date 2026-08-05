@@ -165,47 +165,53 @@ export function StudentsListPage() {
       ) : students.length === 0 ? (
         <p className="muted">No students found.</p>
       ) : (
-        <table className="data-table">
-          <thead>
-            <tr>
-              <th>Admission No.</th>
-              <th>Name</th>
-              <th>Class</th>
-              <th>Section</th>
-              <th>Guardian</th>
-              <th>Status</th>
-              {showActions && <th>Actions</th>}
-            </tr>
-          </thead>
-          <tbody>
-            {students.map((student) => (
-              <tr key={student.id}>
-                <td data-label="Admission No.">{student.admissionNo}</td>
-                <td data-label="Name">{student.name}</td>
-                <td data-label="Class">{student.class.name}</td>
-                <td data-label="Section">{student.section.name}</td>
-                <td data-label="Guardian">{student.guardianName ?? '—'}</td>
-                <td data-label="Status">{student.isActive ? 'Active' : 'Inactive'}</td>
-                {showActions && (
-                  <td data-label="Actions">
-                    <div className="row-actions">
-                      {canEdit && (
-                        <Link to={`/students/${student.id}/edit`}>
-                          <button>Edit</button>
-                        </Link>
-                      )}
-                      {canDelete && (
-                        <button onClick={() => void onDelete(student)} disabled={deletingId === student.id}>
-                          {deletingId === student.id ? 'Deleting…' : 'Delete'}
-                        </button>
-                      )}
-                    </div>
-                  </td>
-                )}
+        <div className="card">
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>Admission No.</th>
+                <th>Name</th>
+                <th>Class</th>
+                <th>Section</th>
+                <th>Guardian</th>
+                <th>Status</th>
+                {showActions && <th>Actions</th>}
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {students.map((student) => (
+                <tr key={student.id}>
+                  <td data-label="Admission No.">{student.admissionNo}</td>
+                  <td data-label="Name">{student.name}</td>
+                  <td data-label="Class">{student.class.name}</td>
+                  <td data-label="Section">{student.section.name}</td>
+                  <td data-label="Guardian">{student.guardianName ?? '—'}</td>
+                  <td data-label="Status">
+                    <span className={`badge ${student.isActive ? 'status-badge-present' : 'status-badge-inactive'}`}>
+                      {student.isActive ? 'Active' : 'Inactive'}
+                    </span>
+                  </td>
+                  {showActions && (
+                    <td data-label="Actions">
+                      <div className="row-actions">
+                        {canEdit && (
+                          <Link to={`/students/${student.id}/edit`}>
+                            <button className="secondary">Edit</button>
+                          </Link>
+                        )}
+                        {canDelete && (
+                          <button className="danger" onClick={() => void onDelete(student)} disabled={deletingId === student.id}>
+                            {deletingId === student.id ? 'Deleting…' : 'Delete'}
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  )}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
     </>
   );

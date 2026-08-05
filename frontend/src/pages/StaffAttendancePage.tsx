@@ -76,33 +76,35 @@ export function StaffAttendancePage() {
       ) : teachers.length === 0 ? (
         <p className="muted">No teachers found.</p>
       ) : (
-        <table className="data-table">
-          <thead>
-            <tr>
-              <th>Name</th>
-              <th>Status</th>
-              <th>Marked by</th>
-            </tr>
-          </thead>
-          <tbody>
-            {teachers.map((teacher) => {
-              const record = byTeacherId.get(teacher.id);
-              return (
-                <tr key={teacher.id}>
-                  <td data-label="Name">{teacher.name}</td>
-                  <td data-label="Status">
-                    <AttendanceStatusToggle
-                      value={record?.status ?? 'PRESENT'}
-                      onChange={(status) => void onMark(teacher.id, status)}
-                      disabled={savingId === teacher.id}
-                    />
-                  </td>
-                  <td data-label="Marked by">{record?.markedBy.name ?? '—'}</td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+        <div className="card">
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Status</th>
+                <th>Marked by</th>
+              </tr>
+            </thead>
+            <tbody>
+              {teachers.map((teacher) => {
+                const record = byTeacherId.get(teacher.id);
+                return (
+                  <tr key={teacher.id}>
+                    <td data-label="Name">{teacher.name}</td>
+                    <td data-label="Status">
+                      <AttendanceStatusToggle
+                        value={record?.status ?? 'PRESENT'}
+                        onChange={(status) => void onMark(teacher.id, status)}
+                        disabled={savingId === teacher.id}
+                      />
+                    </td>
+                    <td data-label="Marked by">{record?.markedBy.name ?? '—'}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       )}
     </>
   );

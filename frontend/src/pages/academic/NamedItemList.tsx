@@ -130,10 +130,10 @@ export function NamedItemList({
                 )}
                 {canManage && (
                   <div className="row-actions">
-                    <button onClick={() => startEdit(item)} disabled={busyId === item.id}>
+                    <button className="secondary" onClick={() => startEdit(item)} disabled={busyId === item.id}>
                       Rename
                     </button>
-                    <button onClick={() => void remove(item)} disabled={busyId === item.id}>
+                    <button className="danger" onClick={() => void remove(item)} disabled={busyId === item.id}>
                       {busyId === item.id ? 'Deleting…' : 'Delete'}
                     </button>
                   </div>

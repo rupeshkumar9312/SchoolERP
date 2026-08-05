@@ -108,6 +108,13 @@ select {
   color-scheme: light dark;
 }
 
+input[type='checkbox'] {
+  accent-color: var(--color-primary);
+  width: 1.05rem;
+  height: 1.05rem;
+  cursor: pointer;
+}
+
 code {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
 }

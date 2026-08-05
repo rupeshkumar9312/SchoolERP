@@ -183,6 +183,19 @@ button.secondary:hover:not(:disabled) {
   box-shadow: none;
 }
 
+button.danger {
+  background: var(--color-danger);
+}
+
+button.danger:hover:not(:disabled) {
+  filter: brightness(0.92);
+}
+
+.status-badge-inactive {
+  background: var(--color-surface-hover);
+  color: var(--color-text-muted);
+}
+
 .row-actions {
   display: flex;
   gap: 0.5rem;

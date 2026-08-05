@@ -69,52 +69,58 @@ export function TeachersListPage() {
       ) : teachers.length === 0 ? (
         <p className="muted">No teachers yet.</p>
       ) : (
-        <table className="data-table">
-          <thead>
-            <tr>
-              <th>Name</th>
-              <th>Email</th>
-              <th>Phone</th>
-              <th>Qualification</th>
-              <th>Joined</th>
-              <th>Status</th>
-              {showActions && <th>Actions</th>}
-            </tr>
-          </thead>
-          <tbody>
-            {teachers.map((teacher) => (
-              <tr key={teacher.id}>
-                <td data-label="Name">{teacher.name}</td>
-                <td data-label="Email">{teacher.email}</td>
-                <td data-label="Phone">{teacher.phone ?? '—'}</td>
-                <td data-label="Qualification">{teacher.qualification ?? '—'}</td>
-                <td data-label="Joined">{new Date(teacher.joiningDate).toLocaleDateString()}</td>
-                <td data-label="Status">{teacher.isActive ? 'Active' : 'Inactive'}</td>
-                {showActions && (
-                  <td data-label="Actions">
-                    <div className="row-actions">
-                      {canAssign && (
-                        <Link to={`/teachers/${teacher.id}/assignments`}>
-                          <button>Assignments</button>
-                        </Link>
-                      )}
-                      {canEdit && (
-                        <Link to={`/teachers/${teacher.id}/edit`}>
-                          <button>Edit</button>
-                        </Link>
-                      )}
-                      {canDelete && (
-                        <button onClick={() => void onDelete(teacher)} disabled={deletingId === teacher.id}>
-                          {deletingId === teacher.id ? 'Deleting…' : 'Delete'}
-                        </button>
-                      )}
-                    </div>
-                  </td>
-                )}
+        <div className="card">
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Email</th>
+                <th>Phone</th>
+                <th>Qualification</th>
+                <th>Joined</th>
+                <th>Status</th>
+                {showActions && <th>Actions</th>}
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {teachers.map((teacher) => (
+                <tr key={teacher.id}>
+                  <td data-label="Name">{teacher.name}</td>
+                  <td data-label="Email">{teacher.email}</td>
+                  <td data-label="Phone">{teacher.phone ?? '—'}</td>
+                  <td data-label="Qualification">{teacher.qualification ?? '—'}</td>
+                  <td data-label="Joined">{new Date(teacher.joiningDate).toLocaleDateString()}</td>
+                  <td data-label="Status">
+                    <span className={`badge ${teacher.isActive ? 'status-badge-present' : 'status-badge-inactive'}`}>
+                      {teacher.isActive ? 'Active' : 'Inactive'}
+                    </span>
+                  </td>
+                  {showActions && (
+                    <td data-label="Actions">
+                      <div className="row-actions">
+                        {canAssign && (
+                          <Link to={`/teachers/${teacher.id}/assignments`}>
+                            <button className="secondary">Assignments</button>
+                          </Link>
+                        )}
+                        {canEdit && (
+                          <Link to={`/teachers/${teacher.id}/edit`}>
+                            <button className="secondary">Edit</button>
+                          </Link>
+                        )}
+                        {canDelete && (
+                          <button className="danger" onClick={() => void onDelete(teacher)} disabled={deletingId === teacher.id}>
+                            {deletingId === teacher.id ? 'Deleting…' : 'Delete'}
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  )}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
     </>
   );

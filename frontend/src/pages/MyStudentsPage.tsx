@@ -31,28 +31,30 @@ export function MyStudentsPage() {
         (students.length === 0 ? (
           <p className="muted">No students in your assigned classes yet.</p>
         ) : (
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>Admission No.</th>
-                <th>Name</th>
-                <th>Class</th>
-                <th>Section</th>
-                <th>Guardian</th>
-              </tr>
-            </thead>
-            <tbody>
-              {students.map((s) => (
-                <tr key={s.id}>
-                  <td data-label="Admission No.">{s.admissionNo}</td>
-                  <td data-label="Name">{s.name}</td>
-                  <td data-label="Class">{s.class.name}</td>
-                  <td data-label="Section">{s.section.name}</td>
-                  <td data-label="Guardian">{s.guardianName ?? '—'}</td>
+          <div className="card">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Admission No.</th>
+                  <th>Name</th>
+                  <th>Class</th>
+                  <th>Section</th>
+                  <th>Guardian</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {students.map((s) => (
+                  <tr key={s.id}>
+                    <td data-label="Admission No.">{s.admissionNo}</td>
+                    <td data-label="Name">{s.name}</td>
+                    <td data-label="Class">{s.class.name}</td>
+                    <td data-label="Section">{s.section.name}</td>
+                    <td data-label="Guardian">{s.guardianName ?? '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         ))}
     </>
   );

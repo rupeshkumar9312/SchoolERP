@@ -31,24 +31,30 @@ export function MyClassesPage() {
         (assignments.length === 0 ? (
           <p className="muted">You have no assigned classes yet.</p>
         ) : (
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>Class</th>
-                <th>Section</th>
-                <th>Subject</th>
-              </tr>
-            </thead>
-            <tbody>
-              {assignments.map((a) => (
-                <tr key={a.id}>
-                  <td data-label="Class">{a.class.name}</td>
-                  <td data-label="Section">{a.section.name}</td>
-                  <td data-label="Subject">{a.subject.name}</td>
+          <div className="card">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Class</th>
+                  <th>Section</th>
+                  <th>Subject</th>
+                  <th>Class teacher?</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {assignments.map((a) => (
+                  <tr key={a.id}>
+                    <td data-label="Class">{a.class.name}</td>
+                    <td data-label="Section">{a.section.name}</td>
+                    <td data-label="Subject">{a.subject.name}</td>
+                    <td data-label="Class teacher?">
+                      {a.isClassTeacher ? <span className="badge">Yes</span> : '—'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         ))}
     </>
   );

@@ -185,7 +185,7 @@ export function MarkAttendancePage() {
       ) : roster.length === 0 ? (
         <p className="muted">No students in this class and section.</p>
       ) : (
-        <>
+        <section className="card">
           <div className="card-head">
             <h2>Roster ({roster.length})</h2>
             <div className="row-actions">
@@ -215,7 +215,7 @@ export function MarkAttendancePage() {
               {saving ? 'Saving…' : 'Save attendance'}
             </button>
           </div>
-        </>
+        </section>
       )}
     </>
   );
