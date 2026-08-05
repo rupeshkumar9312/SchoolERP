@@ -98,9 +98,16 @@ export function StudentsListPage() {
       <div className="card-head">
         <h1>Students</h1>
         {hasPermission('student.create') && (
-          <Link to="/students/new">
-            <button>New student</button>
-          </Link>
+          <div className="row-actions">
+            <Link to="/students/bulk-import">
+              <button type="button" className="secondary">
+                Bulk import
+              </button>
+            </Link>
+            <Link to="/students/new">
+              <button>New student</button>
+            </Link>
+          </div>
         )}
       </div>
 

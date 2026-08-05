@@ -14,6 +14,7 @@ import { MyClassesPage } from './pages/MyClassesPage';
 import { MyStudentsPage } from './pages/MyStudentsPage';
 import { StaffAttendancePage } from './pages/StaffAttendancePage';
 import { StudentFormPage } from './pages/StudentFormPage';
+import { StudentsBulkImportPage } from './pages/StudentsBulkImportPage';
 import { StudentsListPage } from './pages/StudentsListPage';
 import { TeacherAssignmentsPage } from './pages/TeacherAssignmentsPage';
 import { TeacherFormPage } from './pages/TeacherFormPage';
@@ -66,6 +67,7 @@ function App() {
               </Route>
               <Route element={<ProtectedRoute permission="student.create" />}>
                 <Route path="/students/new" element={<StudentFormPage />} />
+                <Route path="/students/bulk-import" element={<StudentsBulkImportPage />} />
               </Route>
               <Route element={<ProtectedRoute permission="student.edit" />}>
                 <Route path="/students/:id/edit" element={<StudentFormPage />} />
