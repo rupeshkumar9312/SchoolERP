@@ -5,6 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
+import { AuditLogService } from '../audit/audit-log.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateStudentDto } from './dto/create-student.dto';
 import { ListStudentsQueryDto } from './dto/list-students.query.dto';
@@ -31,7 +32,10 @@ type StudentWithRefs = Prisma.StudentGetPayload<{ include: { class: true; sectio
 
 @Injectable()
 export class StudentsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly audit: AuditLogService,
+  ) {}
 
   async findAll(query: ListStudentsQueryDto): Promise<StudentView[]> {
     const students = await this.prisma.student.findMany({
@@ -62,7 +66,7 @@ export class StudentsService {
     return this.toView(student);
   }
 
-  async create(dto: CreateStudentDto): Promise<StudentView> {
+  async create(dto: CreateStudentDto, actorId?: number): Promise<StudentView> {
     await this.assertSectionBelongsToClass(dto.sectionId, dto.classId);
 
     try {
@@ -82,13 +86,20 @@ export class StudentsService {
         },
         include: { class: true, section: true },
       });
+      await this.audit.record({
+        entityType: 'Student',
+        entityId: student.id,
+        action: 'CREATE',
+        userId: actorId,
+        newValues: student,
+      });
       return this.toView(student);
     } catch (error) {
       throw this.mapError(error, 'A student with this admission number already exists');
     }
   }
 
-  async update(id: number, dto: UpdateStudentDto): Promise<StudentView> {
+  async update(id: number, dto: UpdateStudentDto, actorId?: number): Promise<StudentView> {
     const existing = await this.prisma.student.findUnique({ where: { id } });
     if (!existing) throw new NotFoundException('Student not found');
 
@@ -119,16 +130,31 @@ export class StudentsService {
         },
         include: { class: true, section: true },
       });
+      await this.audit.record({
+        entityType: 'Student',
+        entityId: student.id,
+        action: 'UPDATE',
+        userId: actorId,
+        oldValues: existing,
+        newValues: student,
+      });
       return this.toView(student);
     } catch (error) {
       throw this.mapError(error, 'A student with this admission number already exists');
     }
   }
 
-  async remove(id: number): Promise<void> {
+  async remove(id: number, actorId?: number): Promise<void> {
     const existing = await this.prisma.student.findUnique({ where: { id } });
     if (!existing) throw new NotFoundException('Student not found');
     await this.prisma.student.delete({ where: { id } });
+    await this.audit.record({
+      entityType: 'Student',
+      entityId: id,
+      action: 'DELETE',
+      userId: actorId,
+      oldValues: existing,
+    });
   }
 
   /**

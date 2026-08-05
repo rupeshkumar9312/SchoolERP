@@ -107,6 +107,15 @@ export function IconClipboardList(props: IconProps) {
   );
 }
 
+export function IconShieldCheck(props: IconProps) {
+  return (
+    <svg {...common} {...props}>
+      <path d="M12 3.5 5 6.2v5.3c0 4.4 3 7 7 9 4-2 7-4.6 7-9V6.2L12 3.5Z" />
+      <path d="M9.2 12.1l2 2 3.6-4.1" />
+    </svg>
+  );
+}
+
 export function IconChartBar(props: IconProps) {
   return (
     <svg {...common} {...props}>

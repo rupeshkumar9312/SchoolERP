@@ -5,6 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
+import { AuditLogService } from '../audit/audit-log.service';
 import { AuthenticatedUser } from '../auth/auth.types';
 import { TEACHER_ROLE } from '../auth/roles.constants';
 import { PrismaService } from '../prisma/prisma.service';
@@ -32,7 +33,10 @@ const TEACHER_ATTENDANCE_INCLUDE = {
 
 @Injectable()
 export class TeacherAttendanceService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly audit: AuditLogService,
+  ) {}
 
   async mark(
     dto: MarkTeacherAttendanceDto,
@@ -48,11 +52,26 @@ export class TeacherAttendanceService {
       throw new ForbiddenException('Teachers can only mark their own attendance for today');
     }
 
+    const date = new Date(dto.date);
+    // Captured before the upsert — this route doubles as create-or-correct
+    // (see README), so whether a row already existed decides CREATE vs UPDATE.
+    const existing = await this.prisma.teacherAttendance.findUnique({
+      where: { teacherId_date: { teacherId, date } },
+    });
+
     const row = await this.prisma.teacherAttendance.upsert({
-      where: { teacherId_date: { teacherId, date: new Date(dto.date) } },
+      where: { teacherId_date: { teacherId, date } },
       update: { status: dto.status, markedById: actor.id },
-      create: { teacherId, date: new Date(dto.date), status: dto.status, markedById: actor.id },
+      create: { teacherId, date, status: dto.status, markedById: actor.id },
       include: TEACHER_ATTENDANCE_INCLUDE,
+    });
+    await this.audit.record({
+      entityType: 'TeacherAttendance',
+      entityId: row.id,
+      action: existing ? 'UPDATE' : 'CREATE',
+      userId: actor.id,
+      oldValues: existing,
+      newValues: row,
     });
     return this.toView(row);
   }

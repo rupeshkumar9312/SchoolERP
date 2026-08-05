@@ -64,13 +64,16 @@ export class StudentsController {
   @Post('bulk-import')
   @RequirePermission('student.create')
   @UseInterceptors(FileInterceptor('file', { limits: { fileSize: MAX_IMPORT_FILE_BYTES } }))
-  bulkImportStudents(@UploadedFile() file?: Express.Multer.File) {
+  bulkImportStudents(
+    @CurrentUser() user: AuthenticatedUser,
+    @UploadedFile() file?: Express.Multer.File,
+  ) {
     if (!file) throw new BadRequestException('No file was uploaded.');
     const isXlsx =
       file.mimetype === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ||
       file.originalname.toLowerCase().endsWith('.xlsx');
     if (!isXlsx) throw new BadRequestException('Please upload a .xlsx file.');
-    return this.bulkImport.bulkImport(file.buffer);
+    return this.bulkImport.bulkImport(file.buffer, user.id);
   }
 
   @Get(':id')
@@ -81,20 +84,24 @@ export class StudentsController {
 
   @Post()
   @RequirePermission('student.create')
-  create(@Body() dto: CreateStudentDto) {
-    return this.students.create(dto);
+  create(@Body() dto: CreateStudentDto, @CurrentUser() user: AuthenticatedUser) {
+    return this.students.create(dto, user.id);
   }
 
   @Patch(':id')
   @RequirePermission('student.edit')
-  update(@Param('id', ParseIntPipe) id: number, @Body() dto: UpdateStudentDto) {
-    return this.students.update(id, dto);
+  update(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: UpdateStudentDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.students.update(id, dto, user.id);
   }
 
   @Delete(':id')
   @RequirePermission('student.delete')
   @HttpCode(204)
-  remove(@Param('id', ParseIntPipe) id: number) {
-    return this.students.remove(id);
+  remove(@Param('id', ParseIntPipe) id: number, @CurrentUser() user: AuthenticatedUser) {
+    return this.students.remove(id, user.id);
   }
 }

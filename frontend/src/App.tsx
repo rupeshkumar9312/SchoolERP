@@ -2,6 +2,7 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import './App.css';
 import { AcademicSetupPage } from './pages/AcademicSetupPage';
 import { AttendanceHistoryPage } from './pages/AttendanceHistoryPage';
+import { AuditLogsPage } from './pages/AuditLogsPage';
 import { AuthProvider } from './auth/AuthContext';
 import { ProtectedRoute } from './auth/ProtectedRoute';
 import { ConfirmDialogProvider } from './components/ConfirmDialogProvider';
@@ -91,6 +92,10 @@ function App() {
 
               <Route element={<ProtectedRoute permission="academic.view" />}>
                 <Route path="/reports" element={<ReportsPage />} />
+              </Route>
+
+              <Route element={<ProtectedRoute roles={['SUPER_ADMIN']} />}>
+                <Route path="/audit-logs" element={<AuditLogsPage />} />
               </Route>
             </Route>
           </Route>

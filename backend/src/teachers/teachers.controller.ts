@@ -53,21 +53,25 @@ export class TeachersController {
 
   @Post()
   @RequirePermission('teacher.create')
-  create(@Body() dto: CreateTeacherDto) {
-    return this.teachers.create(dto);
+  create(@Body() dto: CreateTeacherDto, @CurrentUser() user: AuthenticatedUser) {
+    return this.teachers.create(dto, user.id);
   }
 
   @Patch(':id')
   @RequirePermission('teacher.edit')
-  update(@Param('id', ParseIntPipe) id: number, @Body() dto: UpdateTeacherDto) {
-    return this.teachers.update(id, dto);
+  update(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: UpdateTeacherDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.teachers.update(id, dto, user.id);
   }
 
   @Delete(':id')
   @RequirePermission('teacher.delete')
   @HttpCode(204)
-  remove(@Param('id', ParseIntPipe) id: number) {
-    return this.teachers.remove(id);
+  remove(@Param('id', ParseIntPipe) id: number, @CurrentUser() user: AuthenticatedUser) {
+    return this.teachers.remove(id, user.id);
   }
 
   @Get(':id/assignments')
@@ -78,8 +82,12 @@ export class TeachersController {
 
   @Post(':id/assignments')
   @RequirePermission('teacher.assign')
-  createAssignment(@Param('id', ParseIntPipe) id: number, @Body() dto: CreateAssignmentDto) {
-    return this.teachers.createAssignment(id, dto);
+  createAssignment(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: CreateAssignmentDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.teachers.createAssignment(id, dto, user.id);
   }
 
   @Delete(':id/assignments/:assignmentId')
@@ -88,8 +96,9 @@ export class TeachersController {
   removeAssignment(
     @Param('id', ParseIntPipe) id: number,
     @Param('assignmentId', ParseIntPipe) assignmentId: number,
+    @CurrentUser() user: AuthenticatedUser,
   ) {
-    return this.teachers.removeAssignment(id, assignmentId);
+    return this.teachers.removeAssignment(id, assignmentId, user.id);
   }
 
   @Get(':id/class-teacher-of')

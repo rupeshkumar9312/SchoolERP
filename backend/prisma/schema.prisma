@@ -60,6 +60,7 @@ model User {
   teacher                 Teacher?
   markedAttendance        StudentAttendance[] @relation("AttendanceMarkedBy")
   markedTeacherAttendance TeacherAttendance[] @relation("TeacherAttendanceMarkedBy")
+  auditLogs               AuditLog[]          @relation("AuditLogActor")
 
   @@map("users")
 }
@@ -231,4 +232,32 @@ model Holiday {
   createdAt DateTime @default(now())
 
   @@map("holidays")
+}
+
+enum AuditAction {
+  CREATE
+  UPDATE
+  DELETE
+}
+
+/// Accountability trail for mutations on students, teachers, attendance and
+/// staff accounts. userId is nullable (not optional in practice — every write
+/// goes through an authenticated route) so deleting the actor's own account
+/// later doesn't erase the history of what they did; onDelete: SetNull keeps
+/// the row instead of cascading it away.
+model AuditLog {
+  id         Int         @id @default(autoincrement())
+  entityType String
+  entityId   Int
+  action     AuditAction
+  userId     Int?
+  user       User?       @relation("AuditLogActor", fields: [userId], references: [id], onDelete: SetNull)
+  oldValues  Json?
+  newValues  Json?
+  createdAt  DateTime    @default(now())
+
+  @@index([entityType, entityId])
+  @@index([userId])
+  @@index([createdAt])
+  @@map("audit_logs")
 }

@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { AcademicModule } from './academic/academic.module';
 import { AttendanceModule } from './attendance/attendance.module';
+import { AuditModule } from './audit/audit.module';
 import { AuthModule } from './auth/auth.module';
 import { validateEnv } from './config/env.validation';
 import { DashboardModule } from './dashboard/dashboard.module';
@@ -22,6 +23,7 @@ import { UsersModule } from './users/users.module';
     }),
     PrismaModule,
     HealthModule,
+    AuditModule,
     AuthModule,
     UsersModule,
     RolesModule,

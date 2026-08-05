@@ -14,6 +14,7 @@ import {
   IconGraduate,
   IconHistory,
   IconHome,
+  IconShieldCheck,
   IconUserCheck,
   IconUsersGroup,
 } from "../components/NavIcons";
@@ -35,6 +36,7 @@ const NAV_ICONS: Record<
   "/my-attendance": IconUserCheck,
   "/staff-attendance": IconClipboardList,
   "/reports": IconChartBar,
+  "/audit-logs": IconShieldCheck,
 };
 
 export function AppShell() {
