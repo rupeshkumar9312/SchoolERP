@@ -22,4 +22,5 @@ export const navItems: NavItem[] = [
   { label: 'Attendance History', path: '/attendance/history', permission: 'attendance.student.view' },
   { label: 'My Attendance', path: '/my-attendance', roles: ['TEACHER'] },
   { label: 'Staff Attendance', path: '/staff-attendance', permission: 'teacher.view' },
+  { label: 'Reports', path: '/reports', permission: 'academic.view' },
 ];

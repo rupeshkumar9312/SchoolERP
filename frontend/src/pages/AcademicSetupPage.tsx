@@ -1,14 +1,19 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import * as academic from '../api/academic';
 import type { AcademicYear } from '../api/academic';
+import * as holidaysApi from '../api/holidays';
+import type { Holiday } from '../api/holidays';
 import { useAuth } from '../auth/useAuth';
+import { ApiError } from '../api/client';
 import { useConfirm } from '../components/useConfirm';
+import { useToast } from '../components/useToast';
 import { NamedItemList } from './academic/NamedItemList';
 
 export function AcademicSetupPage() {
   const { hasPermission } = useAuth();
   const canManage = hasPermission('academic.manage');
   const confirm = useConfirm();
+  const toast = useToast();
 
   const [years, setYears] = useState<AcademicYear[]>([]);
   const [selectedYearId, setSelectedYearId] = useState<number | null>(null);
@@ -22,6 +27,12 @@ export function AcademicSetupPage() {
   const [error, setError] = useState<string | null>(null);
   const [busyYearId, setBusyYearId] = useState<number | null>(null);
 
+  const [holidays, setHolidays] = useState<Holiday[]>([]);
+  const [newHolidayDate, setNewHolidayDate] = useState('');
+  const [newHolidayName, setNewHolidayName] = useState('');
+  const [holidayError, setHolidayError] = useState<string | null>(null);
+  const [busyHolidayId, setBusyHolidayId] = useState<number | null>(null);
+
   const loadYears = useCallback(async () => {
     const rows = await academic.listAcademicYears();
     setYears(rows);
@@ -30,6 +41,44 @@ export function AcademicSetupPage() {
   useEffect(() => {
     void loadYears();
   }, [loadYears]);
+
+  const loadHolidays = useCallback(async () => {
+    setHolidays(await holidaysApi.listHolidays());
+  }, []);
+
+  useEffect(() => {
+    void loadHolidays();
+  }, [loadHolidays]);
+
+  const submitNewHoliday = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!newHolidayDate || !newHolidayName.trim()) return;
+    setHolidayError(null);
+    try {
+      await holidaysApi.createHoliday(newHolidayDate, newHolidayName.trim());
+      setNewHolidayDate('');
+      setNewHolidayName('');
+      await loadHolidays();
+    } catch (err) {
+      setHolidayError(err instanceof ApiError ? err.message : 'Failed to add holiday');
+    }
+  };
+
+  const deleteHoliday = async (holiday: Holiday) => {
+    const ok = await confirm({ title: `Delete holiday "${holiday.name}"?`, confirmLabel: 'Delete' });
+    if (!ok) return;
+    setBusyHolidayId(holiday.id);
+    setHolidayError(null);
+    try {
+      await holidaysApi.deleteHoliday(holiday.id);
+      setHolidays((prev) => prev.filter((h) => h.id !== holiday.id));
+      toast(`${holiday.name} was removed.`);
+    } catch (err) {
+      setHolidayError(err instanceof ApiError ? err.message : 'Failed to delete holiday');
+    } finally {
+      setBusyHolidayId(null);
+    }
+  };
 
   const loadClasses = useCallback(async (yearId: number) => {
     const rows = await academic.listClasses(yearId);
@@ -249,6 +298,55 @@ export function AcademicSetupPage() {
           </section>
         </div>
       )}
+
+      <section className="card">
+        <h2>Holidays</h2>
+        <p className="muted">Excluded from attendance % calculations in Reports.</p>
+
+        {holidayError && (
+          <div className="status down">
+            <strong>Error</strong>
+            <p>{holidayError}</p>
+          </div>
+        )}
+
+        {holidays.length === 0 && <p className="muted">No holidays set yet.</p>}
+
+        <ul className="named-item-list">
+          {holidays.map((holiday) => (
+            <li key={holiday.id}>
+              <span className="named-item-name">
+                {holiday.date.slice(0, 10)} — {holiday.name}
+              </span>
+              {canManage && (
+                <div className="row-actions">
+                  <button
+                    className="danger"
+                    onClick={() => void deleteHoliday(holiday)}
+                    disabled={busyHolidayId === holiday.id}
+                  >
+                    {busyHolidayId === holiday.id ? 'Deleting…' : 'Delete'}
+                  </button>
+                </div>
+              )}
+            </li>
+          ))}
+        </ul>
+
+        {canManage && (
+          <form className="named-item-add" onSubmit={(e) => void submitNewHoliday(e)}>
+            <input type="date" value={newHolidayDate} onChange={(e) => setNewHolidayDate(e.target.value)} />
+            <input
+              value={newHolidayName}
+              onChange={(e) => setNewHolidayName(e.target.value)}
+              placeholder="e.g. Independence Day"
+            />
+            <button type="submit" disabled={!newHolidayDate || !newHolidayName.trim()}>
+              Add holiday
+            </button>
+          </form>
+        )}
+      </section>
     </>
   );
 }

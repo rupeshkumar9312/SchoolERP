@@ -968,6 +968,50 @@ button.danger:hover:not(:disabled) {
   flex-shrink: 0;
 }
 
+.tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 1.25rem;
+}
+
+.tab-button {
+  background: var(--color-surface-hover);
+  color: var(--color-text-muted);
+  box-shadow: none;
+}
+
+.tab-button:hover:not(:disabled) {
+  background: var(--color-surface-hover);
+  box-shadow: none;
+  transform: none;
+}
+
+.tab-button-active {
+  background: var(--color-primary-tint);
+  color: var(--color-primary);
+}
+
+.bar-chart-row {
+  display: grid;
+  grid-template-columns: minmax(6rem, 12rem) 1fr auto;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.4rem 0;
+}
+
+.bar-chart-label {
+  font-size: 0.88rem;
+  font-weight: 600;
+}
+
+.bar-chart-value {
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+  min-width: 3rem;
+  text-align: right;
+}
+
 .quick-links {
   display: flex;
   flex-wrap: wrap;
