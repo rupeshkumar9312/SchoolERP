@@ -1,0 +1,21 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: school-erp-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: schoolerp
+      POSTGRES_PASSWORD: schoolerp
+      POSTGRES_DB: school_erp
+    ports:
+      - '5432:5432'
+    volumes:
+      - school_erp_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U schoolerp -d school_erp']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  school_erp_pgdata:

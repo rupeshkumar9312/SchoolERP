@@ -1,0 +1,14 @@
+// School ERP — Prisma schema
+//
+// Module 0 intentionally defines no models: it only proves that the app can
+// reach PostgreSQL. Module 1 (Auth & RBAC) adds the first tables —
+// users, roles, permissions, role_permissions.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
