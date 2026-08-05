@@ -1,9 +1,9 @@
-import type { ReactElement } from 'react';
-import { useEffect, useState } from 'react';
-import { NavLink, Outlet, useLocation } from 'react-router-dom';
-import edvanceMarkDark from '../assets/edvance-mark-dark.png';
-import edvanceMark from '../assets/edvance-mark.png';
-import { useAuth } from '../auth/useAuth';
+import type { ReactElement } from "react";
+import { useEffect, useState } from "react";
+import { NavLink, Outlet, useLocation } from "react-router-dom";
+import edvanceMarkDark from "../assets/edvance-logo-dark.png";
+import edvanceMark from "../assets/edvance-logo.png";
+import { useAuth } from "../auth/useAuth";
 import {
   IconAcademicCap,
   IconBookOpen,
@@ -15,26 +15,29 @@ import {
   IconHome,
   IconUserCheck,
   IconUsersGroup,
-} from '../components/NavIcons';
-import { navItems } from './navConfig';
+} from "../components/NavIcons";
+import { navItems } from "./navConfig";
 
-const NAV_ICONS: Record<string, (props: { className?: string }) => ReactElement> = {
-  '/': IconHome,
-  '/users': IconUsersGroup,
-  '/academic-setup': IconAcademicCap,
-  '/teachers': IconBriefcase,
-  '/students': IconGraduate,
-  '/my-classes': IconBookOpen,
-  '/my-students': IconGraduate,
-  '/attendance/mark': IconClipboardCheck,
-  '/attendance/history': IconHistory,
-  '/my-attendance': IconUserCheck,
-  '/staff-attendance': IconClipboardList,
+const NAV_ICONS: Record<
+  string,
+  (props: { className?: string }) => ReactElement
+> = {
+  "/": IconHome,
+  "/users": IconUsersGroup,
+  "/academic-setup": IconAcademicCap,
+  "/teachers": IconBriefcase,
+  "/students": IconGraduate,
+  "/my-classes": IconBookOpen,
+  "/my-students": IconGraduate,
+  "/attendance/mark": IconClipboardCheck,
+  "/attendance/history": IconHistory,
+  "/my-attendance": IconUserCheck,
+  "/staff-attendance": IconClipboardList,
 };
 
 export function AppShell() {
   const { state, logout, hasPermission } = useAuth();
-  const user = state.status === 'authenticated' ? state.user : null;
+  const user = state.status === "authenticated" ? state.user : null;
   const [drawerOpen, setDrawerOpen] = useState(false);
   const location = useLocation();
 
@@ -43,7 +46,8 @@ export function AppShell() {
 
   const visibleItems = navItems.filter((item) => {
     if (item.permission && !hasPermission(item.permission)) return false;
-    if (item.roles && !(user && item.roles.includes(user.role.name))) return false;
+    if (item.roles && !(user && item.roles.includes(user.role.name)))
+      return false;
     return true;
   });
 
@@ -53,7 +57,7 @@ export function AppShell() {
         <div className="topbar-left">
           <button
             className="drawer-toggle"
-            aria-label={drawerOpen ? 'Close menu' : 'Open menu'}
+            aria-label={drawerOpen ? "Close menu" : "Open menu"}
             aria-expanded={drawerOpen}
             onClick={() => setDrawerOpen((open) => !open)}
           >
@@ -62,9 +66,17 @@ export function AppShell() {
             <span />
           </button>
           <span className="brand">
-            <img src={edvanceMarkDark} alt="EDVANCE" className="brand-mark theme-dark-only" />
-            <img src={edvanceMark} alt="EDVANCE" className="brand-mark theme-light-only" />
-            <span className="brand-text">EDVANCE</span>
+            <img
+              src={edvanceMarkDark}
+              alt="EDVANCE"
+              className="brand-mark theme-dark-only"
+            />
+            <img
+              src={edvanceMark}
+              alt="EDVANCE"
+              className="brand-mark theme-light-only"
+            />
+            {/* <span className="brand-text">EDVANCE</span> */}
           </span>
         </div>
         {user && (
@@ -80,8 +92,13 @@ export function AppShell() {
       </header>
 
       <div className="app-body">
-        {drawerOpen && <div className="drawer-backdrop" onClick={() => setDrawerOpen(false)} />}
-        <aside className={`sidebar ${drawerOpen ? 'sidebar-open' : ''}`}>
+        {drawerOpen && (
+          <div
+            className="drawer-backdrop"
+            onClick={() => setDrawerOpen(false)}
+          />
+        )}
+        <aside className={`sidebar ${drawerOpen ? "sidebar-open" : ""}`}>
           <nav>
             {visibleItems.map((item) => {
               const Icon = NAV_ICONS[item.path];
@@ -89,8 +106,10 @@ export function AppShell() {
                 <NavLink
                   key={item.path}
                   to={item.path}
-                  className={({ isActive }) => `nav-link ${isActive ? 'nav-link-active' : ''}`}
-                  end={item.path === '/'}
+                  className={({ isActive }) =>
+                    `nav-link ${isActive ? "nav-link-active" : ""}`
+                  }
+                  end={item.path === "/"}
                 >
                   {Icon && <Icon />}
                   {item.label}

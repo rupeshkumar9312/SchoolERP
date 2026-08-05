@@ -1,4 +1,4 @@
-import { apiDelete, apiGet, apiPatch, apiPost } from './client';
+import { apiDelete, apiGet, apiGetBlob, apiPatch, apiPost, apiUpload } from './client';
 
 export interface Student {
   id: number;
@@ -80,3 +80,46 @@ export function deleteStudent(id: number): Promise<void> {
 export function listMyClassStudents(): Promise<Student[]> {
   return apiGet<Student[]>('/students/my-classes');
 }
+
+export interface BulkImportFailure {
+  row: number;
+  admissionNo: string;
+  name: string;
+  error: string;
+}
+
+export interface BulkImportResult {
+  totalRows: number;
+  successCount: number;
+  failureCount: number;
+  failures: BulkImportFailure[];
+  failuresWorkbookBase64: string | null;
+}
+
+export function bulkImportStudents(file: File): Promise<BulkImportResult> {
+  return apiUpload<BulkImportResult>('/students/bulk-import', 'file', file);
+}
+
+export function downloadStudentImportTemplate(): Promise<Blob> {
+  return apiGetBlob('/students/bulk-import/template');
+}
+
+function triggerBlobDownload(blob: Blob, filename: string): void {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
+
+export function base64ToBlob(base64: string, mimeType: string): Blob {
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return new Blob([bytes], { type: mimeType });
+}
+
+export { triggerBlobDownload };
