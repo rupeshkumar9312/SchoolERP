@@ -1,7 +1,7 @@
 import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from './useAuth';
 
-export function ProtectedRoute({ permission }: { permission?: string }) {
+export function ProtectedRoute({ permission, roles }: { permission?: string; roles?: string[] }) {
   const { state, hasPermission } = useAuth();
   const location = useLocation();
 
@@ -14,6 +14,10 @@ export function ProtectedRoute({ permission }: { permission?: string }) {
   }
 
   if (permission && !hasPermission(permission)) {
+    return <p className="muted">You don't have permission to view this page.</p>;
+  }
+
+  if (roles && !roles.includes(state.user.role.name)) {
     return <p className="muted">You don't have permission to view this page.</p>;
   }
 

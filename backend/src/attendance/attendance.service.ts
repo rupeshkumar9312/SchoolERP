@@ -5,6 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
+import { AuditLogService } from '../audit/audit-log.service';
 import { AuthenticatedUser } from '../auth/auth.types';
 import { TEACHER_ROLE } from '../auth/roles.constants';
 import { PrismaService } from '../prisma/prisma.service';
@@ -32,7 +33,10 @@ const ATTENDANCE_INCLUDE = { student: true, class: true, section: true, markedBy
 
 @Injectable()
 export class AttendanceService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly audit: AuditLogService,
+  ) {}
 
   async markBulk(dto: MarkAttendanceDto, actor: AuthenticatedUser): Promise<AttendanceView[]> {
     await this.assertSectionBelongsToClass(dto.sectionId, dto.classId);
@@ -42,12 +46,18 @@ export class AttendanceService {
       this.assertSameDayForTeacher(new Date(dto.date));
     }
 
-    await this.assertStudentsBelongToSection(
-      dto.records.map((r) => r.studentId),
-      dto.sectionId,
-    );
+    const studentIds = dto.records.map((r) => r.studentId);
+    await this.assertStudentsBelongToSection(studentIds, dto.sectionId);
 
     const date = new Date(dto.date);
+
+    // Captured before the upsert so each row's audit entry can tell CREATE
+    // (no prior record for that student+date) apart from UPDATE (a correction).
+    const existingRows = await this.prisma.studentAttendance.findMany({
+      where: { date, studentId: { in: studentIds } },
+    });
+    const existingByStudentId = new Map(existingRows.map((r) => [r.studentId, r]));
+
     const rows = await this.prisma.$transaction(
       dto.records.map((record) =>
         this.prisma.studentAttendance.upsert({
@@ -70,6 +80,21 @@ export class AttendanceService {
         }),
       ),
     );
+
+    await Promise.all(
+      rows.map((row) => {
+        const before = existingByStudentId.get(row.studentId) ?? null;
+        return this.audit.record({
+          entityType: 'StudentAttendance',
+          entityId: row.id,
+          action: before ? 'UPDATE' : 'CREATE',
+          userId: actor.id,
+          oldValues: before,
+          newValues: row,
+        });
+      }),
+    );
+
     return rows.map((r) => this.toView(r));
   }
 
@@ -108,6 +133,14 @@ export class AttendanceService {
       where: { id },
       data: { status: dto.status, markedById: actor.id },
       include: ATTENDANCE_INCLUDE,
+    });
+    await this.audit.record({
+      entityType: 'StudentAttendance',
+      entityId: id,
+      action: 'UPDATE',
+      userId: actor.id,
+      oldValues: existing,
+      newValues: row,
     });
     return this.toView(row);
   }

@@ -131,7 +131,7 @@ export class StudentsBulkImportService {
     return Buffer.from(buffer);
   }
 
-  async bulkImport(fileBuffer: Buffer): Promise<BulkImportResult> {
+  async bulkImport(fileBuffer: Buffer, actorId?: number): Promise<BulkImportResult> {
     const workbook = new ExcelJS.Workbook();
     try {
       // exceljs's bundled Buffer type predates @types/node's generic Buffer<T>,
@@ -254,7 +254,7 @@ export class StudentsBulkImportService {
       }
 
       try {
-        await this.students.create(dto);
+        await this.students.create(dto, actorId);
         successCount++;
       } catch (error) {
         recordFailure(error instanceof Error ? error.message : 'Failed to create student');

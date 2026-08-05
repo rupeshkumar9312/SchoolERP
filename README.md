@@ -1,6 +1,6 @@
 # School ERP
 
-A school management system built module by module. Current state: **Module 9 (Reports) complete** — admins can pull an attendance % breakdown by class/student, a below-threshold defaulters list, and a staff attendance summary, each over a filterable date range that excludes holidays. The MVP (Modules 6–7) shipped before this; everything from here improves the experience but isn't blocking.
+A school management system built module by module. Current state: **Module 10 (Audit Log & Admin Tools) complete** — every create/update/delete on students, teachers, staff accounts and attendance is recorded with before/after values and who did it, viewable in a SUPER_ADMIN-only Audit Log screen. The MVP (Modules 6–7) shipped before this; everything from here improves the experience but isn't blocking.
 
 - **Backend** — NestJS 11 + Prisma 6 + PostgreSQL
 - **Frontend** — React 19 + Vite 6 + TypeScript
@@ -108,6 +108,9 @@ SchoolERP/
 │   │   ├── reports/                 GET /reports/attendance-summary(?class_id=&section_id=&from=&to=),
 │   │   │                            /reports/defaulters(?threshold=), /reports/staff-attendance-summary
 │   │   │                            — all academic.view-gated, all default to the current UTC month
+│   │   ├── audit/                   AuditLogService.record() called from Students/Teachers/Users/
+│   │   │                            Attendance services on every create/update/delete; GET /audit-logs
+│   │   │                            (SUPER_ADMIN only, via SuperAdminGuard — not permission-based)
 │   │   ├── config/           env validation — fails fast on a bad .env
 │   │   ├── health/           GET /api/health
 │   │   ├── prisma/           global PrismaService (+ ping for health)
@@ -128,7 +131,8 @@ SchoolERP/
 │       │                         (admin sheet, filterable by date), dashboard/AdminDashboard,
 │       │                         dashboard/TeacherDashboard (DashboardHome picks one by role),
 │       │                         ReportsPage (tabbed: summary/defaulters/staff, CSV export,
-│       │                         AcademicSetupPage grew a Holidays panel to feed it)
+│       │                         AcademicSetupPage grew a Holidays panel to feed it),
+│       │                         AuditLogsPage (SUPER_ADMIN only: filter + expandable before/after)
 │       └── shell/                topbar + permission-and-role-driven sidebar
 │                                  (nav-config.ts), mobile drawer under 768px
 ├── .github/workflows/ci.yml
@@ -188,6 +192,11 @@ SchoolERP/
 - `Holiday` (`holidays` table, unique on `date`) exists purely to be subtracted from attendance-% denominators: `ReportsService` fetches holiday dates in range and passes them to Prisma's `notIn` on the attendance query. Manage them from Academic Setup's new "Holidays" panel (date + name, no edit — delete and re-add), not a separate page, since it's calendar config like years/classes/sections.
 - Every `/reports/*` endpoint defaults `from`/`to` to the current UTC calendar month when omitted (`ReportsService.resolveRange()`) — same UTC-not-local-time rule as `todayUtcDate()`, and it's what makes "students below 75% this month" a zero-filter, one-click screen per the Module 9 "done when."
 - CSV export on `ReportsPage` is client-side (`components/csv.ts`, a `Blob` + anchor-download) rather than a backend endpoint — the data's already loaded as JSON for the on-screen table, so exporting it is just a client-side reshape. PDF export was skipped (marked optional in the spec); revisit only if actually requested.
+- Module 10 logs from the **service layer**, not a global interceptor as the spec first suggests — a generic HTTP-layer interceptor can't cleanly tell a real create from an upsert-as-correction (`TeacherAttendanceService.mark()`, `POST /attendance/teachers`), and breaks entirely on bulk endpoints that mutate many rows in one request (`AttendanceService.markBulk()`, `POST /attendance/students`; `StudentsBulkImportService.bulkImport()`). Each mutating service method already computes exactly what changed, so it calls `AuditLogService.record()` directly — one line, no fragile response-shape inference. Most controllers already threaded an `actor`/`@CurrentUser()` through (Users, Attendance, TeacherAttendance); `Students` and `Teachers` needed a new optional `actorId` parameter added to `create`/`update`/`remove` (and `Teachers`' assignment methods) to attribute the log entry — a small, mechanical, low-risk change since nothing about the existing business logic moved.
+- `AuditLogService.record()` never throws — a failed audit write is logged server-side (`Logger.error`) and swallowed, not propagated, so a broken `audit_logs` table (or its own transient DB hiccup) can never block a legitimate mutation that already succeeded. Accountability is important, but it must never become a single point of failure for the thing it's watching.
+- Bulk operations get one audit row **per affected entity**, not one row for the whole batch: `markBulk()` fetches the existing `(studentId, date)` rows before the transaction so each resulting row can be correctly tagged CREATE or UPDATE, and `StudentsBulkImportService` gets per-student audit logging for free because it already calls `StudentsService.create()` per row — no separate bulk-import-specific logging code was needed.
+- `AuditLogService` stores raw Prisma rows as `oldValues`/`newValues` (flat `classId`/`sectionId`, not the nested `{id,name}` shape the list/detail endpoints return) — a forensic trail favors exact column values over the friendlier shape a UI wants. The one exception: `UsersService` redacts `passwordHash`/`hashedRefreshToken` before logging a `User` row — a bcrypt hash has no forensic value and shouldn't be duplicated into a second table even hashed.
+- `GET /audit-logs` is gated by a new `SuperAdminGuard` (checks `roleName === 'SUPER_ADMIN'` directly), not `@RequirePermission` — Director/Principal/Admin hold every key in `PERMISSIONS` via the existing "Management" seed, so no permission string could be SUPER_ADMIN-exclusive without restructuring that seed. This is the first route in the app gated by role instead of permission; `ProtectedRoute` grew a matching optional `roles?: string[]` prop (alongside the existing `permission?`) so the frontend route gets the same restriction, mirroring how `navConfig.ts` entries already support both `permission` and `roles` for nav visibility.
 
 ### Notes on this machine's toolchain
 
@@ -389,7 +398,7 @@ Goal: Turn raw attendance data into decisions.
 
 **Done when:** Admin can pull "students below 75% attendance this month" in one screen.
 
-## MODULE 10 — Audit Log & Admin Tools
+## MODULE 10 — Audit Log & Admin Tools ✅
 
 Goal: Accountability layer — who changed what.
 
@@ -448,7 +457,7 @@ Goal: Production readiness.
 7. Teacher Attendance     ✅ done ─┘  Core feature — the reason the app exists
 8. Dashboards               ✅ done
 9. Reports                  ✅ done
-10. Audit Log
+10. Audit Log               ✅ done
 11. Notifications          (optional, can slot in anytime after Module 6)
 12. Polish & Hardening
 ```

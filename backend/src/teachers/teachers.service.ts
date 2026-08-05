@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
+import { AuditLogService } from '../audit/audit-log.service';
 import { TEACHER_ROLE } from '../auth/roles.constants';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateAssignmentDto } from './dto/create-assignment.dto';
@@ -50,7 +51,10 @@ type SectionWithClass = Prisma.SectionGetPayload<{ include: { class: true } }>;
 
 @Injectable()
 export class TeachersService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly audit: AuditLogService,
+  ) {}
 
   async findAll(): Promise<TeacherView[]> {
     const teachers = await this.prisma.teacher.findMany({
@@ -69,7 +73,7 @@ export class TeachersService {
     return this.toView(teacher);
   }
 
-  async create(dto: CreateTeacherDto): Promise<TeacherView> {
+  async create(dto: CreateTeacherDto, actorId?: number): Promise<TeacherView> {
     const role = await this.prisma.role.findUnique({ where: { name: TEACHER_ROLE } });
     if (!role) throw new BadRequestException('TEACHER role is not seeded');
 
@@ -91,14 +95,24 @@ export class TeachersService {
         },
         include: { user: true },
       });
+      await this.audit.record({
+        entityType: 'Teacher',
+        entityId: teacher.id,
+        action: 'CREATE',
+        userId: actorId,
+        newValues: teacher,
+      });
       return this.toView(teacher);
     } catch (error) {
       throw this.mapError(error, 'A user with this email already exists');
     }
   }
 
-  async update(id: number, dto: UpdateTeacherDto): Promise<TeacherView> {
-    const existing = await this.prisma.teacher.findUnique({ where: { id } });
+  async update(id: number, dto: UpdateTeacherDto, actorId?: number): Promise<TeacherView> {
+    const existing = await this.prisma.teacher.findUnique({
+      where: { id },
+      include: { user: true },
+    });
     if (!existing) throw new NotFoundException('Teacher not found');
 
     try {
@@ -118,14 +132,25 @@ export class TeachersService {
         },
         include: { user: true },
       });
+      await this.audit.record({
+        entityType: 'Teacher',
+        entityId: teacher.id,
+        action: 'UPDATE',
+        userId: actorId,
+        oldValues: existing,
+        newValues: teacher,
+      });
       return this.toView(teacher);
     } catch (error) {
       throw this.mapError(error, 'A user with this email already exists');
     }
   }
 
-  async remove(id: number): Promise<void> {
-    const existing = await this.prisma.teacher.findUnique({ where: { id } });
+  async remove(id: number, actorId?: number): Promise<void> {
+    const existing = await this.prisma.teacher.findUnique({
+      where: { id },
+      include: { user: true },
+    });
     if (!existing) throw new NotFoundException('Teacher not found');
     try {
       // Cascades to the Teacher row and their assignments (User.teacher, Teacher.assignments onDelete: Cascade).
@@ -136,6 +161,13 @@ export class TeachersService {
         'Cannot delete this teacher: they have marked attendance records that must be reassigned first',
       );
     }
+    await this.audit.record({
+      entityType: 'Teacher',
+      entityId: id,
+      action: 'DELETE',
+      userId: actorId,
+      oldValues: existing,
+    });
   }
 
   async findAssignments(teacherId: number): Promise<AssignmentView[]> {
@@ -154,7 +186,11 @@ export class TeachersService {
     return this.findAssignments(teacher.id);
   }
 
-  async createAssignment(teacherId: number, dto: CreateAssignmentDto): Promise<AssignmentView> {
+  async createAssignment(
+    teacherId: number,
+    dto: CreateAssignmentDto,
+    actorId?: number,
+  ): Promise<AssignmentView> {
     await this.assertTeacherExists(teacherId);
 
     const [section, subject] = await Promise.all([
@@ -195,6 +231,13 @@ export class TeachersService {
           include: { class: true, section: true, subject: true },
         });
       }
+      await this.audit.record({
+        entityType: 'TeacherAssignment',
+        entityId: row.id,
+        action: 'CREATE',
+        userId: actorId,
+        newValues: row,
+      });
       return this.toAssignmentView(row);
     } catch (error) {
       throw this.mapError(
@@ -204,10 +247,17 @@ export class TeachersService {
     }
   }
 
-  async removeAssignment(teacherId: number, assignmentId: number): Promise<void> {
+  async removeAssignment(teacherId: number, assignmentId: number, actorId?: number): Promise<void> {
     const row = await this.prisma.teacherClassSubject.findUnique({ where: { id: assignmentId } });
     if (!row || row.teacherId !== teacherId) throw new NotFoundException('Assignment not found');
     await this.prisma.teacherClassSubject.delete({ where: { id: assignmentId } });
+    await this.audit.record({
+      entityType: 'TeacherAssignment',
+      entityId: assignmentId,
+      action: 'DELETE',
+      userId: actorId,
+      oldValues: row,
+    });
   }
 
   /** Makes this teacher the class (homeroom) teacher of the section, replacing whoever held it. */

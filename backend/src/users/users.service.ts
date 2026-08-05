@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
+import { AuditLogService } from '../audit/audit-log.service';
 import { AuthenticatedUser } from '../auth/auth.types';
 import { SUPER_ADMIN_ROLE } from '../auth/roles.constants';
 import { PrismaService } from '../prisma/prisma.service';
@@ -28,7 +29,10 @@ export interface UserView {
 
 @Injectable()
 export class UsersService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly audit: AuditLogService,
+  ) {}
 
   async findAll(query: ListUsersQueryDto): Promise<UserView[]> {
     const users = await this.prisma.user.findMany({
@@ -72,6 +76,13 @@ export class UsersService {
         },
         include: { role: true },
       });
+      await this.audit.record({
+        entityType: 'User',
+        entityId: user.id,
+        action: 'CREATE',
+        userId: actor.id,
+        newValues: this.redact(user),
+      });
       return this.toView(user);
     } catch (error) {
       throw this.mapWriteError(error);
@@ -101,6 +112,14 @@ export class UsersService {
         },
         include: { role: true },
       });
+      await this.audit.record({
+        entityType: 'User',
+        entityId: user.id,
+        action: 'UPDATE',
+        userId: actor.id,
+        oldValues: this.redact(existing),
+        newValues: this.redact(user),
+      });
       return this.toView(user);
     } catch (error) {
       throw this.mapWriteError(error);
@@ -113,6 +132,23 @@ export class UsersService {
     this.assertMayModify(existing.role.name, actor);
 
     await this.prisma.user.delete({ where: { id } });
+    await this.audit.record({
+      entityType: 'User',
+      entityId: id,
+      action: 'DELETE',
+      userId: actor.id,
+      oldValues: this.redact(existing),
+    });
+  }
+
+  /** Never let a bcrypt hash or refresh-token hash land in the audit trail. */
+  private redact<T extends { passwordHash?: unknown; hashedRefreshToken?: unknown }>(
+    entity: T,
+  ): Omit<T, 'passwordHash' | 'hashedRefreshToken'> {
+    const copy: Record<string, unknown> = { ...entity };
+    delete copy.passwordHash;
+    delete copy.hashedRefreshToken;
+    return copy as Omit<T, 'passwordHash' | 'hashedRefreshToken'>;
   }
 
   /** Non-SUPER_ADMIN callers may neither touch an existing SUPER_ADMIN account... */
