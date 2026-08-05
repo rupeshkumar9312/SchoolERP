@@ -1,11 +1,52 @@
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
 :root {
-  font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
+  color-scheme: light dark;
+
+  /* Dark theme is the default palette; the light media query below overrides it. */
+  --color-bg: #0a0e1a;
+  --color-surface: #131a2b;
+  --color-surface-hover: #182140;
+  --color-border: rgba(148, 163, 184, 0.14);
+  --color-text: #e6eaf2;
+  --color-text-muted: #8b96ac;
+
+  --color-primary: #6366f1;
+  --color-primary-hover: #7678f5;
+  --color-primary-contrast: #ffffff;
+  --color-primary-tint: rgba(99, 102, 241, 0.16);
+
+  --color-success: #34d399;
+  --color-success-tint: rgba(52, 211, 153, 0.14);
+  --color-danger: #f87171;
+  --color-danger-tint: rgba(248, 113, 113, 0.14);
+  --color-warning: #fbbf24;
+  --color-warning-tint: rgba(251, 191, 36, 0.14);
+  --color-info: #818cf8;
+  --color-info-tint: rgba(129, 140, 248, 0.14);
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.24);
+  --shadow-md: 0 12px 28px rgba(0, 0, 0, 0.32);
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 18px;
+
+  font-family:
+    'Inter',
+    system-ui,
+    Avenir,
+    Helvetica,
+    Arial,
+    sans-serif;
   line-height: 1.5;
   font-weight: 400;
 
-  color-scheme: light dark;
-  color: rgba(255, 255, 255, 0.87);
-  background-color: #242424;
+  color: var(--color-text);
+  background-color: var(--color-bg);
 
   font-synthesis: none;
   text-rendering: optimizeLegibility;
@@ -17,26 +58,54 @@ body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
+  background:
+    radial-gradient(1100px circle at 8% -10%, rgba(99, 102, 241, 0.16), transparent 42%),
+    radial-gradient(900px circle at 92% 0%, rgba(139, 92, 246, 0.12), transparent 40%),
+    var(--color-bg);
+  background-attachment: fixed;
+}
+
+h1,
+h2,
+h3 {
+  letter-spacing: -0.01em;
 }
 
 button {
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   border: 1px solid transparent;
-  padding: 0.5em 1em;
+  padding: 0.6em 1.15em;
   font-size: 0.9em;
-  font-weight: 500;
+  font-weight: 600;
   font-family: inherit;
-  color: inherit;
-  background-color: #1a1a1a;
+  color: var(--color-primary-contrast);
+  background: var(--color-primary);
   cursor: pointer;
-  transition: border-color 0.25s;
+  box-shadow: var(--shadow-sm);
+  transition:
+    background-color 0.15s ease,
+    box-shadow 0.15s ease,
+    transform 0.1s ease;
 }
+
 button:hover:not(:disabled) {
-  border-color: #646cff;
+  background: var(--color-primary-hover);
+  box-shadow: var(--shadow-md);
 }
+
+button:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
 button:disabled {
-  opacity: 0.6;
+  opacity: 0.5;
   cursor: default;
+  box-shadow: none;
+}
+
+input,
+select {
+  color-scheme: light dark;
 }
 
 code {
@@ -45,10 +114,36 @@ code {
 
 @media (prefers-color-scheme: light) {
   :root {
-    color: #213547;
-    background-color: #ffffff;
+    --color-bg: #f6f7fb;
+    --color-surface: #ffffff;
+    --color-surface-hover: #f1f2fa;
+    --color-border: rgba(15, 23, 42, 0.09);
+    --color-text: #171b2e;
+    --color-text-muted: #64748b;
+
+    --color-primary: #4f46e5;
+    --color-primary-hover: #4338ca;
+    --color-primary-contrast: #ffffff;
+    --color-primary-tint: rgba(79, 70, 229, 0.08);
+
+    --color-success: #16a34a;
+    --color-success-tint: rgba(22, 163, 74, 0.1);
+    --color-danger: #dc2626;
+    --color-danger-tint: rgba(220, 38, 38, 0.1);
+    --color-warning: #d97706;
+    --color-warning-tint: rgba(217, 119, 6, 0.1);
+    --color-info: #4f46e5;
+    --color-info-tint: rgba(79, 70, 229, 0.09);
+
+    --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.06);
+    --shadow-md: 0 16px 32px rgba(15, 23, 42, 0.08);
   }
-  button {
-    background-color: #f9f9f9;
+
+  body {
+    background:
+      radial-gradient(1100px circle at 8% -10%, rgba(79, 70, 229, 0.07), transparent 42%),
+      radial-gradient(900px circle at 92% 0%, rgba(139, 92, 246, 0.06), transparent 40%),
+      var(--color-bg);
+    background-attachment: fixed;
   }
 }

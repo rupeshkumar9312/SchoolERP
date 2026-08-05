@@ -1,8 +1,8 @@
 // School ERP — Prisma schema
 //
-// Module 0 intentionally defines no models: it only proves that the app can
-// reach PostgreSQL. Module 1 (Auth & RBAC) adds the first tables —
-// users, roles, permissions, role_permissions.
+// Module 1 (Auth & RBAC) — first real tables: users, roles, permissions,
+// role_permissions. Roles/permissions are DB-driven (not enums) so Module 12
+// can offer a role/permission management UI without a code change.
 
 generator client {
   provider = "prisma-client-js"
@@ -11,4 +11,214 @@ generator client {
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
+}
+
+model Role {
+  id          Int              @id @default(autoincrement())
+  name        String           @unique
+  users       User[]
+  permissions RolePermission[]
+  createdAt   DateTime         @default(now())
+
+  @@map("roles")
+}
+
+model Permission {
+  id          Int              @id @default(autoincrement())
+  key         String           @unique
+  description String?
+  roles       RolePermission[]
+  createdAt   DateTime         @default(now())
+
+  @@map("permissions")
+}
+
+model RolePermission {
+  roleId       Int
+  permissionId Int
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+  @@map("role_permissions")
+}
+
+model User {
+  id                      Int                 @id @default(autoincrement())
+  email                   String              @unique
+  passwordHash            String
+  name                    String
+  phone                   String?
+  isActive                Boolean             @default(true)
+  roleId                  Int
+  role                    Role                @relation(fields: [roleId], references: [id])
+  /// bcrypt hash of the current refresh token, cleared on logout — lets us
+  /// revoke a stolen refresh token without a separate token-blacklist table.
+  hashedRefreshToken      String?
+  createdAt               DateTime            @default(now())
+  updatedAt               DateTime            @updatedAt
+  teacher                 Teacher?
+  markedAttendance        StudentAttendance[] @relation("AttendanceMarkedBy")
+  markedTeacherAttendance TeacherAttendance[] @relation("TeacherAttendanceMarkedBy")
+
+  @@map("users")
+}
+
+model AcademicYear {
+  id        Int      @id @default(autoincrement())
+  name      String   @unique
+  /// Only one row may be true at a time — enforced in AcademicService, not the DB.
+  isCurrent Boolean  @default(false)
+  classes   Class[]
+  createdAt DateTime @default(now())
+
+  @@map("academic_years")
+}
+
+model Class {
+  id             Int                   @id @default(autoincrement())
+  name           String
+  academicYearId Int
+  academicYear   AcademicYear          @relation(fields: [academicYearId], references: [id], onDelete: Restrict)
+  sections       Section[]
+  subjects       Subject[]
+  assignments    TeacherClassSubject[]
+  students       Student[]
+  attendance     StudentAttendance[]
+  createdAt      DateTime              @default(now())
+
+  @@unique([academicYearId, name])
+  @@map("classes")
+}
+
+model Section {
+  id             Int                   @id @default(autoincrement())
+  name           String
+  classId        Int
+  class          Class                 @relation(fields: [classId], references: [id], onDelete: Restrict)
+  assignments    TeacherClassSubject[]
+  students       Student[]
+  attendance     StudentAttendance[]
+  /// The homeroom teacher, distinct from a TeacherClassSubject row: a subject
+  /// teacher can be assigned to teach here without being able to mark
+  /// attendance for it. Nullable — a section may have no class teacher yet,
+  /// and a teacher may hold this for zero, one, or several sections.
+  classTeacherId Int?
+  classTeacher   Teacher?              @relation("ClassTeacherOf", fields: [classTeacherId], references: [id], onDelete: SetNull)
+  createdAt      DateTime              @default(now())
+
+  @@unique([classId, name])
+  @@map("sections")
+}
+
+model Subject {
+  id          Int                   @id @default(autoincrement())
+  name        String
+  classId     Int
+  class       Class                 @relation(fields: [classId], references: [id], onDelete: Restrict)
+  assignments TeacherClassSubject[]
+  createdAt   DateTime              @default(now())
+
+  @@unique([classId, name])
+  @@map("subjects")
+}
+
+model Teacher {
+  id             Int                   @id @default(autoincrement())
+  userId         Int                   @unique
+  user           User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  qualification  String?
+  joiningDate    DateTime
+  assignments    TeacherClassSubject[]
+  attendance     TeacherAttendance[]
+  classTeacherOf Section[]             @relation("ClassTeacherOf")
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
+
+  @@map("teachers")
+}
+
+/// A teacher's assignment to teach one subject to one class+section.
+model TeacherClassSubject {
+  id        Int      @id @default(autoincrement())
+  teacherId Int
+  teacher   Teacher  @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  classId   Int
+  class     Class    @relation(fields: [classId], references: [id], onDelete: Restrict)
+  sectionId Int
+  section   Section  @relation(fields: [sectionId], references: [id], onDelete: Restrict)
+  subjectId Int
+  subject   Subject  @relation(fields: [subjectId], references: [id], onDelete: Restrict)
+  createdAt DateTime @default(now())
+
+  @@unique([teacherId, classId, sectionId, subjectId])
+  @@map("teacher_class_subject")
+}
+
+model Student {
+  id            Int                 @id @default(autoincrement())
+  admissionNo   String              @unique
+  name          String
+  dateOfBirth   DateTime?
+  gender        String?
+  classId       Int
+  class         Class               @relation(fields: [classId], references: [id], onDelete: Restrict)
+  sectionId     Int
+  section       Section             @relation(fields: [sectionId], references: [id], onDelete: Restrict)
+  guardianName  String?
+  guardianPhone String?
+  guardianEmail String?
+  address       String?
+  isActive      Boolean             @default(true)
+  admissionDate DateTime            @default(now())
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+  attendance    StudentAttendance[]
+
+  @@map("students")
+}
+
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+  LATE
+  LEAVE
+}
+
+model StudentAttendance {
+  id         Int              @id @default(autoincrement())
+  studentId  Int
+  student    Student          @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  date       DateTime         @db.Date
+  status     AttendanceStatus
+  /// Snapshot of the student's class/section on the marked date, so a later
+  /// class change doesn't rewrite history or break filtering by past class.
+  classId    Int
+  class      Class            @relation(fields: [classId], references: [id], onDelete: Restrict)
+  sectionId  Int
+  section    Section          @relation(fields: [sectionId], references: [id], onDelete: Restrict)
+  markedById Int
+  markedBy   User             @relation("AttendanceMarkedBy", fields: [markedById], references: [id], onDelete: Restrict)
+  createdAt  DateTime         @default(now())
+  updatedAt  DateTime         @updatedAt
+
+  @@unique([studentId, date])
+  @@map("student_attendance")
+}
+
+/// Staff attendance, separate from StudentAttendance — a teacher self-marks
+/// their own row; admins may mark/edit any teacher's row for any date.
+model TeacherAttendance {
+  id         Int              @id @default(autoincrement())
+  teacherId  Int
+  teacher    Teacher          @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  date       DateTime         @db.Date
+  status     AttendanceStatus
+  markedById Int
+  markedBy   User             @relation("TeacherAttendanceMarkedBy", fields: [markedById], references: [id], onDelete: Restrict)
+  createdAt  DateTime         @default(now())
+  updatedAt  DateTime         @updatedAt
+
+  @@unique([teacherId, date])
+  @@map("teacher_attendance")
 }

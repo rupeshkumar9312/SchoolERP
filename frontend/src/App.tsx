@@ -1,78 +1,92 @@
-import { useCallback, useEffect, useState } from 'react';
+import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import './App.css';
-import { API_URL } from './api/client';
-import { fetchHealth, type HealthResponse } from './api/health';
-
-type State =
-  | { phase: 'loading' }
-  | { phase: 'ready'; health: HealthResponse }
-  | { phase: 'error'; message: string };
+import { AcademicSetupPage } from './pages/AcademicSetupPage';
+import { AttendanceHistoryPage } from './pages/AttendanceHistoryPage';
+import { AuthProvider } from './auth/AuthContext';
+import { ProtectedRoute } from './auth/ProtectedRoute';
+import { DashboardHome } from './pages/DashboardHome';
+import { LoginPage } from './pages/LoginPage';
+import { MarkAttendancePage } from './pages/MarkAttendancePage';
+import { MyAttendancePage } from './pages/MyAttendancePage';
+import { MyClassesPage } from './pages/MyClassesPage';
+import { MyStudentsPage } from './pages/MyStudentsPage';
+import { StaffAttendancePage } from './pages/StaffAttendancePage';
+import { StudentFormPage } from './pages/StudentFormPage';
+import { StudentsListPage } from './pages/StudentsListPage';
+import { TeacherAssignmentsPage } from './pages/TeacherAssignmentsPage';
+import { TeacherFormPage } from './pages/TeacherFormPage';
+import { TeachersListPage } from './pages/TeachersListPage';
+import { UserFormPage } from './pages/UserFormPage';
+import { UsersListPage } from './pages/UsersListPage';
+import { AppShell } from './shell/AppShell';
 
 function App() {
-  const [state, setState] = useState<State>({ phase: 'loading' });
-
-  const check = useCallback(async () => {
-    setState({ phase: 'loading' });
-    try {
-      setState({ phase: 'ready', health: await fetchHealth() });
-    } catch (error) {
-      setState({ phase: 'error', message: error instanceof Error ? error.message : String(error) });
-    }
-  }, []);
-
-  useEffect(() => {
-    void check();
-  }, [check]);
-
   return (
-    <main className="shell">
-      <header>
-        <h1>School ERP</h1>
-        <p className="subtitle">Module 0 — Project Setup</p>
-      </header>
+    <BrowserRouter>
+      <AuthProvider>
+        <Routes>
+          <Route path="/login" element={<LoginPage />} />
+          <Route element={<ProtectedRoute />}>
+            <Route element={<AppShell />}>
+              <Route path="/" element={<DashboardHome />} />
 
-      <section className="card">
-        <div className="card-head">
-          <h2>API health</h2>
-          <button onClick={() => void check()} disabled={state.phase === 'loading'}>
-            {state.phase === 'loading' ? 'Checking…' : 'Re-check'}
-          </button>
-        </div>
+              <Route element={<ProtectedRoute permission="user.view" />}>
+                <Route path="/users" element={<UsersListPage />} />
+              </Route>
+              <Route element={<ProtectedRoute permission="user.create" />}>
+                <Route path="/users/new" element={<UserFormPage />} />
+              </Route>
+              <Route element={<ProtectedRoute permission="user.edit" />}>
+                <Route path="/users/:id/edit" element={<UserFormPage />} />
+              </Route>
 
-        <p className="endpoint">
-          GET <code>{API_URL}/health</code>
-        </p>
+              <Route element={<ProtectedRoute permission="academic.view" />}>
+                <Route path="/academic-setup" element={<AcademicSetupPage />} />
+              </Route>
 
-        {state.phase === 'loading' && <p className="muted">Contacting the API…</p>}
+              <Route element={<ProtectedRoute permission="teacher.view" />}>
+                <Route path="/teachers" element={<TeachersListPage />} />
+              </Route>
+              <Route element={<ProtectedRoute permission="teacher.create" />}>
+                <Route path="/teachers/new" element={<TeacherFormPage />} />
+              </Route>
+              <Route element={<ProtectedRoute permission="teacher.edit" />}>
+                <Route path="/teachers/:id/edit" element={<TeacherFormPage />} />
+              </Route>
+              <Route element={<ProtectedRoute permission="teacher.assign" />}>
+                <Route path="/teachers/:id/assignments" element={<TeacherAssignmentsPage />} />
+              </Route>
 
-        {state.phase === 'error' && (
-          <div className="status down">
-            <strong>Unreachable</strong>
-            <p>{state.message}</p>
-          </div>
-        )}
+              <Route element={<ProtectedRoute permission="student.view" />}>
+                <Route path="/students" element={<StudentsListPage />} />
+              </Route>
+              <Route element={<ProtectedRoute permission="student.create" />}>
+                <Route path="/students/new" element={<StudentFormPage />} />
+              </Route>
+              <Route element={<ProtectedRoute permission="student.edit" />}>
+                <Route path="/students/:id/edit" element={<StudentFormPage />} />
+              </Route>
 
-        {state.phase === 'ready' && (
-          <>
-            <div className={`status ${state.health.status === 'ok' ? 'up' : 'down'}`}>
-              <strong>API: {state.health.status}</strong>
-              <p>
-                {state.health.service} · up {state.health.uptime}s
-              </p>
-            </div>
-            <div
-              className={`status ${state.health.dependencies.database.status === 'up' ? 'up' : 'down'}`}
-            >
-              <strong>Database: {state.health.dependencies.database.status}</strong>
-              {state.health.dependencies.database.error && (
-                <p>{state.health.dependencies.database.error}</p>
-              )}
-            </div>
-            <pre>{JSON.stringify(state.health, null, 2)}</pre>
-          </>
-        )}
-      </section>
-    </main>
+              <Route path="/my-classes" element={<MyClassesPage />} />
+              <Route path="/my-students" element={<MyStudentsPage />} />
+
+              <Route element={<ProtectedRoute permission="attendance.student.mark" />}>
+                <Route path="/attendance/mark" element={<MarkAttendancePage />} />
+              </Route>
+              <Route element={<ProtectedRoute permission="attendance.student.view" />}>
+                <Route path="/attendance/history" element={<AttendanceHistoryPage />} />
+              </Route>
+
+              <Route path="/my-attendance" element={<MyAttendancePage />} />
+              <Route element={<ProtectedRoute permission="teacher.view" />}>
+                <Route path="/staff-attendance" element={<StaffAttendancePage />} />
+              </Route>
+            </Route>
+          </Route>
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </AuthProvider>
+    </BrowserRouter>
   );
 }
 
