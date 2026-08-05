@@ -13,6 +13,7 @@ import {
   IconTeachers,
 } from '../../components/DashboardIcons';
 import { AttendanceBreakdown } from './AttendanceBreakdown';
+import { DashboardSkeleton } from '../../components/Skeleton';
 
 const QUICK_LINKS: Array<{ label: string; path: string; permission: string }> = [
   { label: 'Users', path: '/users', permission: 'user.view' },
@@ -24,10 +25,10 @@ const QUICK_LINKS: Array<{ label: string; path: string; permission: string }> = 
 ];
 
 const STAT_ACCENTS = {
-  students: { accent: '#6366f1', tint: 'rgba(99, 102, 241, 0.14)' },
-  teachers: { accent: '#a855f7', tint: 'rgba(168, 85, 247, 0.14)' },
-  classes: { accent: '#0ea5e9', tint: 'rgba(14, 165, 233, 0.14)' },
-  sections: { accent: '#f43f5e', tint: 'rgba(244, 63, 94, 0.14)' },
+  students: { accent: '#2f7cd6', tint: 'rgba(47, 124, 214, 0.14)' },
+  teachers: { accent: '#22a375', tint: 'rgba(34, 163, 117, 0.14)' },
+  classes: { accent: '#0e9aab', tint: 'rgba(14, 154, 171, 0.14)' },
+  sections: { accent: '#64748b', tint: 'rgba(100, 116, 139, 0.14)' },
 } as const;
 
 function accentStyle(key: keyof typeof STAT_ACCENTS): CSSProperties {
@@ -60,7 +61,7 @@ export function AdminDashboard() {
     void load();
   }, [load]);
 
-  if (loading) return <p className="muted">Loading dashboard…</p>;
+  if (loading) return <DashboardSkeleton />;
 
   if (error || !summary) {
     return (

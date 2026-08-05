@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import { ApiError } from '../api/client';
 import type { Assignment } from '../api/teachers';
 import { listMyAssignments } from '../api/teachers';
+import { EmptyState } from '../components/EmptyState';
+import { TableSkeleton } from '../components/Skeleton';
 
 export function MyClassesPage() {
   const [assignments, setAssignments] = useState<Assignment[] | null>(null);
@@ -25,11 +27,11 @@ export function MyClassesPage() {
         </div>
       )}
 
-      {!error && assignments === null && <p className="muted">Loading…</p>}
+      {!error && assignments === null && <TableSkeleton columns={4} />}
 
       {assignments !== null &&
         (assignments.length === 0 ? (
-          <p className="muted">You have no assigned classes yet.</p>
+          <EmptyState title="No assigned classes yet" />
         ) : (
           <div className="card">
             <table className="data-table">

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import type { TeacherSummary } from '../../api/dashboard';
 import { getTeacherSummary } from '../../api/dashboard';
 import { ApiError } from '../../api/client';
+import { Skeleton } from '../../components/Skeleton';
 
 export function TeacherDashboard() {
   const navigate = useNavigate();
@@ -26,7 +27,20 @@ export function TeacherDashboard() {
     void load();
   }, [load]);
 
-  if (loading) return <p className="muted">Loading dashboard…</p>;
+  if (loading) {
+    return (
+      <>
+        <div className="card">
+          <Skeleton width="40%" height="1.1rem" />
+          <Skeleton width="25%" height="2rem" className="skeleton-block" />
+        </div>
+        <div className="card">
+          <Skeleton width="35%" height="1.1rem" />
+          <Skeleton width="100%" height="6rem" className="skeleton-block" />
+        </div>
+      </>
+    );
+  }
 
   if (error || !summary) {
     return (

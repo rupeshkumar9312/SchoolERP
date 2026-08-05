@@ -6,9 +6,15 @@ import { listRoles } from '../api/roles';
 import type { UserListItem } from '../api/users';
 import { deleteUser, listUsers } from '../api/users';
 import { useAuth } from '../auth/useAuth';
+import { useConfirm } from '../components/useConfirm';
+import { useToast } from '../components/useToast';
+import { EmptyState } from '../components/EmptyState';
+import { TableSkeleton } from '../components/Skeleton';
 
 export function UsersListPage() {
   const { hasPermission } = useAuth();
+  const confirm = useConfirm();
+  const toast = useToast();
   const [users, setUsers] = useState<UserListItem[]>([]);
   const [roles, setRoles] = useState<Role[]>([]);
   const [roleFilter, setRoleFilter] = useState<string>('');
@@ -37,11 +43,17 @@ export function UsersListPage() {
   }, [load]);
 
   const onDelete = async (user: UserListItem) => {
-    if (!window.confirm(`Delete ${user.name}? This can't be undone.`)) return;
+    const ok = await confirm({
+      title: `Delete ${user.name}?`,
+      message: "This can't be undone.",
+      confirmLabel: 'Delete',
+    });
+    if (!ok) return;
     setDeletingId(user.id);
     try {
       await deleteUser(user.id);
       setUsers((prev) => prev.filter((u) => u.id !== user.id));
+      toast(`${user.name} was deleted.`);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Failed to delete user');
     } finally {
@@ -80,9 +92,9 @@ export function UsersListPage() {
       )}
 
       {loading ? (
-        <p className="muted">Loading…</p>
+        <TableSkeleton columns={5} />
       ) : users.length === 0 ? (
-        <p className="muted">No users found.</p>
+        <EmptyState title="No users found" message="Try a different role filter, or create the first one." />
       ) : (
         <div className="card">
           <table className="data-table">

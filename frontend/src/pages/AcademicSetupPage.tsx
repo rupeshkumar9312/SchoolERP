@@ -2,11 +2,13 @@ import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import * as academic from '../api/academic';
 import type { AcademicYear } from '../api/academic';
 import { useAuth } from '../auth/useAuth';
+import { useConfirm } from '../components/useConfirm';
 import { NamedItemList } from './academic/NamedItemList';
 
 export function AcademicSetupPage() {
   const { hasPermission } = useAuth();
   const canManage = hasPermission('academic.manage');
+  const confirm = useConfirm();
 
   const [years, setYears] = useState<AcademicYear[]>([]);
   const [selectedYearId, setSelectedYearId] = useState<number | null>(null);
@@ -93,7 +95,8 @@ export function AcademicSetupPage() {
   };
 
   const deleteYear = async (year: AcademicYear) => {
-    if (!window.confirm(`Delete academic year "${year.name}"?`)) return;
+    const ok = await confirm({ title: `Delete academic year "${year.name}"?`, confirmLabel: 'Delete' });
+    if (!ok) return;
     setBusyYearId(year.id);
     setError(null);
     try {

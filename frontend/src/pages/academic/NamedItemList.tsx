@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react';
+import { useConfirm } from '../../components/useConfirm';
 
 interface NamedItem {
   id: number;
@@ -39,6 +40,7 @@ export function NamedItemList({
   const [editingName, setEditingName] = useState('');
   const [busyId, setBusyId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const confirm = useConfirm();
 
   const sortedItems = [...items].sort((a, b) => collator.compare(a.name, b.name));
 
@@ -78,7 +80,8 @@ export function NamedItemList({
   };
 
   const remove = async (item: NamedItem) => {
-    if (!window.confirm(`Delete "${item.name}"?`)) return;
+    const ok = await confirm({ title: `Delete "${item.name}"?`, confirmLabel: 'Delete' });
+    if (!ok) return;
     setBusyId(item.id);
     setError(null);
     try {

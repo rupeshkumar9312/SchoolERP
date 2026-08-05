@@ -1,7 +1,36 @@
+import type { ReactElement } from 'react';
 import { useEffect, useState } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
+import edvanceMarkDark from '../assets/edvance-mark-dark.png';
+import edvanceMark from '../assets/edvance-mark.png';
 import { useAuth } from '../auth/useAuth';
+import {
+  IconAcademicCap,
+  IconBookOpen,
+  IconBriefcase,
+  IconClipboardCheck,
+  IconClipboardList,
+  IconGraduate,
+  IconHistory,
+  IconHome,
+  IconUserCheck,
+  IconUsersGroup,
+} from '../components/NavIcons';
 import { navItems } from './navConfig';
+
+const NAV_ICONS: Record<string, (props: { className?: string }) => ReactElement> = {
+  '/': IconHome,
+  '/users': IconUsersGroup,
+  '/academic-setup': IconAcademicCap,
+  '/teachers': IconBriefcase,
+  '/students': IconGraduate,
+  '/my-classes': IconBookOpen,
+  '/my-students': IconGraduate,
+  '/attendance/mark': IconClipboardCheck,
+  '/attendance/history': IconHistory,
+  '/my-attendance': IconUserCheck,
+  '/staff-attendance': IconClipboardList,
+};
 
 export function AppShell() {
   const { state, logout, hasPermission } = useAuth();
@@ -32,7 +61,11 @@ export function AppShell() {
             <span />
             <span />
           </button>
-          <span className="brand">School ERP</span>
+          <span className="brand">
+            <img src={edvanceMarkDark} alt="EDVANCE" className="brand-mark theme-dark-only" />
+            <img src={edvanceMark} alt="EDVANCE" className="brand-mark theme-light-only" />
+            <span className="brand-text">EDVANCE</span>
+          </span>
         </div>
         {user && (
           <div className="topbar-user">
@@ -50,20 +83,26 @@ export function AppShell() {
         {drawerOpen && <div className="drawer-backdrop" onClick={() => setDrawerOpen(false)} />}
         <aside className={`sidebar ${drawerOpen ? 'sidebar-open' : ''}`}>
           <nav>
-            {visibleItems.map((item) => (
-              <NavLink
-                key={item.path}
-                to={item.path}
-                className={({ isActive }) => `nav-link ${isActive ? 'nav-link-active' : ''}`}
-                end={item.path === '/'}
-              >
-                {item.label}
-              </NavLink>
-            ))}
+            {visibleItems.map((item) => {
+              const Icon = NAV_ICONS[item.path];
+              return (
+                <NavLink
+                  key={item.path}
+                  to={item.path}
+                  className={({ isActive }) => `nav-link ${isActive ? 'nav-link-active' : ''}`}
+                  end={item.path === '/'}
+                >
+                  {Icon && <Icon />}
+                  {item.label}
+                </NavLink>
+              );
+            })}
           </nav>
         </aside>
         <main className="content">
-          <Outlet />
+          <div key={location.pathname} className="page-transition">
+            <Outlet />
+          </div>
         </main>
       </div>
     </div>

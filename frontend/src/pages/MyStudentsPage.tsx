@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import { ApiError } from '../api/client';
 import type { Student } from '../api/students';
 import { listMyClassStudents } from '../api/students';
+import { EmptyState } from '../components/EmptyState';
+import { TableSkeleton } from '../components/Skeleton';
 
 export function MyStudentsPage() {
   const [students, setStudents] = useState<Student[] | null>(null);
@@ -25,11 +27,11 @@ export function MyStudentsPage() {
         </div>
       )}
 
-      {!error && students === null && <p className="muted">Loading…</p>}
+      {!error && students === null && <TableSkeleton columns={5} />}
 
       {students !== null &&
         (students.length === 0 ? (
-          <p className="muted">No students in your assigned classes yet.</p>
+          <EmptyState title="No students yet" message="Students in your assigned classes will show up here." />
         ) : (
           <div className="card">
             <table className="data-table">

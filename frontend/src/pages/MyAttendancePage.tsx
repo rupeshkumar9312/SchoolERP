@@ -5,6 +5,8 @@ import { listTeacherAttendance, markTeacherAttendance } from '../api/teacherAtte
 import { AttendanceStatusToggle } from './attendance/AttendanceStatusToggle';
 import { todayUtcDate } from './attendance/todayUtc';
 import type { AttendanceStatus } from '../api/attendance';
+import { EmptyState } from '../components/EmptyState';
+import { Skeleton } from '../components/Skeleton';
 
 export function MyAttendancePage() {
   const today = todayUtcDate();
@@ -69,9 +71,13 @@ export function MyAttendancePage() {
           <h2>Recent history</h2>
         </div>
         {loading ? (
-          <p className="muted">Loading…</p>
+          <>
+            <Skeleton height="1.1rem" className="skeleton-block" />
+            <Skeleton height="1.1rem" className="skeleton-block" />
+            <Skeleton height="1.1rem" className="skeleton-block" />
+          </>
         ) : history.length === 0 ? (
-          <p className="muted">No attendance marked yet.</p>
+          <EmptyState title="No attendance marked yet" />
         ) : (
           <table className="data-table">
             <thead>

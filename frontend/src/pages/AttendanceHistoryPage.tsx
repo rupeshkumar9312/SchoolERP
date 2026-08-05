@@ -6,6 +6,8 @@ import { useAuth } from '../auth/useAuth';
 import { AttendanceStatusToggle } from './attendance/AttendanceStatusToggle';
 import { todayUtcDate } from './attendance/todayUtc';
 import { useClassSectionScope } from './attendance/useClassSectionScope';
+import { EmptyState } from '../components/EmptyState';
+import { TableSkeleton } from '../components/Skeleton';
 
 export function AttendanceHistoryPage() {
   const { hasPermission } = useAuth();
@@ -145,11 +147,11 @@ export function AttendanceHistoryPage() {
       )}
 
       {!classId || !sectionId ? (
-        <p className="muted">Select a class and section to see attendance.</p>
+        <EmptyState title="Select a class and section" message="Pick a class and section above to see attendance." />
       ) : loading ? (
-        <p className="muted">Loading…</p>
+        <TableSkeleton columns={4} />
       ) : records.length === 0 ? (
-        <p className="muted">No attendance marked for this date yet.</p>
+        <EmptyState title="No attendance marked" message="Nothing has been marked for this date yet." />
       ) : (
         <div className="card">
           <table className="data-table">

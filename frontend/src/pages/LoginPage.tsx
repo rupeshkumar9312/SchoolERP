@@ -1,5 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { Navigate, useLocation, useNavigate } from 'react-router-dom';
+import edvanceLogoDark from '../assets/edvance-logo-dark.png';
+import edvanceLogo from '../assets/edvance-logo.png';
 import { ApiError } from '../api/client';
 import { useAuth } from '../auth/useAuth';
 
@@ -33,8 +35,13 @@ export function LoginPage() {
 
   return (
     <main className="shell">
-      <header>
-        <h1>School ERP</h1>
+      <header className="login-header">
+        <img
+          src={edvanceLogoDark}
+          alt="EDVANCE — Effortless Management"
+          className="login-logo theme-dark-only"
+        />
+        <img src={edvanceLogo} alt="EDVANCE — Effortless Management" className="login-logo theme-light-only" />
         <p className="subtitle">Sign in</p>
       </header>
 

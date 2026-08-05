@@ -4,9 +4,15 @@ import { ApiError } from '../api/client';
 import type { Teacher } from '../api/teachers';
 import { deleteTeacher, listTeachers } from '../api/teachers';
 import { useAuth } from '../auth/useAuth';
+import { useConfirm } from '../components/useConfirm';
+import { useToast } from '../components/useToast';
+import { EmptyState } from '../components/EmptyState';
+import { TableSkeleton } from '../components/Skeleton';
 
 export function TeachersListPage() {
   const { hasPermission } = useAuth();
+  const confirm = useConfirm();
+  const toast = useToast();
   const [teachers, setTeachers] = useState<Teacher[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -29,11 +35,17 @@ export function TeachersListPage() {
   }, [load]);
 
   const onDelete = async (teacher: Teacher) => {
-    if (!window.confirm(`Delete ${teacher.name}? This removes their login too and can't be undone.`)) return;
+    const ok = await confirm({
+      title: `Delete ${teacher.name}?`,
+      message: "This removes their login too and can't be undone.",
+      confirmLabel: 'Delete',
+    });
+    if (!ok) return;
     setDeletingId(teacher.id);
     try {
       await deleteTeacher(teacher.id);
       setTeachers((prev) => prev.filter((t) => t.id !== teacher.id));
+      toast(`${teacher.name} was deleted.`);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Failed to delete teacher');
     } finally {
@@ -65,9 +77,9 @@ export function TeachersListPage() {
       )}
 
       {loading ? (
-        <p className="muted">Loading…</p>
+        <TableSkeleton columns={6} />
       ) : teachers.length === 0 ? (
-        <p className="muted">No teachers yet.</p>
+        <EmptyState title="No teachers yet" message="Add your first teacher to get started." />
       ) : (
         <div className="card">
           <table className="data-table">

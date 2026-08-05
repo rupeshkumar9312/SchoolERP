@@ -7,6 +7,8 @@ import { listTeacherAttendance, markTeacherAttendance } from '../api/teacherAtte
 import type { TeacherAttendanceRecord } from '../api/teacherAttendance';
 import { AttendanceStatusToggle } from './attendance/AttendanceStatusToggle';
 import { todayUtcDate } from './attendance/todayUtc';
+import { EmptyState } from '../components/EmptyState';
+import { TableSkeleton } from '../components/Skeleton';
 
 export function StaffAttendancePage() {
   const [date, setDate] = useState(todayUtcDate());
@@ -72,9 +74,9 @@ export function StaffAttendancePage() {
       )}
 
       {loading ? (
-        <p className="muted">Loading…</p>
+        <TableSkeleton columns={3} />
       ) : teachers.length === 0 ? (
-        <p className="muted">No teachers found.</p>
+        <EmptyState title="No teachers found" />
       ) : (
         <div className="card">
           <table className="data-table">

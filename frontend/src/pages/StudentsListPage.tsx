@@ -5,9 +5,15 @@ import { ApiError } from '../api/client';
 import type { Student } from '../api/students';
 import { deleteStudent, listStudents } from '../api/students';
 import { useAuth } from '../auth/useAuth';
+import { useConfirm } from '../components/useConfirm';
+import { useToast } from '../components/useToast';
+import { EmptyState } from '../components/EmptyState';
+import { TableSkeleton } from '../components/Skeleton';
 
 export function StudentsListPage() {
   const { hasPermission } = useAuth();
+  const confirm = useConfirm();
+  const toast = useToast();
   const [years, setYears] = useState<academic.AcademicYear[]>([]);
   const [classes, setClasses] = useState<academic.SchoolClass[]>([]);
   const [sections, setSections] = useState<academic.Section[]>([]);
@@ -65,11 +71,17 @@ export function StudentsListPage() {
   }, [load]);
 
   const onDelete = async (student: Student) => {
-    if (!window.confirm(`Delete ${student.name}? This can't be undone.`)) return;
+    const ok = await confirm({
+      title: `Delete ${student.name}?`,
+      message: "This can't be undone.",
+      confirmLabel: 'Delete',
+    });
+    if (!ok) return;
     setDeletingId(student.id);
     try {
       await deleteStudent(student.id);
       setStudents((prev) => prev.filter((s) => s.id !== student.id));
+      toast(`${student.name} was deleted.`);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Failed to delete student');
     } finally {
@@ -161,9 +173,9 @@ export function StudentsListPage() {
       )}
 
       {loading ? (
-        <p className="muted">Loading…</p>
+        <TableSkeleton columns={6} />
       ) : students.length === 0 ? (
-        <p className="muted">No students found.</p>
+        <EmptyState title="No students found" message="Try clearing your filters, or admit a new student." />
       ) : (
         <div className="card">
           <table className="data-table">

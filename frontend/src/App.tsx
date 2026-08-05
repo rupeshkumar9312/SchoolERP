@@ -4,6 +4,8 @@ import { AcademicSetupPage } from './pages/AcademicSetupPage';
 import { AttendanceHistoryPage } from './pages/AttendanceHistoryPage';
 import { AuthProvider } from './auth/AuthContext';
 import { ProtectedRoute } from './auth/ProtectedRoute';
+import { ConfirmDialogProvider } from './components/ConfirmDialogProvider';
+import { ToastProvider } from './components/ToastProvider';
 import { DashboardHome } from './pages/DashboardHome';
 import { LoginPage } from './pages/LoginPage';
 import { MarkAttendancePage } from './pages/MarkAttendancePage';
@@ -24,7 +26,9 @@ function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
-        <Routes>
+        <ToastProvider>
+          <ConfirmDialogProvider>
+            <Routes>
           <Route path="/login" element={<LoginPage />} />
           <Route element={<ProtectedRoute />}>
             <Route element={<AppShell />}>
@@ -84,7 +88,9 @@ function App() {
             </Route>
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
+            </Routes>
+          </ConfirmDialogProvider>
+        </ToastProvider>
       </AuthProvider>
     </BrowserRouter>
   );
