@@ -1,8 +1,8 @@
 # School ERP
 
-A school management system built module by module. Current state: **Module 10 (Audit Log & Admin Tools) complete** — every create/update/delete on students, teachers, staff accounts and attendance is recorded with before/after values and who did it, viewable in a SUPER_ADMIN-only Audit Log screen. The MVP (Modules 6–7) shipped before this; everything from here improves the experience but isn't blocking.
+A school management system built module by module. Current state: **Module 10 (Audit Log & Admin Tools) complete**, and the backend has since been migrated from PostgreSQL to MySQL — every create/update/delete on students, teachers, staff accounts and attendance is recorded with before/after values and who did it, viewable in a SUPER_ADMIN-only Audit Log screen. The MVP (Modules 6–7) shipped before this; everything from here improves the experience but isn't blocking.
 
-- **Backend** — NestJS 11 + Prisma 6 + PostgreSQL
+- **Backend** — NestJS 11 + Prisma 6 + MySQL
 - **Frontend** — React 19 + Vite 6 + TypeScript
 - **CI** — GitHub Actions (lint + build + e2e for both apps)
 
@@ -10,13 +10,13 @@ A school management system built module by module. Current state: **Module 10 (A
 
 ## Quick start
 
-Prerequisites: Node.js 20+, PostgreSQL 14+ (or Docker).
+Prerequisites: Node.js 20+, MySQL 8+ (or Docker).
 
 ```bash
 git clone <repo> && cd SchoolERP
 ```
 
-**1. Start PostgreSQL** — either Docker:
+**1. Start MySQL** — either Docker:
 
 ```bash
 docker compose up -d db
@@ -25,7 +25,7 @@ docker compose up -d db
 …or a local install (Homebrew):
 
 ```bash
-brew services start postgresql@14 && createdb school_erp
+brew install mysql && brew services start mysql
 ```
 
 **2. Backend**
@@ -136,7 +136,7 @@ SchoolERP/
 │       └── shell/                topbar + permission-and-role-driven sidebar
 │                                  (nav-config.ts), mobile drawer under 768px
 ├── .github/workflows/ci.yml
-└── docker-compose.yml        PostgreSQL 16
+└── docker-compose.yml        MySQL 8
 ```
 
 ### Backend scripts
@@ -173,7 +173,7 @@ SchoolERP/
 - A student belongs to exactly one class+section (a direct FK, not a join table like teacher assignments) — `StudentsService` requires `sectionId` whenever `classId` changes, so a class move can never leave a student pointing at a section from the old class.
 - Teacher-scoped read views (e.g. `GET /students/my-classes`) don't use `@RequirePermission` — a `TEACHER` has no `student.view`, so the route relies on `JwtAuthGuard` alone and resolves scope from the caller's own `Teacher` row (via `TeacherClassSubject`), not from a query param the client could tamper with.
 - Module 6 broke that pattern on purpose: `TEACHER` **does** hold `attendance.student.view/mark/edit` (seeded directly onto the role, alongside the Director/Principal/Admin "Management" set) — the same permission gates everyone, and `AttendanceService.isScopedToOwnClasses()` does the actual restriction (assignment check + same-day check) only for `TEACHER`. Pick whichever pattern fits: a brand-new self-service concept usually wants its own unguarded route; a workflow every role already touches (marking attendance) wants one shared permission with server-side scoping.
-- Dates that cross a day boundary must be compared in one timezone end-to-end. `AttendanceService`'s same-day check for teachers uses UTC calendar dates (`date.toISOString().slice(0, 10)`, matching how Postgres stores `@db.Date` and how a bare `"YYYY-MM-DD"` string parses); the frontend's date pickers default to `todayUtcDate()` (`pages/attendance/todayUtc.ts`) for the same reason. A `todayLocalDate()` version existed briefly and broke for any timezone ahead of UTC (e.g. IST) for the first several hours of each local day — the client and server disagreed on what day it was. Don't reintroduce a local-time default here without also changing the server side to match.
+- Dates that cross a day boundary must be compared in one timezone end-to-end. `AttendanceService`'s same-day check for teachers uses UTC calendar dates (`date.toISOString().slice(0, 10)`, matching how the DB stores `@db.Date` and how a bare `"YYYY-MM-DD"` string parses); the frontend's date pickers default to `todayUtcDate()` (`pages/attendance/todayUtc.ts`) for the same reason. A `todayLocalDate()` version existed briefly and broke for any timezone ahead of UTC (e.g. IST) for the first several hours of each local day — the client and server disagreed on what day it was. Don't reintroduce a local-time default here without also changing the server side to match.
 - `frontend/src/pages/attendance/useClassSectionScope.ts` is the shared hook behind both attendance pages' class/section picker — it branches on `academic.view`: admins get the full Year→Class→Section cascade, a `TEACHER` gets a flat list derived from `GET /teachers/me/assignments` (they can't call `GET /academic-years` at all). `MarkAttendancePage`'s roster fetch has the same branch, reusing `GET /students/my-classes` for teachers instead of `GET /students`. Any new attendance-adjacent screen needs the same two branches, not just the picker.
 - `TeacherAttendanceService` scopes by *identity*, not class/section: a plain `TEACHER` is always pinned to their own `Teacher` row (via `userId`) regardless of what `teacherId` the request sends, and can only self-mark for today; anyone else (admin) must pass an explicit `teacherId` and is unrestricted on date. Same "one shared permission, service does the scoping" shape as Module 6's `attendance.student.*`, applied to `attendance.teacher.view/mark`.
 - `POST /attendance/teachers` doubles as create-or-correct (an upsert on the `(teacherId, date)` unique constraint) — there's no separate PATCH, unlike student attendance's roster-based flow, because a teacher only ever has one row to touch at a time.
@@ -197,11 +197,13 @@ SchoolERP/
 - Bulk operations get one audit row **per affected entity**, not one row for the whole batch: `markBulk()` fetches the existing `(studentId, date)` rows before the transaction so each resulting row can be correctly tagged CREATE or UPDATE, and `StudentsBulkImportService` gets per-student audit logging for free because it already calls `StudentsService.create()` per row — no separate bulk-import-specific logging code was needed.
 - `AuditLogService` stores raw Prisma rows as `oldValues`/`newValues` (flat `classId`/`sectionId`, not the nested `{id,name}` shape the list/detail endpoints return) — a forensic trail favors exact column values over the friendlier shape a UI wants. The one exception: `UsersService` redacts `passwordHash`/`hashedRefreshToken` before logging a `User` row — a bcrypt hash has no forensic value and shouldn't be duplicated into a second table even hashed.
 - `GET /audit-logs` is gated by a new `SuperAdminGuard` (checks `roleName === 'SUPER_ADMIN'` directly), not `@RequirePermission` — Director/Principal/Admin hold every key in `PERMISSIONS` via the existing "Management" seed, so no permission string could be SUPER_ADMIN-exclusive without restructuring that seed. This is the first route in the app gated by role instead of permission; `ProtectedRoute` grew a matching optional `roles?: string[]` prop (alongside the existing `permission?`) so the frontend route gets the same restriction, mirroring how `navConfig.ts` entries already support both `permission` and `roles` for nav visibility.
+- **DB engine: PostgreSQL → MySQL.** `schema.prisma`'s `datasource` provider is `mysql`; `docker-compose.yml` and CI now run `mysql:8` instead of `postgres:16-alpine`. The application code was barely coupled to Postgres — the only real casualty was `mode: 'insensitive'` on the `contains` filters in `StudentsService.findAll()`/`UsersService.findAll()` (a Postgres-only Prisma option; MySQL's default collation, `utf8mb4_*_ci`, is already case-insensitive, so the filters were simply dropped, not replaced). Everything else — `Json?` fields on `AuditLog`, the `AttendanceStatus`/`AuditAction` enums, `@db.Date`, cascades/restricts — is supported identically by Prisma's MySQL connector, no schema changes needed. The old Postgres migration history doesn't translate (different SQL dialect), so `backend/prisma/migrations/` was rebuilt from scratch as a single `init` baseline against MySQL; the original Postgres migrations were moved (not deleted) to `backend/prisma/migrations_postgres_backup/` for reference — safe to remove once nobody needs to diff against pre-migration schema history. Since this was a dev database with only seeded/demo data, no data export/import was needed — just a fresh migrate + reseed.
 
 ### Notes on this machine's toolchain
 
 - Node is 20.11.1, below Prisma 7's floor (20.19+), so Prisma is pinned to `^6`. Bump both `prisma` and `@prisma/client` together after upgrading Node.
 - `npm` hit `EACCES` writing to `~/.npm/_cacache` during setup. If you see it, `sudo chown -R $(whoami) ~/.npm` clears it.
+- Local MySQL runs via `docker compose up -d db` (image `mysql:8`, matching CI). The `schoolerp` user needs `GRANT ALL PRIVILEGES` (not just on `school_erp`) because `prisma migrate dev` creates a throwaway shadow database on every run — a scoped grant on just `school_erp` fails with Prisma error `P3014`.
 
 ---
 

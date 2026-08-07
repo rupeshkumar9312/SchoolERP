@@ -40,10 +40,7 @@ export class UsersService {
         roleId: query.roleId,
         ...(query.search
           ? {
-              OR: [
-                { name: { contains: query.search, mode: 'insensitive' } },
-                { email: { contains: query.search, mode: 'insensitive' } },
-              ],
+              OR: [{ name: { contains: query.search } }, { email: { contains: query.search } }],
             }
           : {}),
       },
