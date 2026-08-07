@@ -45,8 +45,8 @@ export class StudentsService {
         ...(query.search
           ? {
               OR: [
-                { name: { contains: query.search, mode: 'insensitive' } },
-                { admissionNo: { contains: query.search, mode: 'insensitive' } },
+                { name: { contains: query.search } },
+                { admissionNo: { contains: query.search } },
               ],
             }
           : {}),
