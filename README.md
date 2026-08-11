@@ -1,6 +1,6 @@
 # School ERP
 
-A school management system built module by module. Current state: **Module 10 (Audit Log & Admin Tools) complete**, and the backend has since been migrated from PostgreSQL to MySQL — every create/update/delete on students, teachers, staff accounts and attendance is recorded with before/after values and who did it, viewable in a SUPER_ADMIN-only Audit Log screen. The MVP (Modules 6–7) shipped before this; everything from here improves the experience but isn't blocking.
+A school management system built module by module. Current state: **Module 10 (Audit Log & Admin Tools) complete**, the backend has since been migrated from PostgreSQL to MySQL, and **Module 10.5 (Class Assignments)** adds teacher-owned homework with strict view/edit/delete ownership, a staff-recorded submission checklist per student, file attachments, and both bulk (.xlsx) and recurring-weekly creation — every create/update/delete on students, teachers, staff accounts, attendance and assignments is recorded with before/after values and who did it, viewable in a SUPER_ADMIN-only Audit Log screen. The MVP (Modules 6–7) shipped before this; everything from here improves the experience but isn't blocking.
 
 - **Backend** — NestJS 11 + Prisma 6 + MySQL
 - **Frontend** — React 19 + Vite 6 + TypeScript
@@ -109,8 +109,15 @@ SchoolERP/
 │   │   │                            /reports/defaulters(?threshold=), /reports/staff-attendance-summary
 │   │   │                            — all academic.view-gated, all default to the current UTC month
 │   │   ├── audit/                   AuditLogService.record() called from Students/Teachers/Users/
-│   │   │                            Attendance services on every create/update/delete; GET /audit-logs
-│   │   │                            (SUPER_ADMIN only, via SuperAdminGuard — not permission-based)
+│   │   │                            Attendance/Assignments services on every create/update/delete;
+│   │   │                            GET /audit-logs (SUPER_ADMIN only, via SuperAdminGuard — not
+│   │   │                            permission-based)
+│   │   ├── assignments/             GET/POST/PATCH/DELETE /assignments — teacher-owned homework;
+│   │   │                            a TEACHER sees/edits only their own, admin roles see all but
+│   │   │                            can't mutate (enforced in the service, not the permission guard);
+│   │   │                            + submissions (assignment_submissions), file attachments
+│   │   │                            (backend/uploads/assignments/, git-ignored), bulk-import
+│   │   │                            (assignments-bulk-import.service.ts) and recurring-weekly create
 │   │   ├── config/           env validation — fails fast on a bad .env
 │   │   ├── health/           GET /api/health
 │   │   ├── prisma/           global PrismaService (+ ping for health)
@@ -132,7 +139,11 @@ SchoolERP/
 │       │                         dashboard/TeacherDashboard (DashboardHome picks one by role),
 │       │                         ReportsPage (tabbed: summary/defaulters/staff, CSV export,
 │       │                         AcademicSetupPage grew a Holidays panel to feed it),
-│       │                         AuditLogsPage (SUPER_ADMIN only: filter + expandable before/after)
+│       │                         AuditLogsPage (SUPER_ADMIN only: filter + expandable before/after),
+│       │                         AssignmentsPage (create/edit/delete own for a TEACHER,
+│       │                         read-only school-wide table with filters for admin roles;
+│       │                         + submission checklist, attachment upload/download,
+│       │                         recurring-weekly field), AssignmentsBulkImportPage
 │       └── shell/                topbar + permission-and-role-driven sidebar
 │                                  (nav-config.ts), mobile drawer under 768px
 ├── .github/workflows/ci.yml
@@ -197,6 +208,14 @@ SchoolERP/
 - Bulk operations get one audit row **per affected entity**, not one row for the whole batch: `markBulk()` fetches the existing `(studentId, date)` rows before the transaction so each resulting row can be correctly tagged CREATE or UPDATE, and `StudentsBulkImportService` gets per-student audit logging for free because it already calls `StudentsService.create()` per row — no separate bulk-import-specific logging code was needed.
 - `AuditLogService` stores raw Prisma rows as `oldValues`/`newValues` (flat `classId`/`sectionId`, not the nested `{id,name}` shape the list/detail endpoints return) — a forensic trail favors exact column values over the friendlier shape a UI wants. The one exception: `UsersService` redacts `passwordHash`/`hashedRefreshToken` before logging a `User` row — a bcrypt hash has no forensic value and shouldn't be duplicated into a second table even hashed.
 - `GET /audit-logs` is gated by a new `SuperAdminGuard` (checks `roleName === 'SUPER_ADMIN'` directly), not `@RequirePermission` — Director/Principal/Admin hold every key in `PERMISSIONS` via the existing "Management" seed, so no permission string could be SUPER_ADMIN-exclusive without restructuring that seed. This is the first route in the app gated by role instead of permission; `ProtectedRoute` grew a matching optional `roles?: string[]` prop (alongside the existing `permission?`) so the frontend route gets the same restriction, mirroring how `navConfig.ts` entries already support both `permission` and `roles` for nav visibility.
+- **Module 10.5 descopes "students can view their own class's assignments."** There is no student login in this app — `Student` is a data record (name, class, guardian info), not a `User` with an account; the five seeded roles are all staff roles. Building real student-facing authorization would mean adding a `STUDENT` role, linking `Student` to `User`, and a student login/portal — a materially larger feature than "assignments," and out of scope here by explicit user decision. Assignments therefore only has three audiences: the owning `TEACHER`, other admin-tier roles (read-only), and nobody else. Revisit if/when a Student Portal module is actually built.
+- **Assignments are admin-visible but admin-immutable, on purpose.** `assignment.create`/`edit`/`delete` are real permission keys, and Director/Principal/Admin hold them too via the "Management" catch-all (`MANAGEMENT_PERMISSION_KEYS = PERMISSIONS.map(p => p.key)`) — the same structural fact that forced `SuperAdminGuard` to exist for Module 10 means no permission string can ever be "TEACHER-exclusive" either. So `AssignmentsService.create/update/remove()` each explicitly check `actor.roleName !== 'TEACHER'` and throw `ForbiddenException` regardless of what the permission guard already allowed — admins pass the guard (they hold the key) but are blocked in the service, mirroring Module 6's "one shared permission, the service does the actual restriction" pattern, just inverted (blocking a superset instead of narrowing one role's view).
+- **Homework ownership reuses `TeacherClassSubject`, not a new concept.** A teacher may only create an assignment for a class+section+subject they already hold a `TeacherClassSubject` row for (`AssignmentsService.assertAssignedToTeach()`) — the same "who teaches what" relationship Module 4/6 already established, not a parallel permission system. `UpdateAssignmentDto` deliberately excludes `classId`/`sectionId`/`subjectId`/`teacherId` — editing is content-only (title/description/due date); moving an assignment to a different class is delete-and-recreate, so the ownership check never needs to be re-run mid-edit.
+- **Naming collision, avoided on purpose:** `frontend/src/api/teachers.ts` already exports an `Assignment` type and `listAssignments`/`createAssignment`/`deleteAssignment` functions for `TeacherClassSubject` ("who teaches what"). Module 10.5's homework feature is a different concept ("what homework was set") that the user also calls "assignments," so its frontend API lives in a new `api/homework.ts` exporting `HomeworkAssignment`/`listHomeworkAssignments`/etc. — distinct names so a page needing both APIs (as `AssignmentsPage.tsx` does, to source a teacher's class/section/subject options) never has an import collision. The backend has no such collision risk (separate service files, never imported together), so `assignments/assignments.service.ts` uses the natural `AssignmentView`/`CreateAssignmentDto` names.
+- **Submission tracking is staff-recorded, on purpose.** Same reasoning as the Module 10.5 student-portal descope above: there's no student login, so `AssignmentSubmission` rows are written by the owning teacher (`PATCH /assignments/:id/submissions/:studentId`), the same trust model as `StudentAttendance`. A row is only materialized in the DB once a teacher actually touches it — `listSubmissions()` computes the full roster by joining `Student` (by class+section) against whatever `AssignmentSubmission` rows exist, defaulting anyone without one to "not submitted," rather than pre-creating N rows at assignment-creation time for classes that may never get checked.
+- **Attachments are served through the controller, never a static mount.** `express.static` (or Nest's `ServeStaticModule`) would have been simpler, but it bypasses `JwtAuthGuard`/`PermissionGuard` entirely — anyone with a guessed or leaked URL could download a homework file. `GET /assignments/:id/attachment` re-runs the exact same `assertMayView` ownership check as the assignment itself, so file access always has the same authorization as the assignment record does. `attachmentPath` (the real disk path) is never included in any JSON response — only `attachmentFileName`/`attachmentMimeType`/`attachmentSize`.
+- **Recurring assignments are materialized eagerly, not scheduled.** There's no job queue or cron anywhere in this codebase, so `repeatWeeklyUntil` creates every occurrence immediately in one `$transaction` (capped at 52) rather than "an assignment that creates its future selves later." All occurrences share a generated `seriesId` purely for the UI's "weekly" badge — there's no series-level edit/delete; each occurrence is independent once created (deleting one doesn't touch its siblings).
+- **Bulk import gets ownership checks for free by reusing `AssignmentsService.create()`** per row, exactly like `StudentsBulkImportService` reuses `StudentsService.create()` in Module 8 — a row for a class/section/subject the uploading teacher doesn't teach fails with the same `ForbiddenException` message a manual create would, surfaced as a per-row error in the results table rather than crashing the whole import.
 - **DB engine: PostgreSQL → MySQL.** `schema.prisma`'s `datasource` provider is `mysql`; `docker-compose.yml` and CI now run `mysql:8` instead of `postgres:16-alpine`. The application code was barely coupled to Postgres — the only real casualty was `mode: 'insensitive'` on the `contains` filters in `StudentsService.findAll()`/`UsersService.findAll()` (a Postgres-only Prisma option; MySQL's default collation, `utf8mb4_*_ci`, is already case-insensitive, so the filters were simply dropped, not replaced). Everything else — `Json?` fields on `AuditLog`, the `AttendanceStatus`/`AuditAction` enums, `@db.Date`, cascades/restricts — is supported identically by Prisma's MySQL connector, no schema changes needed. The old Postgres migration history doesn't translate (different SQL dialect), so `backend/prisma/migrations/` was rebuilt from scratch as a single `init` baseline against MySQL; the original Postgres migrations were moved (not deleted) to `backend/prisma/migrations_postgres_backup/` for reference — safe to remove once nobody needs to diff against pre-migration schema history. Since this was a dev database with only seeded/demo data, no data export/import was needed — just a fresh migrate + reseed.
 
 ### Notes on this machine's toolchain
@@ -417,6 +436,58 @@ Goal: Accountability layer — who changed what.
 
 **Done when:** Editing a past attendance record produces a visible audit trail entry with old/new values.
 
+## MODULE 10.5 — Class Assignments ✅
+
+Goal: Teachers can set homework for the classes they teach, with strict ownership — not part of the original module list, added after Module 10.
+
+**Tables:** `assignments`, `assignment_submissions`
+
+**Backend:**
+
+- `POST /assignments` — a TEACHER only, for a class+section+subject they hold a `TeacherClassSubject` row for
+- `GET /assignments` — a TEACHER sees only their own; DIRECTOR/PRINCIPAL/ADMIN/SUPER_ADMIN see every assignment school-wide (optionally filtered by `classId`/`sectionId`/`subjectId`/`teacherId`)
+- `GET /assignments/:id`, `PATCH /assignments/:id`, `DELETE /assignments/:id` — only the owning teacher; not even an admin
+- Every create/update/delete logs to the Module 10 audit trail (`entityType: 'Assignment'`)
+
+**Frontend:**
+
+- `/assignments` page: a TEACHER gets a "new assignment" form (class/section/subject limited to what they teach) plus an editable list of their own homework; an admin-tier viewer gets a read-only, filterable, school-wide table with no create/edit/delete controls
+
+**Done when:** A teacher can create, edit and delete homework for their own class; a different teacher or an admin cannot edit or delete it, and every mutation shows up in the Audit Log with the correct actor.
+
+### 10.5a — Submission tracking ✅
+
+Goal: Know who has and hasn't turned in a given assignment, without a student login.
+
+- `assignment_submissions` (`assignmentId` + `studentId` unique) — a checklist row per student in the assignment's class+section, holding `submitted`, `submittedAt`, and free-text `remarks`
+- `GET /assignments/:id/submissions` — full class roster with each student's current status (rows that don't exist yet default to "not submitted," not fabricated in the DB until first touched); viewable by the owning teacher or any admin-tier role
+- `PATCH /assignments/:id/submissions/:studentId` — only the owning teacher; upserts the row and logs to the audit trail (`entityType: 'AssignmentSubmission'`)
+- `AssignmentView` carries `submittedCount`/`totalStudents` so the list view shows an "X/Y" badge without a second round trip per row
+- Frontend: an expandable row under each assignment (same `Fragment`-based expand pattern as `AuditLogsPage`) with a checkbox per student for the teacher, a read-only "Submitted"/"Not submitted" badge for admins
+
+**Done when:** A teacher can check off which students submitted a given assignment, an admin can see the same list read-only, and the X/Y badge on the assignments table updates immediately.
+
+### 10.5b — File attachments ✅
+
+Goal: A teacher can attach a worksheet to an assignment.
+
+- `POST /assignments/:id/attachment` (multipart, owning teacher only), `DELETE /assignments/:id/attachment`, `GET /assignments/:id/attachment` (download, owning teacher or admin-tier)
+- Stored on local disk under `backend/uploads/assignments/` (git-ignored), not a static-served path — every download goes through the controller so the same view-authorization as the assignment itself applies; a static mount would have bypassed auth entirely
+- 10MB cap, allow-listed MIME types (PDF, Word, Excel, PowerPoint, PNG, JPEG)
+- `Assignment.attachmentPath` is never sent to the client — only `attachmentFileName`/`attachmentMimeType`/`attachmentSize` via the `attachment` field on `AssignmentView`
+
+**Done when:** A teacher can upload, download and remove a file on their own assignment; a different teacher gets 403 on upload/remove, an admin can download but not upload/remove.
+
+### 10.5c — Bulk import & recurring creation ✅
+
+Goal: Set many assignments at once, two different ways.
+
+- **Bulk import** (`POST /assignments/bulk-import`, `GET /assignments/bulk-import/template`) — an `.xlsx` upload (Title/Description/Class/Section/Subject/Due Date columns), mirroring Module 8's `StudentsBulkImportService` exactly: resolve Class/Section/Subject by name against the current academic year, then call `AssignmentsService.create()` per row. Reusing `create()` means every row gets the same role check, the same "assigned to teach this class/section/subject" check, and the same audit logging as a single manual creation, for free — no separate authorization path to keep in sync.
+- **Recurring weekly** — `CreateAssignmentDto.repeatWeeklyUntil` (optional). When set, `AssignmentsService` materializes one row per week from `dueDate` up to and including that date inside a single `$transaction`, all sharing a generated `seriesId`, capped at 52 occurrences to stop a mistyped far-future date from generating years of rows. There's no scheduler anywhere in this app, so recurrence is eager (every row exists immediately), not a cron job creating them week by week.
+- The create endpoint still returns a single `AssignmentView` (the first occurrence) for backward compatibility with the plain one-off create response shape; the frontend re-fetches the full list after a recurring create instead of trying to guess the others.
+
+**Done when:** An `.xlsx` with a mix of valid and invalid rows produces the right success/failure counts and a downloadable failed-rows file; a single "repeat weekly until" creation produces the correct number of dated rows, all linked by `seriesId`.
+
 ## MODULE 11 — Notifications (Optional but high-value)
 
 Goal: Proactive alerts, especially absentee notices.
@@ -460,6 +531,7 @@ Goal: Production readiness.
 8. Dashboards               ✅ done
 9. Reports                  ✅ done
 10. Audit Log               ✅ done
+10.5 Class Assignments      ✅ done (not in the original spec)
 11. Notifications          (optional, can slot in anytime after Module 6)
 12. Polish & Hardening
 ```

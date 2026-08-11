@@ -28,6 +28,10 @@ const PERMISSIONS: Array<{ key: string; description: string }> = [
   { key: 'attendance.student.edit', description: 'Edit an existing student attendance record' },
   { key: 'attendance.teacher.view', description: 'View staff attendance records' },
   { key: 'attendance.teacher.mark', description: 'Mark staff attendance (own, or any staff member for admins)' },
+  { key: 'assignment.view', description: 'View class assignments (own for a teacher, all for admin roles)' },
+  { key: 'assignment.create', description: 'Create a class assignment' },
+  { key: 'assignment.edit', description: 'Edit a class assignment (teacher may only edit their own)' },
+  { key: 'assignment.delete', description: 'Delete a class assignment (teacher may only delete their own)' },
 ];
 
 // Director/Principal/Admin share one "Management" permission set per the
@@ -46,6 +50,10 @@ const TEACHER_PERMISSION_KEYS = [
   'attendance.student.edit',
   'attendance.teacher.view',
   'attendance.teacher.mark',
+  'assignment.view',
+  'assignment.create',
+  'assignment.edit',
+  'assignment.delete',
 ];
 
 const SUPER_ADMIN_EMAIL = 'admin@schoolerp.dev';
