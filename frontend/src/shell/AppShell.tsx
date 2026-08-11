@@ -14,6 +14,7 @@ import {
   IconGraduate,
   IconHistory,
   IconHome,
+  IconNotebookPen,
   IconShieldCheck,
   IconUserCheck,
   IconUsersGroup,
@@ -36,6 +37,7 @@ const NAV_ICONS: Record<
   "/my-attendance": IconUserCheck,
   "/staff-attendance": IconClipboardList,
   "/reports": IconChartBar,
+  "/assignments": IconNotebookPen,
   "/audit-logs": IconShieldCheck,
 };
 

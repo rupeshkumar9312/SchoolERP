@@ -12,6 +12,8 @@ const ENTITY_TYPES = [
   'User',
   'StudentAttendance',
   'TeacherAttendance',
+  'Assignment',
+  'AssignmentSubmission',
 ];
 
 const ACTION_BADGE: Record<AuditAction, string> = {

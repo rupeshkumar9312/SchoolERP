@@ -1,6 +1,8 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import './App.css';
 import { AcademicSetupPage } from './pages/AcademicSetupPage';
+import { AssignmentsBulkImportPage } from './pages/AssignmentsBulkImportPage';
+import { AssignmentsPage } from './pages/AssignmentsPage';
 import { AttendanceHistoryPage } from './pages/AttendanceHistoryPage';
 import { AuditLogsPage } from './pages/AuditLogsPage';
 import { AuthProvider } from './auth/AuthContext';
@@ -92,6 +94,13 @@ function App() {
 
               <Route element={<ProtectedRoute permission="academic.view" />}>
                 <Route path="/reports" element={<ReportsPage />} />
+              </Route>
+
+              <Route element={<ProtectedRoute permission="assignment.view" />}>
+                <Route path="/assignments" element={<AssignmentsPage />} />
+              </Route>
+              <Route element={<ProtectedRoute permission="assignment.create" />}>
+                <Route path="/assignments/bulk-import" element={<AssignmentsBulkImportPage />} />
               </Route>
 
               <Route element={<ProtectedRoute roles={['SUPER_ADMIN']} />}>

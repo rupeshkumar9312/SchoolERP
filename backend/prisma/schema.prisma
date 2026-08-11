@@ -77,64 +77,68 @@ model AcademicYear {
 }
 
 model Class {
-  id             Int                   @id @default(autoincrement())
-  name           String
-  academicYearId Int
-  academicYear   AcademicYear          @relation(fields: [academicYearId], references: [id], onDelete: Restrict)
-  sections       Section[]
-  subjects       Subject[]
-  assignments    TeacherClassSubject[]
-  students       Student[]
-  attendance     StudentAttendance[]
-  createdAt      DateTime              @default(now())
+  id                  Int                   @id @default(autoincrement())
+  name                String
+  academicYearId      Int
+  academicYear        AcademicYear          @relation(fields: [academicYearId], references: [id], onDelete: Restrict)
+  sections            Section[]
+  subjects            Subject[]
+  assignments         TeacherClassSubject[]
+  students            Student[]
+  attendance          StudentAttendance[]
+  homeworkAssignments Assignment[]
+  createdAt           DateTime              @default(now())
 
   @@unique([academicYearId, name])
   @@map("classes")
 }
 
 model Section {
-  id             Int                   @id @default(autoincrement())
-  name           String
-  classId        Int
-  class          Class                 @relation(fields: [classId], references: [id], onDelete: Restrict)
-  assignments    TeacherClassSubject[]
-  students       Student[]
-  attendance     StudentAttendance[]
+  id                  Int                   @id @default(autoincrement())
+  name                String
+  classId             Int
+  class               Class                 @relation(fields: [classId], references: [id], onDelete: Restrict)
+  assignments         TeacherClassSubject[]
+  students            Student[]
+  attendance          StudentAttendance[]
   /// The homeroom teacher, distinct from a TeacherClassSubject row: a subject
   /// teacher can be assigned to teach here without being able to mark
   /// attendance for it. Nullable — a section may have no class teacher yet,
   /// and a teacher may hold this for zero, one, or several sections.
-  classTeacherId Int?
-  classTeacher   Teacher?              @relation("ClassTeacherOf", fields: [classTeacherId], references: [id], onDelete: SetNull)
-  createdAt      DateTime              @default(now())
+  classTeacherId      Int?
+  classTeacher        Teacher?              @relation("ClassTeacherOf", fields: [classTeacherId], references: [id], onDelete: SetNull)
+  homeworkAssignments Assignment[]
+  createdAt           DateTime              @default(now())
 
   @@unique([classId, name])
   @@map("sections")
 }
 
 model Subject {
-  id          Int                   @id @default(autoincrement())
-  name        String
-  classId     Int
-  class       Class                 @relation(fields: [classId], references: [id], onDelete: Restrict)
-  assignments TeacherClassSubject[]
-  createdAt   DateTime              @default(now())
+  id                  Int                   @id @default(autoincrement())
+  name                String
+  classId             Int
+  class               Class                 @relation(fields: [classId], references: [id], onDelete: Restrict)
+  assignments         TeacherClassSubject[]
+  homeworkAssignments Assignment[]
+  createdAt           DateTime              @default(now())
 
   @@unique([classId, name])
   @@map("subjects")
 }
 
 model Teacher {
-  id             Int                   @id @default(autoincrement())
-  userId         Int                   @unique
-  user           User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
-  qualification  String?
-  joiningDate    DateTime
-  assignments    TeacherClassSubject[]
-  attendance     TeacherAttendance[]
-  classTeacherOf Section[]             @relation("ClassTeacherOf")
-  createdAt      DateTime              @default(now())
-  updatedAt      DateTime              @updatedAt
+  id                  Int                   @id @default(autoincrement())
+  userId              Int                   @unique
+  user                User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  qualification       String?
+  joiningDate         DateTime
+  assignments         TeacherClassSubject[]
+  attendance          TeacherAttendance[]
+  classTeacherOf      Section[]             @relation("ClassTeacherOf")
+  homeworkAssignments Assignment[]
+  createdAt           DateTime              @default(now())
+  updatedAt           DateTime              @updatedAt
 
   @@map("teachers")
 }
@@ -156,25 +160,86 @@ model TeacherClassSubject {
   @@map("teacher_class_subject")
 }
 
+/// Coursework/homework a teacher sets for a class+section+subject — distinct
+/// from TeacherClassSubject above (which is "who teaches what," not "what was
+/// assigned"). Field name on the back-relations is `homeworkAssignments` to
+/// keep it unambiguous next to Class/Section/Subject/Teacher's existing
+/// `assignments` (TeacherClassSubject) relation.
+model Assignment {
+  id                 Int                    @id @default(autoincrement())
+  title              String
+  description        String?
+  classId            Int
+  class              Class                  @relation(fields: [classId], references: [id], onDelete: Restrict)
+  sectionId          Int
+  section            Section                @relation(fields: [sectionId], references: [id], onDelete: Restrict)
+  subjectId          Int
+  subject            Subject                @relation(fields: [subjectId], references: [id], onDelete: Restrict)
+  /// Owner — the only teacher who may view/edit/delete this row. Cascades
+  /// with the teacher (same rule as TeacherClassSubject/TeacherAttendance):
+  /// deleting a Teacher's login removes their homework too.
+  teacherId          Int
+  teacher            Teacher                @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  dueDate            DateTime               @db.Date
+  /// Recurring assignments are materialized eagerly as N independent rows at
+  /// creation time (no scheduler in this app) — this just links siblings so
+  /// the UI can show "part of a weekly series" without a separate table.
+  seriesId           String?
+  /// File on local disk under backend/uploads/assignments/ — path is never
+  /// exposed to the client, only attachmentFileName + a proxied download route.
+  attachmentPath     String?
+  attachmentFileName String?
+  attachmentMimeType String?
+  attachmentSize     Int?
+  submissions        AssignmentSubmission[]
+  createdAt          DateTime               @default(now())
+  updatedAt          DateTime               @updatedAt
+
+  @@index([classId, sectionId])
+  @@index([teacherId])
+  @@map("assignments")
+}
+
+/// A teacher-operated submission checklist — there is no student login in
+/// this app (see README), so a student can never mark their own work
+/// submitted; the owning teacher records it on their behalf, the same way
+/// StudentAttendance is staff-recorded rather than self-reported.
+model AssignmentSubmission {
+  id           Int        @id @default(autoincrement())
+  assignmentId Int
+  assignment   Assignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  studentId    Int
+  student      Student    @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  submitted    Boolean    @default(false)
+  submittedAt  DateTime?
+  remarks      String?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  @@unique([assignmentId, studentId])
+  @@map("assignment_submissions")
+}
+
 model Student {
-  id            Int                 @id @default(autoincrement())
-  admissionNo   String              @unique
-  name          String
-  dateOfBirth   DateTime?
-  gender        String?
-  classId       Int
-  class         Class               @relation(fields: [classId], references: [id], onDelete: Restrict)
-  sectionId     Int
-  section       Section             @relation(fields: [sectionId], references: [id], onDelete: Restrict)
-  guardianName  String?
-  guardianPhone String?
-  guardianEmail String?
-  address       String?
-  isActive      Boolean             @default(true)
-  admissionDate DateTime            @default(now())
-  createdAt     DateTime            @default(now())
-  updatedAt     DateTime            @updatedAt
-  attendance    StudentAttendance[]
+  id                    Int                    @id @default(autoincrement())
+  admissionNo           String                 @unique
+  name                  String
+  dateOfBirth           DateTime?
+  gender                String?
+  classId               Int
+  class                 Class                  @relation(fields: [classId], references: [id], onDelete: Restrict)
+  sectionId             Int
+  section               Section                @relation(fields: [sectionId], references: [id], onDelete: Restrict)
+  guardianName          String?
+  guardianPhone         String?
+  guardianEmail         String?
+  address               String?
+  isActive              Boolean                @default(true)
+  admissionDate         DateTime               @default(now())
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+  attendance            StudentAttendance[]
+  assignmentSubmissions AssignmentSubmission[]
 
   @@map("students")
 }

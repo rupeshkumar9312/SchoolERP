@@ -116,6 +116,16 @@ export function IconShieldCheck(props: IconProps) {
   );
 }
 
+export function IconNotebookPen(props: IconProps) {
+  return (
+    <svg {...common} {...props}>
+      <path d="M6 3.5h9.5A1.5 1.5 0 0 1 17 5v14a1.5 1.5 0 0 1-1.5 1.5H6a1.5 1.5 0 0 1-1.5-1.5V5A1.5 1.5 0 0 1 6 3.5Z" />
+      <path d="M8 8h5.5M8 11.5h5.5" />
+      <path d="M15.5 14.7 19 11.2l1.8 1.8-3.5 3.5-2.1.3.3-2.1Z" />
+    </svg>
+  );
+}
+
 export function IconChartBar(props: IconProps) {
   return (
     <svg {...common} {...props}>
