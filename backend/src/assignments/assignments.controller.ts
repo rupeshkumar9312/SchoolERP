@@ -72,8 +72,18 @@ export class AssignmentsController {
     return this.bulkImport.bulkImport(file.buffer, user);
   }
 
+  // No @RequirePermission — a STUDENT holds no permissions at all, this is a
+  // "me" route like /teachers/me/assignments, scoped by the caller's own id.
+  // Registered before ':id' — otherwise Express would match this path with id="me".
+  @Get('me')
+  findMyAssignments(@CurrentUser() user: AuthenticatedUser) {
+    return this.assignments.findForStudent(user.id);
+  }
+
+  // No @RequirePermission here either: assertMayView() inside findOne() is the
+  // real authorization (teacher-owns-only, student-own-class-only, admin
+  // unrestricted) — a blanket permission gate can't express "own class" scoping.
   @Get(':id')
-  @RequirePermission('assignment.view')
   findOne(@Param('id', ParseIntPipe) id: number, @CurrentUser() user: AuthenticatedUser) {
     return this.assignments.findOne(id, user);
   }
@@ -119,8 +129,9 @@ export class AssignmentsController {
     return this.assignments.removeAttachment(id, user);
   }
 
+  // No @RequirePermission — same reasoning as GET ':id' above; getAttachmentForDownload()
+  // re-runs assertMayView() so a STUDENT can only download their own class's attachments.
   @Get(':id/attachment')
-  @RequirePermission('assignment.view')
   async downloadAttachment(
     @Param('id', ParseIntPipe) id: number,
     @CurrentUser() user: AuthenticatedUser,

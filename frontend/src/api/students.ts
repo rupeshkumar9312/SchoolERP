@@ -15,6 +15,13 @@ export interface Student {
   isActive: boolean;
   admissionDate: string;
   createdAt: string;
+  hasLogin: boolean;
+}
+
+/** Only returned once, from createStudent() — the plaintext password can't be
+ * retrieved again after this response, so the UI must show it immediately. */
+export interface StudentCreateResult extends Student {
+  login: { email: string; temporaryPassword: string };
 }
 
 export interface StudentFilters {
@@ -65,8 +72,8 @@ export function getStudent(id: number): Promise<Student> {
   return apiGet<Student>(`/students/${id}`);
 }
 
-export function createStudent(payload: CreateStudentPayload): Promise<Student> {
-  return apiPost<Student>('/students', payload);
+export function createStudent(payload: CreateStudentPayload): Promise<StudentCreateResult> {
+  return apiPost<StudentCreateResult>('/students', payload);
 }
 
 export function updateStudent(id: number, payload: UpdateStudentPayload): Promise<Student> {

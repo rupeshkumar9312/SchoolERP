@@ -58,6 +58,7 @@ model User {
   createdAt               DateTime            @default(now())
   updatedAt               DateTime            @updatedAt
   teacher                 Teacher?
+  student                 Student?
   markedAttendance        StudentAttendance[] @relation("AttendanceMarkedBy")
   markedTeacherAttendance TeacherAttendance[] @relation("TeacherAttendanceMarkedBy")
   auditLogs               AuditLog[]          @relation("AuditLogActor")
@@ -238,6 +239,14 @@ model Student {
   admissionDate         DateTime               @default(now())
   createdAt             DateTime               @default(now())
   updatedAt             DateTime               @updatedAt
+  /// The student's own portal login (Module 10.6). Nullable so students
+  /// admitted before this module keep working with no login; provisioned
+  /// automatically for every new admission. Same 1:1 shape and cascade
+  /// direction as Teacher.userId — deleting the User row (the login) cascades
+  /// to delete this Student row, so StudentsService.remove() deletes via the
+  /// User row (when one exists) rather than the Student row directly.
+  userId                Int?                   @unique
+  user                  User?                  @relation(fields: [userId], references: [id], onDelete: Cascade)
   attendance            StudentAttendance[]
   assignmentSubmissions AssignmentSubmission[]
 

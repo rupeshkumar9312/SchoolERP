@@ -1,4 +1,5 @@
 import { AdminDashboard } from './dashboard/AdminDashboard';
+import { StudentDashboard } from './dashboard/StudentDashboard';
 import { TeacherDashboard } from './dashboard/TeacherDashboard';
 import { useAuth } from '../auth/useAuth';
 
@@ -31,6 +32,8 @@ export function DashboardHome() {
         <AdminDashboard />
       ) : user?.role.name === 'TEACHER' ? (
         <TeacherDashboard />
+      ) : user?.role.name === 'STUDENT' ? (
+        <StudentDashboard />
       ) : (
         <p className="subtitle">Logged in as {user?.role.name}.</p>
       )}

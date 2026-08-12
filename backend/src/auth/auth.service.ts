@@ -5,6 +5,7 @@ import * as bcrypt from 'bcrypt';
 import { PrismaService } from '../prisma/prisma.service';
 import { JwtPayload } from './auth.types';
 import { PermissionsService } from './permissions.service';
+import { STUDENT_ROLE } from './roles.constants';
 
 const REFRESH_TOKEN_BCRYPT_ROUNDS = 10;
 
@@ -19,6 +20,16 @@ export interface AuthenticatedUserView {
   name: string;
   role: { id: number; name: string };
   permissions: string[];
+  /** Only populated when role.name === 'STUDENT' — mirrors how a Teacher's
+   * profile isn't surfaced here either; the frontend fetches teacher profile
+   * data from its own endpoints. Kept minimal: just enough for the shell/nav
+   * to show "Class 6 - A" without a second round trip on every page load. */
+  student?: {
+    id: number;
+    admissionNo: string;
+    class: { id: number; name: string };
+    section: { id: number; name: string };
+  };
 }
 
 type UserWithRole = {
@@ -102,12 +113,30 @@ export class AuthService {
       user.roleId,
       user.role.name,
     );
+
+    let student: AuthenticatedUserView['student'];
+    if (user.role.name === STUDENT_ROLE) {
+      const profile = await this.prisma.student.findUnique({
+        where: { userId: user.id },
+        include: { class: true, section: true },
+      });
+      if (profile) {
+        student = {
+          id: profile.id,
+          admissionNo: profile.admissionNo,
+          class: { id: profile.class.id, name: profile.class.name },
+          section: { id: profile.section.id, name: profile.section.name },
+        };
+      }
+    }
+
     return {
       id: user.id,
       email: user.email,
       name: user.name,
       role: { id: user.role.id, name: user.role.name },
       permissions,
+      student,
     };
   }
 

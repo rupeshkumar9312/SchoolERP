@@ -6,6 +6,13 @@ export interface AuthUser {
   name: string;
   role: { id: number; name: string };
   permissions: string[];
+  /** Only present when role.name === 'STUDENT'. */
+  student?: {
+    id: number;
+    admissionNo: string;
+    class: { id: number; name: string };
+    section: { id: number; name: string };
+  };
 }
 
 export interface LoginResponse {

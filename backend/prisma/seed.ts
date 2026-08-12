@@ -3,7 +3,7 @@ import * as bcrypt from 'bcrypt';
 
 const prisma = new PrismaClient();
 
-const ROLE_NAMES = ['SUPER_ADMIN', 'DIRECTOR', 'PRINCIPAL', 'ADMIN', 'TEACHER'] as const;
+const ROLE_NAMES = ['SUPER_ADMIN', 'DIRECTOR', 'PRINCIPAL', 'ADMIN', 'TEACHER', 'STUDENT'] as const;
 
 // Starter permission set — later modules add their own keys here as they land.
 const PERMISSIONS: Array<{ key: string; description: string }> = [

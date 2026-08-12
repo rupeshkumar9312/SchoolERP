@@ -10,7 +10,7 @@ import {
 import { Prisma, Teacher } from '@prisma/client';
 import { AuditLogService } from '../audit/audit-log.service';
 import { AuthenticatedUser } from '../auth/auth.types';
-import { TEACHER_ROLE } from '../auth/roles.constants';
+import { STUDENT_ROLE, TEACHER_ROLE } from '../auth/roles.constants';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateAssignmentDto } from './dto/create-assignment.dto';
 import { ListAssignmentsQueryDto } from './dto/list-assignments.query.dto';
@@ -46,6 +46,20 @@ export interface AttachmentForDownload {
   path: string;
   fileName: string;
   mimeType: string;
+}
+
+/** A student's read-only view of their own class's homework — deliberately
+ * narrower than AssignmentView: no teacher-facing submittedCount/totalStudents
+ * roster aggregate, just "have I turned this in yet." */
+export interface StudentAssignmentView {
+  id: number;
+  title: string;
+  description: string | null;
+  subject: { id: number; name: string };
+  teacher: { id: number; name: string };
+  dueDate: Date;
+  attachment: { fileName: string; mimeType: string; size: number } | null;
+  submitted: boolean;
 }
 
 type AssignmentWithRefs = Prisma.AssignmentGetPayload<{
@@ -112,6 +126,43 @@ export class AssignmentsService {
     const row = await this.findRowOrThrow(id);
     await this.assertMayView(row, actor);
     return this.toView(row);
+  }
+
+  /** Identity-pinned "me" route for a STUDENT — their own class+section's
+   * homework, read-only. AssignmentSubmission stays staff-recorded (Module
+   * 10.5a's decision holds); `submitted` here is just their own status, never
+   * writable through this path. */
+  async findForStudent(userId: number): Promise<StudentAssignmentView[]> {
+    const student = await this.getOwnStudent(userId);
+    const [rows, mySubmissions] = await Promise.all([
+      this.prisma.assignment.findMany({
+        where: { classId: student.classId, sectionId: student.sectionId },
+        include: ASSIGNMENT_INCLUDE,
+        orderBy: { dueDate: 'desc' },
+      }),
+      this.prisma.assignmentSubmission.findMany({ where: { studentId: student.id } }),
+    ]);
+    const submittedByAssignmentId = new Set(
+      mySubmissions.filter((s) => s.submitted).map((s) => s.assignmentId),
+    );
+
+    return rows.map((row) => ({
+      id: row.id,
+      title: row.title,
+      description: row.description,
+      subject: { id: row.subject.id, name: row.subject.name },
+      teacher: { id: row.teacher.id, name: row.teacher.user.name },
+      dueDate: row.dueDate,
+      attachment:
+        row.attachmentFileName && row.attachmentMimeType && row.attachmentSize !== null
+          ? {
+              fileName: row.attachmentFileName,
+              mimeType: row.attachmentMimeType,
+              size: row.attachmentSize,
+            }
+          : null,
+      submitted: submittedByAssignmentId.has(row.id),
+    }));
   }
 
   async create(dto: CreateAssignmentDto, actor: AuthenticatedUser): Promise<AssignmentView> {
@@ -306,6 +357,11 @@ export class AssignmentsService {
   // student to mark their own work submitted.
 
   async listSubmissions(assignmentId: number, actor: AuthenticatedUser): Promise<SubmissionView[]> {
+    if (actor.roleName === STUDENT_ROLE) {
+      // A classmate's submission status is other students' data, not the
+      // caller's own — not exposed by /assignments/me either.
+      throw new ForbiddenException('Students cannot view the submissions roster');
+    }
     const assignment = await this.findRowOrThrow(assignmentId);
     await this.assertMayView(assignment, actor);
 
@@ -397,11 +453,29 @@ export class AssignmentsService {
     return teacher;
   }
 
+  private async getOwnStudent(userId: number) {
+    const student = await this.prisma.student.findUnique({ where: { userId } });
+    if (!student) throw new ForbiddenException('No student profile for this account');
+    return student;
+  }
+
+  /** A STUDENT may only reach findOne()/getAttachmentForDownload() (routes
+   * without a permission gate — see the controller) for an assignment set for
+   * their own class+section; every other role's rule is unchanged. */
   private async assertMayView(row: AssignmentWithRefs, actor: AuthenticatedUser): Promise<void> {
-    if (actor.roleName !== TEACHER_ROLE) return;
-    const teacher = await this.getOwnTeacher(actor.id);
-    if (row.teacherId !== teacher.id) {
-      throw new ForbiddenException('You may only view assignments you created');
+    if (actor.roleName === TEACHER_ROLE) {
+      const teacher = await this.getOwnTeacher(actor.id);
+      if (row.teacherId !== teacher.id) {
+        throw new ForbiddenException('You may only view assignments you created');
+      }
+      return;
+    }
+    if (actor.roleName === STUDENT_ROLE) {
+      const student = await this.getOwnStudent(actor.id);
+      if (row.classId !== student.classId || row.sectionId !== student.sectionId) {
+        throw new ForbiddenException('You may only view assignments set for your own class');
+      }
+      return;
     }
   }
 
