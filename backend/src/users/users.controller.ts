@@ -16,6 +16,7 @@ import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { RequirePermission } from '../auth/decorators/require-permission.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { PermissionGuard } from '../auth/guards/permission.guard';
+import { SuperAdminGuard } from '../auth/guards/super-admin.guard';
 import { CreateUserDto } from './dto/create-user.dto';
 import { ListUsersQueryDto } from './dto/list-users.query.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
@@ -59,5 +60,15 @@ export class UsersController {
   @HttpCode(204)
   remove(@Param('id', ParseIntPipe) id: number, @CurrentUser() actor: AuthenticatedUser) {
     return this.users.remove(id, actor);
+  }
+
+  // SuperAdminGuard, not @RequirePermission — Director/Principal/Admin hold
+  // user.edit too via the Management set, but only a SUPER_ADMIN may reset
+  // another account's password.
+  @Post(':id/reset-password')
+  @UseGuards(SuperAdminGuard)
+  @HttpCode(200)
+  resetPassword(@Param('id', ParseIntPipe) id: number, @CurrentUser() actor: AuthenticatedUser) {
+    return this.users.resetPassword(id, actor);
   }
 }

@@ -1,6 +1,8 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import './App.css';
 import { AcademicSetupPage } from './pages/AcademicSetupPage';
+import { AnnouncementFormPage } from './pages/AnnouncementFormPage';
+import { AnnouncementsListPage } from './pages/AnnouncementsListPage';
 import { AssignmentsBulkImportPage } from './pages/AssignmentsBulkImportPage';
 import { AssignmentsPage } from './pages/AssignmentsPage';
 import { AttendanceHistoryPage } from './pages/AttendanceHistoryPage';
@@ -9,6 +11,7 @@ import { AuthProvider } from './auth/AuthContext';
 import { ProtectedRoute } from './auth/ProtectedRoute';
 import { ConfirmDialogProvider } from './components/ConfirmDialogProvider';
 import { ToastProvider } from './components/ToastProvider';
+import { ChangePasswordPage } from './pages/ChangePasswordPage';
 import { DashboardHome } from './pages/DashboardHome';
 import { LoginPage } from './pages/LoginPage';
 import { MarkAttendancePage } from './pages/MarkAttendancePage';
@@ -16,6 +19,7 @@ import { MyAttendancePage } from './pages/MyAttendancePage';
 import { MyClassesPage } from './pages/MyClassesPage';
 import { MyStudentsPage } from './pages/MyStudentsPage';
 import { ReportsPage } from './pages/ReportsPage';
+import { SettingsPage } from './pages/SettingsPage';
 import { StaffAttendancePage } from './pages/StaffAttendancePage';
 import { StudentAssignmentsPage } from './pages/StudentAssignmentsPage';
 import { StudentAttendancePage } from './pages/StudentAttendancePage';
@@ -38,8 +42,12 @@ function App() {
             <Routes>
           <Route path="/login" element={<LoginPage />} />
           <Route element={<ProtectedRoute />}>
+            <Route path="/change-password" element={<ChangePasswordPage />} />
+          </Route>
+          <Route element={<ProtectedRoute />}>
             <Route element={<AppShell />}>
               <Route path="/" element={<DashboardHome />} />
+              <Route path="/settings" element={<SettingsPage />} />
 
               <Route element={<ProtectedRoute permission="user.view" />}>
                 <Route path="/users" element={<UsersListPage />} />
@@ -103,6 +111,14 @@ function App() {
               </Route>
               <Route element={<ProtectedRoute permission="assignment.create" />}>
                 <Route path="/assignments/bulk-import" element={<AssignmentsBulkImportPage />} />
+              </Route>
+
+              <Route path="/announcements" element={<AnnouncementsListPage />} />
+              <Route element={<ProtectedRoute permission="announcement.create" />}>
+                <Route path="/announcements/new" element={<AnnouncementFormPage />} />
+              </Route>
+              <Route element={<ProtectedRoute permission="announcement.edit" />}>
+                <Route path="/announcements/:id/edit" element={<AnnouncementFormPage />} />
               </Route>
 
               <Route element={<ProtectedRoute roles={['SUPER_ADMIN']} />}>

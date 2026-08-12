@@ -41,7 +41,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [state],
   );
 
-  const value = useMemo(() => ({ state, login, logout, hasPermission }), [state, login, logout, hasPermission]);
+  const changePassword = useCallback(async (currentPassword: string, newPassword: string) => {
+    const { user } = await authApi.changePassword({ currentPassword, newPassword });
+    setState({ status: 'authenticated', user });
+  }, []);
+
+  const value = useMemo(
+    () => ({ state, login, logout, hasPermission, changePassword }),
+    [state, login, logout, hasPermission, changePassword],
+  );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

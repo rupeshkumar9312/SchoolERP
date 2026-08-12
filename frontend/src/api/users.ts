@@ -46,3 +46,9 @@ export function updateUser(id: number, payload: UpdateUserPayload): Promise<User
 export function deleteUser(id: number): Promise<void> {
   return apiDelete<void>(`/users/${id}`);
 }
+
+/** SUPER_ADMIN only — generates a fresh temp password for this user (returned
+ * once) and forces them to change it on next login. */
+export function resetUserPassword(id: number): Promise<{ temporaryPassword: string }> {
+  return apiPost<{ temporaryPassword: string }>(`/users/${id}/reset-password`);
+}

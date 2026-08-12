@@ -10,6 +10,7 @@ import * as bcrypt from 'bcrypt';
 import { AuditLogService } from '../audit/audit-log.service';
 import { AuthenticatedUser } from '../auth/auth.types';
 import { SUPER_ADMIN_ROLE } from '../auth/roles.constants';
+import { generateTempPassword } from '../common/generate-temp-password';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { ListUsersQueryDto } from './dto/list-users.query.dto';
@@ -136,6 +137,36 @@ export class UsersService {
       userId: actor.id,
       oldValues: this.redact(existing),
     });
+  }
+
+  /** SUPER_ADMIN-only (enforced by SuperAdminGuard on the route, not a
+   * permission key — Director/Principal/Admin hold user.edit too via the
+   * Management set, but must not be able to reset anyone's password).
+   * Generates a fresh temp password, forces a change on next login, and
+   * invalidates any existing session so a stolen/forgotten password can't
+   * keep working after the reset. */
+  async resetPassword(
+    id: number,
+    actor: AuthenticatedUser,
+  ): Promise<{ temporaryPassword: string }> {
+    const existing = await this.prisma.user.findUnique({ where: { id }, include: { role: true } });
+    if (!existing) throw new NotFoundException('User not found');
+
+    const temporaryPassword = generateTempPassword();
+    const passwordHash = await bcrypt.hash(temporaryPassword, PASSWORD_BCRYPT_ROUNDS);
+    await this.prisma.user.update({
+      where: { id },
+      data: { passwordHash, mustChangePassword: true, hashedRefreshToken: null },
+    });
+    await this.audit.record({
+      entityType: 'User',
+      entityId: id,
+      action: 'UPDATE',
+      userId: actor.id,
+      oldValues: this.redact(existing),
+      newValues: { mustChangePassword: true },
+    });
+    return { temporaryPassword };
   }
 
   /** Never let a bcrypt hash or refresh-token hash land in the audit trail. */

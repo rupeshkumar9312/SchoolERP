@@ -4,7 +4,7 @@ import { ApiError } from '../api/client';
 import type { Role } from '../api/roles';
 import { listRoles } from '../api/roles';
 import type { UserListItem } from '../api/users';
-import { deleteUser, listUsers } from '../api/users';
+import { deleteUser, listUsers, resetUserPassword } from '../api/users';
 import { useAuth } from '../auth/useAuth';
 import { useConfirm } from '../components/useConfirm';
 import { useToast } from '../components/useToast';
@@ -12,7 +12,8 @@ import { EmptyState } from '../components/EmptyState';
 import { TableSkeleton } from '../components/Skeleton';
 
 export function UsersListPage() {
-  const { hasPermission } = useAuth();
+  const { state, hasPermission } = useAuth();
+  const isSuperAdmin = state.status === 'authenticated' && state.user.role.name === 'SUPER_ADMIN';
   const confirm = useConfirm();
   const toast = useToast();
   const [users, setUsers] = useState<UserListItem[]>([]);
@@ -21,6 +22,8 @@ export function UsersListPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [resettingId, setResettingId] = useState<number | null>(null);
+  const [resetResult, setResetResult] = useState<{ email: string; temporaryPassword: string } | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -61,6 +64,24 @@ export function UsersListPage() {
     }
   };
 
+  const onResetPassword = async (user: UserListItem) => {
+    const ok = await confirm({
+      title: `Reset ${user.name}'s password?`,
+      message: 'A new temporary password will be generated, and they will be signed out of any active session.',
+      confirmLabel: 'Reset password',
+    });
+    if (!ok) return;
+    setResettingId(user.id);
+    try {
+      const { temporaryPassword } = await resetUserPassword(user.id);
+      setResetResult({ email: user.email, temporaryPassword });
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Failed to reset password');
+    } finally {
+      setResettingId(null);
+    }
+  };
+
   return (
     <>
       <div className="card-head">
@@ -91,6 +112,24 @@ export function UsersListPage() {
         </div>
       )}
 
+      {resetResult && (
+        <div className="card">
+          <p>
+            Password reset for <strong>{resetResult.email}</strong>. Copy this now — it can't be
+            shown again after you leave this page.
+          </p>
+          <label className="field">
+            <span>Temporary password</span>
+            <input value={resetResult.temporaryPassword} readOnly onFocus={(e) => e.target.select()} />
+          </label>
+          <div className="form-actions">
+            <button type="button" className="secondary" onClick={() => setResetResult(null)}>
+              Dismiss
+            </button>
+          </div>
+        </div>
+      )}
+
       {loading ? (
         <TableSkeleton columns={5} />
       ) : users.length === 0 ? (
@@ -105,7 +144,7 @@ export function UsersListPage() {
                 <th>Phone</th>
                 <th>Role</th>
                 <th>Status</th>
-                {(hasPermission('user.edit') || hasPermission('user.delete')) && <th>Actions</th>}
+                {(hasPermission('user.edit') || hasPermission('user.delete') || isSuperAdmin) && <th>Actions</th>}
               </tr>
             </thead>
             <tbody>
@@ -122,7 +161,7 @@ export function UsersListPage() {
                       {user.isActive ? 'Active' : 'Inactive'}
                     </span>
                   </td>
-                  {(hasPermission('user.edit') || hasPermission('user.delete')) && (
+                  {(hasPermission('user.edit') || hasPermission('user.delete') || isSuperAdmin) && (
                     <td data-label="Actions">
                       <div className="row-actions">
                         {hasPermission('user.edit') && (
@@ -133,6 +172,15 @@ export function UsersListPage() {
                         {hasPermission('user.delete') && (
                           <button className="danger" onClick={() => void onDelete(user)} disabled={deletingId === user.id}>
                             {deletingId === user.id ? 'Deleting…' : 'Delete'}
+                          </button>
+                        )}
+                        {isSuperAdmin && (
+                          <button
+                            className="secondary"
+                            onClick={() => void onResetPassword(user)}
+                            disabled={resettingId === user.id}
+                          >
+                            {resettingId === user.id ? 'Resetting…' : 'Reset password'}
                           </button>
                         )}
                       </div>

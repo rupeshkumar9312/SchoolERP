@@ -26,5 +26,7 @@ export const navItems: NavItem[] = [
   { label: 'Assignments', path: '/assignments', permission: 'assignment.view' },
   { label: 'My Attendance', path: '/student/attendance', roles: ['STUDENT'] },
   { label: 'My Assignments', path: '/student/assignments', roles: ['STUDENT'] },
+  { label: 'Announcements', path: '/announcements' },
   { label: 'Audit Log', path: '/audit-logs', roles: ['SUPER_ADMIN'] },
+  { label: 'Settings', path: '/settings' },
 ];

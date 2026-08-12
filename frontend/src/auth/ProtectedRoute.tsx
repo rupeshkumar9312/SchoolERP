@@ -13,6 +13,10 @@ export function ProtectedRoute({ permission, roles }: { permission?: string; rol
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
+  if (state.user.mustChangePassword && location.pathname !== '/change-password') {
+    return <Navigate to="/change-password" replace />;
+  }
+
   if (permission && !hasPermission(permission)) {
     return <p className="muted">You don't have permission to view this page.</p>;
   }

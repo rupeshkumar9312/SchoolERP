@@ -6,9 +6,9 @@ import {
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
-import { randomBytes } from 'crypto';
 import { AuditLogService } from '../audit/audit-log.service';
 import { STUDENT_ROLE } from '../auth/roles.constants';
+import { generateTempPassword } from '../common/generate-temp-password';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateStudentDto } from './dto/create-student.dto';
 import { ListStudentsQueryDto } from './dto/list-students.query.dto';
@@ -94,7 +94,7 @@ export class StudentsService {
     if (!role) throw new BadRequestException('STUDENT role is not seeded');
 
     const loginEmail = `${dto.admissionNo.toLowerCase()}@${STUDENT_LOGIN_EMAIL_DOMAIN}`;
-    const temporaryPassword = this.generateTempPassword();
+    const temporaryPassword = generateTempPassword();
     const passwordHash = await bcrypt.hash(temporaryPassword, PASSWORD_BCRYPT_ROUNDS);
 
     try {
@@ -270,12 +270,6 @@ export class StudentsService {
       createdAt: student.createdAt,
       hasLogin: student.userId !== null,
     };
-  }
-
-  /** Readable, guessable-enough-to-type-by-hand temp password — the admin
-   * copies it once from the create response and hands it to the student. */
-  private generateTempPassword(): string {
-    return randomBytes(6).toString('base64url');
   }
 
   private mapError(error: unknown, conflictMessage: string): Error {
