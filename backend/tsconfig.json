@@ -12,7 +12,7 @@
     "allowSyntheticDefaultImports": true,
     "target": "ES2023",
     "sourceMap": true,
-    "outDir": "./build",
+    "outDir": "./compiled",
     "baseUrl": "./",
     "incremental": true,
     "skipLibCheck": true,

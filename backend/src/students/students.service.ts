@@ -5,11 +5,20 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
+import * as bcrypt from 'bcrypt';
+import { randomBytes } from 'crypto';
 import { AuditLogService } from '../audit/audit-log.service';
+import { STUDENT_ROLE } from '../auth/roles.constants';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateStudentDto } from './dto/create-student.dto';
 import { ListStudentsQueryDto } from './dto/list-students.query.dto';
 import { UpdateStudentDto } from './dto/update-student.dto';
+
+const PASSWORD_BCRYPT_ROUNDS = 10;
+/** Synthetic login domain — students have no real email on file, only a
+ * guardian's, so the login address is derived from the (unique) admission
+ * number rather than asking an admin to invent one at admission time. */
+const STUDENT_LOGIN_EMAIL_DOMAIN = 'student.schoolerp.local';
 
 export interface StudentView {
   id: number;
@@ -26,6 +35,13 @@ export interface StudentView {
   isActive: boolean;
   admissionDate: Date;
   createdAt: Date;
+  hasLogin: boolean;
+}
+
+/** Only returned once, from create() — the plaintext password is never stored
+ * or retrievable again, so an admin must copy/share it immediately. */
+export interface StudentCreateResult extends StudentView {
+  login: { email: string; temporaryPassword: string };
 }
 
 type StudentWithRefs = Prisma.StudentGetPayload<{ include: { class: true; section: true } }>;
@@ -66,25 +82,49 @@ export class StudentsService {
     return this.toView(student);
   }
 
-  async create(dto: CreateStudentDto, actorId?: number): Promise<StudentView> {
+  /** Provisions a portal login (User, role STUDENT) alongside the Student row
+   * in one transaction, at admission time — mirrors TeachersService.create()'s
+   * "user + profile together" flow. The generated password is returned once,
+   * in plaintext, for the admin to hand to the student/guardian; it is never
+   * stored or retrievable again. */
+  async create(dto: CreateStudentDto, actorId?: number): Promise<StudentCreateResult> {
     await this.assertSectionBelongsToClass(dto.sectionId, dto.classId);
 
+    const role = await this.prisma.role.findUnique({ where: { name: STUDENT_ROLE } });
+    if (!role) throw new BadRequestException('STUDENT role is not seeded');
+
+    const loginEmail = `${dto.admissionNo.toLowerCase()}@${STUDENT_LOGIN_EMAIL_DOMAIN}`;
+    const temporaryPassword = this.generateTempPassword();
+    const passwordHash = await bcrypt.hash(temporaryPassword, PASSWORD_BCRYPT_ROUNDS);
+
     try {
-      const student = await this.prisma.student.create({
-        data: {
-          admissionNo: dto.admissionNo,
-          name: dto.name,
-          dateOfBirth: dto.dateOfBirth ? new Date(dto.dateOfBirth) : undefined,
-          gender: dto.gender,
-          classId: dto.classId,
-          sectionId: dto.sectionId,
-          guardianName: dto.guardianName,
-          guardianPhone: dto.guardianPhone,
-          guardianEmail: dto.guardianEmail,
-          address: dto.address,
-          admissionDate: dto.admissionDate ? new Date(dto.admissionDate) : undefined,
-        },
-        include: { class: true, section: true },
+      // Two unchecked (scalar-FK) creates in one transaction, rather than a
+      // single nested `student.create({ data: { user: { create: {...} } } })`
+      // — Prisma's nested-write shape requires relation-style `class: {
+      // connect }` for every field once one relation is nested, which would
+      // mean rewriting classId/sectionId too. A transaction keeps the same
+      // atomicity with the plain scalar-FK style used everywhere else here.
+      const student = await this.prisma.$transaction(async (tx) => {
+        const user = await tx.user.create({
+          data: { name: dto.name, email: loginEmail, passwordHash, roleId: role.id },
+        });
+        return tx.student.create({
+          data: {
+            admissionNo: dto.admissionNo,
+            name: dto.name,
+            dateOfBirth: dto.dateOfBirth ? new Date(dto.dateOfBirth) : undefined,
+            gender: dto.gender,
+            classId: dto.classId,
+            sectionId: dto.sectionId,
+            guardianName: dto.guardianName,
+            guardianPhone: dto.guardianPhone,
+            guardianEmail: dto.guardianEmail,
+            address: dto.address,
+            admissionDate: dto.admissionDate ? new Date(dto.admissionDate) : undefined,
+            userId: user.id,
+          },
+          include: { class: true, section: true },
+        });
       });
       await this.audit.record({
         entityType: 'Student',
@@ -93,7 +133,7 @@ export class StudentsService {
         userId: actorId,
         newValues: student,
       });
-      return this.toView(student);
+      return { ...this.toView(student), login: { email: loginEmail, temporaryPassword } };
     } catch (error) {
       throw this.mapError(error, 'A student with this admission number already exists');
     }
@@ -147,7 +187,13 @@ export class StudentsService {
   async remove(id: number, actorId?: number): Promise<void> {
     const existing = await this.prisma.student.findUnique({ where: { id } });
     if (!existing) throw new NotFoundException('Student not found');
-    await this.prisma.student.delete({ where: { id } });
+    if (existing.userId) {
+      // Cascades to the Student row too (User.student, Student.userId onDelete: Cascade) —
+      // same shape as TeachersService.remove() deleting via the linked User row.
+      await this.prisma.user.delete({ where: { id: existing.userId } });
+    } else {
+      await this.prisma.student.delete({ where: { id } });
+    }
     await this.audit.record({
       entityType: 'Student',
       entityId: id,
@@ -222,7 +268,14 @@ export class StudentsService {
       isActive: student.isActive,
       admissionDate: student.admissionDate,
       createdAt: student.createdAt,
+      hasLogin: student.userId !== null,
     };
+  }
+
+  /** Readable, guessable-enough-to-type-by-hand temp password — the admin
+   * copies it once from the create response and hands it to the student. */
+  private generateTempPassword(): string {
+    return randomBytes(6).toString('base64url');
   }
 
   private mapError(error: unknown, conflictMessage: string): Error {

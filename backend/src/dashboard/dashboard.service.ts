@@ -41,6 +41,24 @@ export interface TeacherSummaryView {
   myAttendanceToday: { status: AttendanceStatus } | null;
 }
 
+export interface StudentSummaryView {
+  student: {
+    id: number;
+    name: string;
+    admissionNo: string;
+    class: { id: number; name: string };
+    section: { id: number; name: string };
+  };
+  myAttendanceToday: { status: AttendanceStatus } | null;
+  attendanceThisMonth: { present: number; totalMarked: number; presentPercent: number | null };
+  upcomingAssignments: Array<{
+    id: number;
+    title: string;
+    subject: { id: number; name: string };
+    dueDate: Date;
+  }>;
+}
+
 const EMPTY_BREAKDOWN: AttendanceBreakdown = {
   present: 0,
   absent: 0,
@@ -167,6 +185,62 @@ export class DashboardService {
         attendanceMarkedToday: markedTodaySectionIds.has(s.id),
       })),
       myAttendanceToday: myAttendance ? { status: myAttendance.status } : null,
+    };
+  }
+
+  async getStudentSummary(userId: number): Promise<StudentSummaryView> {
+    const student = await this.prisma.student.findUnique({
+      where: { userId },
+      include: { class: true, section: true },
+    });
+    if (!student) throw new NotFoundException('No student profile for this account');
+
+    const today = this.todayUtcDate();
+    const monthStart = `${today.slice(0, 7)}-01`;
+
+    const [myAttendanceToday, monthRows, upcoming] = await Promise.all([
+      this.prisma.studentAttendance.findUnique({
+        where: { studentId_date: { studentId: student.id, date: new Date(today) } },
+      }),
+      this.prisma.studentAttendance.groupBy({
+        by: ['status'],
+        where: { studentId: student.id, date: { gte: new Date(monthStart), lte: new Date(today) } },
+        _count: { _all: true },
+      }),
+      this.prisma.assignment.findMany({
+        where: {
+          classId: student.classId,
+          sectionId: student.sectionId,
+          dueDate: { gte: new Date(today) },
+        },
+        include: { subject: true },
+        orderBy: { dueDate: 'asc' },
+        take: 5,
+      }),
+    ]);
+
+    const breakdown = this.toBreakdown(monthRows);
+
+    return {
+      student: {
+        id: student.id,
+        name: student.name,
+        admissionNo: student.admissionNo,
+        class: { id: student.class.id, name: student.class.name },
+        section: { id: student.section.id, name: student.section.name },
+      },
+      myAttendanceToday: myAttendanceToday ? { status: myAttendanceToday.status } : null,
+      attendanceThisMonth: {
+        present: breakdown.present,
+        totalMarked: breakdown.totalMarked,
+        presentPercent: breakdown.presentPercent,
+      },
+      upcomingAssignments: upcoming.map((a) => ({
+        id: a.id,
+        title: a.title,
+        subject: { id: a.subject.id, name: a.subject.name },
+        dueDate: a.dueDate,
+      })),
     };
   }
 

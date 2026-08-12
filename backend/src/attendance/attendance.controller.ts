@@ -30,6 +30,13 @@ export class AttendanceController {
     return this.attendance.findAll(query, actor);
   }
 
+  // No @RequirePermission — a STUDENT holds no permissions at all, this is a
+  // "me" route like /teachers/me/assignments, scoped by the caller's own id.
+  @Get('me')
+  findMyAttendance(@CurrentUser() actor: AuthenticatedUser) {
+    return this.attendance.findForStudent(actor.id);
+  }
+
   @Post()
   @RequirePermission('attendance.student.mark')
   markBulk(@Body() dto: MarkAttendanceDto, @CurrentUser() actor: AuthenticatedUser) {

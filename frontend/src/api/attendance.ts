@@ -41,3 +41,7 @@ export function markAttendance(payload: {
 export function updateAttendance(id: number, status: AttendanceStatus): Promise<AttendanceRecord> {
   return apiPatch<AttendanceRecord>(`/attendance/students/${id}`, { status });
 }
+
+export function listMyAttendance(): Promise<AttendanceRecord[]> {
+  return apiGet<AttendanceRecord[]>('/attendance/students/me');
+}

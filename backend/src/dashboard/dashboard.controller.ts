@@ -23,4 +23,10 @@ export class DashboardController {
   getTeacherSummary(@CurrentUser() user: AuthenticatedUser) {
     return this.dashboard.getTeacherSummary(user.id);
   }
+
+  // Same reasoning: a STUDENT has no permissions at all, scoped by the caller's own id.
+  @Get('student-summary')
+  getStudentSummary(@CurrentUser() user: AuthenticatedUser) {
+    return this.dashboard.getStudentSummary(user.id);
+  }
 }

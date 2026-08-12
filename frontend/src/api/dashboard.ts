@@ -40,10 +40,32 @@ export interface TeacherSummary {
   myAttendanceToday: { status: AttendanceStatus } | null;
 }
 
+export interface StudentSummary {
+  student: {
+    id: number;
+    name: string;
+    admissionNo: string;
+    class: { id: number; name: string };
+    section: { id: number; name: string };
+  };
+  myAttendanceToday: { status: AttendanceStatus } | null;
+  attendanceThisMonth: { present: number; totalMarked: number; presentPercent: number | null };
+  upcomingAssignments: Array<{
+    id: number;
+    title: string;
+    subject: { id: number; name: string };
+    dueDate: string;
+  }>;
+}
+
 export function getAdminSummary(): Promise<AdminSummary> {
   return apiGet<AdminSummary>('/dashboard/admin-summary');
 }
 
 export function getTeacherSummary(): Promise<TeacherSummary> {
   return apiGet<TeacherSummary>('/dashboard/teacher-summary');
+}
+
+export function getStudentSummary(): Promise<StudentSummary> {
+  return apiGet<StudentSummary>('/dashboard/student-summary');
 }

@@ -17,6 +17,8 @@ import { MyClassesPage } from './pages/MyClassesPage';
 import { MyStudentsPage } from './pages/MyStudentsPage';
 import { ReportsPage } from './pages/ReportsPage';
 import { StaffAttendancePage } from './pages/StaffAttendancePage';
+import { StudentAssignmentsPage } from './pages/StudentAssignmentsPage';
+import { StudentAttendancePage } from './pages/StudentAttendancePage';
 import { StudentFormPage } from './pages/StudentFormPage';
 import { StudentsBulkImportPage } from './pages/StudentsBulkImportPage';
 import { StudentsListPage } from './pages/StudentsListPage';
@@ -105,6 +107,11 @@ function App() {
 
               <Route element={<ProtectedRoute roles={['SUPER_ADMIN']} />}>
                 <Route path="/audit-logs" element={<AuditLogsPage />} />
+              </Route>
+
+              <Route element={<ProtectedRoute roles={['STUDENT']} />}>
+                <Route path="/student/attendance" element={<StudentAttendancePage />} />
+                <Route path="/student/assignments" element={<StudentAssignmentsPage />} />
               </Route>
             </Route>
           </Route>

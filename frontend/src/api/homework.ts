@@ -23,6 +23,20 @@ export interface HomeworkAssignment {
   updatedAt: string;
 }
 
+/** A student's own read-only view of one assignment — narrower than
+ * HomeworkAssignment: no classmate-facing submittedCount/totalStudents, just
+ * this student's own submitted flag. */
+export interface StudentHomeworkAssignment {
+  id: number;
+  title: string;
+  description: string | null;
+  subject: { id: number; name: string };
+  teacher: { id: number; name: string };
+  dueDate: string;
+  attachment: { fileName: string; mimeType: string; size: number } | null;
+  submitted: boolean;
+}
+
 export interface HomeworkSubmission {
   student: { id: number; name: string; admissionNo: string };
   submitted: boolean;
@@ -83,6 +97,10 @@ export function listHomeworkAssignments(
   if (filters.teacherId !== undefined) params.set('teacherId', String(filters.teacherId));
   const query = params.toString();
   return apiGet<HomeworkAssignment[]>(`/assignments${query ? `?${query}` : ''}`);
+}
+
+export function listMyHomeworkAssignments(): Promise<StudentHomeworkAssignment[]> {
+  return apiGet<StudentHomeworkAssignment[]>('/assignments/me');
 }
 
 export function createHomeworkAssignment(

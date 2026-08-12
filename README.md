@@ -1,6 +1,6 @@
 # School ERP
 
-A school management system built module by module. Current state: **Module 10 (Audit Log & Admin Tools) complete**, the backend has since been migrated from PostgreSQL to MySQL, and **Module 10.5 (Class Assignments)** adds teacher-owned homework with strict view/edit/delete ownership, a staff-recorded submission checklist per student, file attachments, and both bulk (.xlsx) and recurring-weekly creation — every create/update/delete on students, teachers, staff accounts, attendance and assignments is recorded with before/after values and who did it, viewable in a SUPER_ADMIN-only Audit Log screen. The MVP (Modules 6–7) shipped before this; everything from here improves the experience but isn't blocking.
+A school management system built module by module. Current state: **Module 10 (Audit Log & Admin Tools) complete**, the backend has since been migrated from PostgreSQL to MySQL, **Module 10.5 (Class Assignments)** adds teacher-owned homework with strict view/edit/delete ownership, a staff-recorded submission checklist per student, file attachments, and both bulk (.xlsx) and recurring-weekly creation, and **Module 10.6 (Student Portal)** gives every newly-admitted student their own read-only login (auto-provisioned at admission time) to see their own attendance and their own class's assignments — every create/update/delete on students, teachers, staff accounts, attendance and assignments is recorded with before/after values and who did it, viewable in a SUPER_ADMIN-only Audit Log screen. The MVP (Modules 6–7) shipped before this; everything from here improves the experience but isn't blocking.
 
 - **Backend** — NestJS 11 + Prisma 6 + MySQL
 - **Frontend** — React 19 + Vite 6 + TypeScript
@@ -95,14 +95,18 @@ SchoolERP/
 │   │   │                          POST/DELETE /teachers/:id/class-teacher(/:sectionId),
 │   │   │                          GET /teachers/(:id|me)/class-teacher-of
 │   │   ├── students/               student CRUD, class/section consistency check,
-│   │   │                           /students/my-classes (teacher read-only scope)
+│   │   │                           /students/my-classes (teacher read-only scope);
+│   │   │                           create() also provisions a STUDENT login (Module 10.6),
+│   │   │                           remove() deletes via the linked User row when one exists
 │   │   ├── attendance/             bulk mark (upsert), scoped GET, same-day-restricted
 │   │   │                           PATCH — same attendance.student.* permission for
 │   │   │                           TEACHER and admins, scoping happens in the service;
 │   │   │                           TeacherAttendanceService/-Controller: self-mark or
-│   │   │                           admin-marks-any-teacher, same-day-restricted for TEACHER
+│   │   │                           admin-marks-any-teacher, same-day-restricted for TEACHER;
+│   │   │                           GET /attendance/students/me — unguarded "me" route for STUDENT
 │   │   ├── dashboard/               GET /dashboard/admin-summary (academic.view-gated),
-│   │   │                            GET /dashboard/teacher-summary (self-scoped "me" route)
+│   │   │                            GET /dashboard/teacher-summary, GET /dashboard/student-summary
+│   │   │                            (both self-scoped "me" routes, no permission required)
 │   │   ├── holidays/                GET/POST/DELETE /holidays (academic.view/manage) — dates
 │   │   │                            excluded from Reports' attendance % calculations
 │   │   ├── reports/                 GET /reports/attendance-summary(?class_id=&section_id=&from=&to=),
@@ -117,7 +121,11 @@ SchoolERP/
 │   │   │                            can't mutate (enforced in the service, not the permission guard);
 │   │   │                            + submissions (assignment_submissions), file attachments
 │   │   │                            (backend/uploads/assignments/, git-ignored), bulk-import
-│   │   │                            (assignments-bulk-import.service.ts) and recurring-weekly create
+│   │   │                            (assignments-bulk-import.service.ts) and recurring-weekly create;
+│   │   │                            GET /assignments/me — unguarded "me" route for STUDENT, their
+│   │   │                            own class+section's homework; GET :id and :id/attachment carry
+│   │   │                            no @RequirePermission either — assertMayView() alone decides
+│   │   │                            (teacher-owns-only / student-own-class-only / admin unrestricted)
 │   │   ├── config/           env validation — fails fast on a bad .env
 │   │   ├── health/           GET /api/health
 │   │   ├── prisma/           global PrismaService (+ ping for health)
@@ -143,7 +151,11 @@ SchoolERP/
 │       │                         AssignmentsPage (create/edit/delete own for a TEACHER,
 │       │                         read-only school-wide table with filters for admin roles;
 │       │                         + submission checklist, attachment upload/download,
-│       │                         recurring-weekly field), AssignmentsBulkImportPage
+│       │                         recurring-weekly field), AssignmentsBulkImportPage,
+│       │                         dashboard/StudentDashboard (today's attendance, this month's %,
+│       │                         upcoming assignments), StudentAttendancePage (read-only history),
+│       │                         StudentAssignmentsPage (read-only, own class, attachment download,
+│       │                         own submitted/not-submitted badge) — all STUDENT-only
 │       └── shell/                topbar + permission-and-role-driven sidebar
 │                                  (nav-config.ts), mobile drawer under 768px
 ├── .github/workflows/ci.yml
@@ -208,7 +220,7 @@ SchoolERP/
 - Bulk operations get one audit row **per affected entity**, not one row for the whole batch: `markBulk()` fetches the existing `(studentId, date)` rows before the transaction so each resulting row can be correctly tagged CREATE or UPDATE, and `StudentsBulkImportService` gets per-student audit logging for free because it already calls `StudentsService.create()` per row — no separate bulk-import-specific logging code was needed.
 - `AuditLogService` stores raw Prisma rows as `oldValues`/`newValues` (flat `classId`/`sectionId`, not the nested `{id,name}` shape the list/detail endpoints return) — a forensic trail favors exact column values over the friendlier shape a UI wants. The one exception: `UsersService` redacts `passwordHash`/`hashedRefreshToken` before logging a `User` row — a bcrypt hash has no forensic value and shouldn't be duplicated into a second table even hashed.
 - `GET /audit-logs` is gated by a new `SuperAdminGuard` (checks `roleName === 'SUPER_ADMIN'` directly), not `@RequirePermission` — Director/Principal/Admin hold every key in `PERMISSIONS` via the existing "Management" seed, so no permission string could be SUPER_ADMIN-exclusive without restructuring that seed. This is the first route in the app gated by role instead of permission; `ProtectedRoute` grew a matching optional `roles?: string[]` prop (alongside the existing `permission?`) so the frontend route gets the same restriction, mirroring how `navConfig.ts` entries already support both `permission` and `roles` for nav visibility.
-- **Module 10.5 descopes "students can view their own class's assignments."** There is no student login in this app — `Student` is a data record (name, class, guardian info), not a `User` with an account; the five seeded roles are all staff roles. Building real student-facing authorization would mean adding a `STUDENT` role, linking `Student` to `User`, and a student login/portal — a materially larger feature than "assignments," and out of scope here by explicit user decision. Assignments therefore only has three audiences: the owning `TEACHER`, other admin-tier roles (read-only), and nobody else. Revisit if/when a Student Portal module is actually built.
+- **Module 10.5 descopes "students can view their own class's assignments."** There is no student login in this app — `Student` is a data record (name, class, guardian info), not a `User` with an account; the five seeded roles are all staff roles. Building real student-facing authorization would mean adding a `STUDENT` role, linking `Student` to `User`, and a student login/portal — a materially larger feature than "assignments," and out of scope here by explicit user decision. Assignments therefore only has three audiences: the owning `TEACHER`, other admin-tier roles (read-only), and nobody else. **Update:** built as Module 10.6 (see below).
 - **Assignments are admin-visible but admin-immutable, on purpose.** `assignment.create`/`edit`/`delete` are real permission keys, and Director/Principal/Admin hold them too via the "Management" catch-all (`MANAGEMENT_PERMISSION_KEYS = PERMISSIONS.map(p => p.key)`) — the same structural fact that forced `SuperAdminGuard` to exist for Module 10 means no permission string can ever be "TEACHER-exclusive" either. So `AssignmentsService.create/update/remove()` each explicitly check `actor.roleName !== 'TEACHER'` and throw `ForbiddenException` regardless of what the permission guard already allowed — admins pass the guard (they hold the key) but are blocked in the service, mirroring Module 6's "one shared permission, the service does the actual restriction" pattern, just inverted (blocking a superset instead of narrowing one role's view).
 - **Homework ownership reuses `TeacherClassSubject`, not a new concept.** A teacher may only create an assignment for a class+section+subject they already hold a `TeacherClassSubject` row for (`AssignmentsService.assertAssignedToTeach()`) — the same "who teaches what" relationship Module 4/6 already established, not a parallel permission system. `UpdateAssignmentDto` deliberately excludes `classId`/`sectionId`/`subjectId`/`teacherId` — editing is content-only (title/description/due date); moving an assignment to a different class is delete-and-recreate, so the ownership check never needs to be re-run mid-edit.
 - **Naming collision, avoided on purpose:** `frontend/src/api/teachers.ts` already exports an `Assignment` type and `listAssignments`/`createAssignment`/`deleteAssignment` functions for `TeacherClassSubject` ("who teaches what"). Module 10.5's homework feature is a different concept ("what homework was set") that the user also calls "assignments," so its frontend API lives in a new `api/homework.ts` exporting `HomeworkAssignment`/`listHomeworkAssignments`/etc. — distinct names so a page needing both APIs (as `AssignmentsPage.tsx` does, to source a teacher's class/section/subject options) never has an import collision. The backend has no such collision risk (separate service files, never imported together), so `assignments/assignments.service.ts` uses the natural `AssignmentView`/`CreateAssignmentDto` names.
@@ -223,6 +235,8 @@ SchoolERP/
 - Node is 20.11.1, below Prisma 7's floor (20.19+), so Prisma is pinned to `^6`. Bump both `prisma` and `@prisma/client` together after upgrading Node.
 - `npm` hit `EACCES` writing to `~/.npm/_cacache` during setup. If you see it, `sudo chown -R $(whoami) ~/.npm` clears it.
 - Local MySQL runs via `docker compose up -d db` (image `mysql:8`, matching CI). The `schoolerp` user needs `GRANT ALL PRIVILEGES` (not just on `school_erp`) because `prisma migrate dev` creates a throwaway shadow database on every run — a scoped grant on just `school_erp` fails with Prisma error `P3014`.
+- `backend/tsconfig.json`'s `outDir` is `./compiled`, not the conventional `./dist` — on this machine, `backend/dist/` (and later `backend/build/`, after an earlier redirect) both ended up owned by `root` from some stray root-privileged process unrelated to this project's code, and Nest's `deleteOutDir: true` can't clear a root-owned directory without a password this environment doesn't have. If `npm run build`/`start:dev` ever throws `EACCES: permission denied, rmdir '.../<outDir>/...'` again, don't fight for root — repoint `outDir` (in both `tsconfig.json` and `tsconfig.build.json`'s `exclude`) and `start:prod` (in `package.json`) at a fresh, never-used folder name instead. Whatever process keeps running as root against this checkout is outside this repo's control; the workaround costs three one-line edits and no elevated access.
+- Against a remote/shared MySQL host that won't grant shadow-database privileges (`prisma migrate dev` fails with `P3014` the same way a mis-scoped grant does locally), generate migration SQL without a shadow database via `npx prisma migrate diff --from-schema-datasource prisma/schema.prisma --to-schema-datamodel prisma/schema.prisma --script`, hand-place the output under `prisma/migrations/<timestamp>_<name>/migration.sql`, then `npx prisma migrate deploy` (which never needs a shadow database, only `migrate dev` does). Used for the Module 10.6 `student_portal_login` migration.
 
 ---
 
@@ -488,6 +502,44 @@ Goal: Set many assignments at once, two different ways.
 
 **Done when:** An `.xlsx` with a mix of valid and invalid rows produces the right success/failure counts and a downloadable failed-rows file; a single "repeat weekly until" creation produces the correct number of dated rows, all linked by `seriesId`.
 
+## MODULE 10.6 — Student Portal ✅
+
+Goal: Give students their own login so they can see their own attendance and assignments — the gap explicitly descoped at Module 10.5 (see the note above). Not part of the original module list, added after 10.5c for the same reason 10.5 itself was: a real need that came up after Module 10 shipped.
+
+**Tables:** `students` (extended: `userId Int? @unique` FK → `users`, `onDelete: Cascade`)
+
+**Backend:**
+
+- Migration `student_portal_login`: `Student.userId Int? @unique` + `User.student Student?` inverse relation, same 1:1 shape and cascade direction as `Teacher.userId` — deleting the `User` row cascades to delete the `Student` row, so `StudentsService.remove()` deletes via the linked `User` (when `userId` is set) instead of the `Student` row directly, exactly mirroring `TeachersService.remove()`.
+- Seed: `STUDENT` added to `ROLE_NAMES`. No permission keys are seeded for it — every portal route below is an unguarded "me" route, not `@RequirePermission`-gated, so a `STUDENT` never needs to hold a permission key at all.
+- `StudentsService.create()` provisions a `User` (role `STUDENT`) alongside the `Student` row in one `$transaction`, at admission time — same "user + profile together" flow as `TeachersService.create()`, done as two scalar-FK creates in a transaction (not a single nested `student.create({ data: { user: { create } } })`) because mixing Prisma's nested-relation write style with the existing scalar `classId`/`sectionId` fields on the same call isn't allowed by its generated types.
+  - **Login email is synthetic**, derived from the (already-unique) admission number: `{admissionNo}@student.schoolerp.local`. Students have no email of their own on file (only a guardian's), and this avoids asking an admin to invent one at admission time.
+  - **Password is generated and returned once**, in the create response's `login: { email, temporaryPassword }` field — never stored in plaintext or retrievable again. The admin copies it immediately and hands it to the student/guardian.
+  - `StudentView` gained a `hasLogin: boolean` field (`userId !== null`) — students admitted before this module keep working with no login; nothing retroactively provisions one.
+- New self-scoped "me" routes — unguarded by `@RequirePermission`, resolved from the caller's own `Student` row via `req.user.id`, never from a client-supplied `studentId` (same identity-pinning convention as `TeacherAttendanceService`):
+  - `GET /attendance/students/me` — full history, most recent first (a student has no date/class/section picker, unlike the admin/teacher list route)
+  - `GET /assignments/me` — the caller's own class+section's homework, each row's `submitted` reflecting only *their own* status (a narrower `StudentAssignmentView`, not the teacher-facing `submittedCount`/`totalStudents` aggregate)
+  - `GET /dashboard/student-summary` — today's attendance, this month's present/%, and up to 5 upcoming assignments
+- **`AssignmentsService.assertMayView()` grew a `STUDENT` branch** (own class+section only, `ForbiddenException` otherwise) — a real authorization gap that adding the role opened up, not a cosmetic addition: before this, the method's shape was "restrict `TEACHER` to their own, allow everyone else" which would have let a `STUDENT` view or download *any* assignment school-wide, not just their own class's. To let a `STUDENT` reach it at all, `GET /assignments/:id` and `GET /assignments/:id/attachment` had their `@RequirePermission('assignment.view')` decorator removed entirely — `assertMayView()` inside the service is now the sole authorization for those two routes (teacher-owns-only / student-own-class-only / admin-unrestricted), since a blanket permission gate can't express "own class" scoping and a `STUDENT` holds no permissions to gate on anyway. `assignment.create/edit/delete` and the plain `GET /assignments` list are untouched and still permission-gated — a `STUDENT` can't reach them.
+- **`listSubmissions()` explicitly forbids `STUDENT`** — a classmate's submission status is that classmate's data, not the caller's own, and isn't exposed via `/assignments/me` either. This was a deliberate call, not an oversight: nothing in the spec asked for a student-visible submissions roster, and showing one would leak every classmate's status to every student.
+- `AuthService.getMe()` (and the login/refresh response) returns a `student: { id, admissionNo, class, section }` field when the caller's role is `STUDENT`, the same way it already resolves role-specific extras — kept intentionally minimal (just enough for the shell to show "Class 6 - A" without an extra round trip).
+
+**Frontend:**
+
+- `dashboard/StudentDashboard.tsx`, modeled on `TeacherDashboard.tsx`'s loading/error/skeleton card pattern (today's status, this month's % with the same progress-bar markup as `AttendanceBreakdown`, upcoming assignments table); `DashboardHome.tsx` grew a `role === 'STUDENT'` branch alongside the existing `TEACHER` one.
+- `StudentAttendancePage.tsx` / `StudentAssignmentsPage.tsx` — read-only, following the existing `MyClassesPage` self-service pattern (skeleton → empty state → table). The assignments table reuses `downloadHomeworkAttachment`/`triggerBlobDownload` from the existing homework API unchanged, since the backend route is the same one admins/teachers use — only the server-side scoping differs.
+- `navConfig.ts` gained two `roles: ['STUDENT']` entries (`/student/attendance`, `/student/assignments`), same pattern as `TEACHER`'s "My Classes"/"My Attendance"; both routes wrapped in `<ProtectedRoute roles={['STUDENT']}>` in `App.tsx`.
+- `StudentFormPage.tsx`: after a successful admission (create, not edit), the form is replaced by a one-time confirmation card showing the generated login email and temporary password with a "Done" button — the password can't be retrieved again once the admin navigates away, so it's surfaced immediately rather than folded into the regular success flow.
+
+**Decisions locked in for this module:**
+
+- Students log in directly — no separate `Guardian`/`Parent` entity or role. The same credentials can be shared with a parent manually; `Student.guardianName/Phone/Email` stay flat fields, unchanged.
+- Login accounts are auto-created at admission time, not a separate admin action.
+- Read-only for v1 — no self-submission of assignments. Revisit `AssignmentsService.setSubmission()`'s permission scoping later if that changes; it's a behavior change, not just a new read route.
+- A student cannot see the class-wide submissions roster (`GET /assignments/:id/submissions` stays 403 for `STUDENT`) — only their own `submitted` flag, surfaced via `/assignments/me`.
+
+**Done when:** A newly-admitted student can log in with their generated credentials and see only their own attendance history and their own class/section's assignments (with due dates and attachments) — and cannot see or affect any other student's data, or reach any teacher/admin-only route. Verified end-to-end: cross-class isolation (`GET /assignments/:id` for another class's assignment → 403), submissions-roster block (→ 403), every admin/teacher-only route (→ 403), and cascade delete (removing a `Student` invalidates their login immediately).
+
 ## MODULE 11 — Notifications (Optional but high-value)
 
 Goal: Proactive alerts, especially absentee notices.
@@ -532,6 +584,7 @@ Goal: Production readiness.
 9. Reports                  ✅ done
 10. Audit Log               ✅ done
 10.5 Class Assignments      ✅ done (not in the original spec)
+10.6 Student Portal         ✅ done (not in the original spec)
 11. Notifications          (optional, can slot in anytime after Module 6)
 12. Polish & Hardening
 ```

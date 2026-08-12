@@ -30,6 +30,7 @@ export function StudentFormPage() {
   const [loading, setLoading] = useState(isEdit);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [createdLogin, setCreatedLogin] = useState<{ email: string; temporaryPassword: string } | null>(null);
 
   useEffect(() => {
     void academic.listAcademicYears().then(setYears);
@@ -106,10 +107,11 @@ export function StudentFormPage() {
       };
       if (isEdit) {
         await updateStudent(Number(id), { ...payload, isActive });
+        navigate('/students');
       } else {
-        await createStudent(payload);
+        const created = await createStudent(payload);
+        setCreatedLogin(created.login);
       }
-      navigate('/students');
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Failed to save student');
     } finally {
@@ -118,6 +120,37 @@ export function StudentFormPage() {
   };
 
   if (loading) return <p className="muted">Loading…</p>;
+
+  if (createdLogin) {
+    return (
+      <>
+        <h1>Student admitted</h1>
+        <div className="card">
+          <p>
+            A portal login was created automatically. Copy these credentials now — the password
+            can't be shown again after you leave this page.
+          </p>
+          <label className="field">
+            <span>Login email</span>
+            <input value={createdLogin.email} readOnly onFocus={(e) => e.target.select()} />
+          </label>
+          <label className="field">
+            <span>Temporary password</span>
+            <input
+              value={createdLogin.temporaryPassword}
+              readOnly
+              onFocus={(e) => e.target.select()}
+            />
+          </label>
+          <div className="form-actions">
+            <button type="button" onClick={() => navigate('/students')}>
+              Done
+            </button>
+          </div>
+        </div>
+      </>
+    );
+  }
 
   return (
     <>

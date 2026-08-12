@@ -98,6 +98,22 @@ export class AttendanceService {
     return rows.map((r) => this.toView(r));
   }
 
+  /** Identity-pinned "me" route for a STUDENT — resolved from the caller's own
+   * Student row via userId, same pattern as TeacherAttendanceService's
+   * self-mark scoping. Full history, not a single date, since a student has
+   * no picker UI for it. */
+  async findForStudent(userId: number): Promise<AttendanceView[]> {
+    const student = await this.prisma.student.findUnique({ where: { userId } });
+    if (!student) throw new NotFoundException('No student profile for this account');
+
+    const rows = await this.prisma.studentAttendance.findMany({
+      where: { studentId: student.id },
+      include: ATTENDANCE_INCLUDE,
+      orderBy: { date: 'desc' },
+    });
+    return rows.map((r) => this.toView(r));
+  }
+
   async findAll(
     query: ListAttendanceQueryDto,
     actor: AuthenticatedUser,
