@@ -52,6 +52,11 @@ model User {
   isActive                Boolean             @default(true)
   roleId                  Int
   role                    Role                @relation(fields: [roleId], references: [id])
+  /// True until the user sets their own password — forces a change-password
+  /// screen on first login for every login this app ever creates (seed,
+  /// staff, teacher, or student admission), since all of them start from an
+  /// admin-chosen or generated password the user didn't pick themselves.
+  mustChangePassword      Boolean             @default(true)
   /// bcrypt hash of the current refresh token, cleared on logout — lets us
   /// revoke a stolen refresh token without a separate token-blacklist table.
   hashedRefreshToken      String?
@@ -62,6 +67,7 @@ model User {
   markedAttendance        StudentAttendance[] @relation("AttendanceMarkedBy")
   markedTeacherAttendance TeacherAttendance[] @relation("TeacherAttendanceMarkedBy")
   auditLogs               AuditLog[]          @relation("AuditLogActor")
+  announcements           Announcement[]      @relation("AnnouncementAuthor")
 
   @@map("users")
 }
@@ -334,4 +340,44 @@ model AuditLog {
   @@index([userId])
   @@index([createdAt])
   @@map("audit_logs")
+}
+
+/// The three visibility groups an announcement can target — deliberately
+/// coarser than the six actual roles: ADMIN means every admin-tier role
+/// (SUPER_ADMIN/DIRECTOR/PRINCIPAL/ADMIN) collectively, the same grouping
+/// already used informally throughout the app (e.g. Assignments' "admin
+/// roles see all"), not a literal match on the ADMIN role name.
+enum AudienceRole {
+  STUDENT
+  TEACHER
+  ADMIN
+}
+
+/// A notice posted by admin-tier staff, targeted at one or more audience
+/// groups. createdById is nullable with onDelete: SetNull, same reasoning as
+/// AuditLog.userId — deleting the poster's account later shouldn't erase the
+/// announcement itself, just its attribution.
+model Announcement {
+  id          Int                    @id @default(autoincrement())
+  title       String
+  body        String                 @db.Text
+  createdById Int?
+  createdBy   User?                  @relation("AnnouncementAuthor", fields: [createdById], references: [id], onDelete: SetNull)
+  audiences   AnnouncementAudience[]
+  createdAt   DateTime               @default(now())
+  updatedAt   DateTime               @updatedAt
+
+  @@map("announcements")
+}
+
+/// Join table, same shape as RolePermission — one row per (announcement,
+/// audience group). A composite PK instead of a JSON array column keeps
+/// "which announcements target TEACHER" a plain, indexable relation filter.
+model AnnouncementAudience {
+  announcementId Int
+  announcement   Announcement @relation(fields: [announcementId], references: [id], onDelete: Cascade)
+  audience       AudienceRole
+
+  @@id([announcementId, audience])
+  @@map("announcement_audiences")
 }

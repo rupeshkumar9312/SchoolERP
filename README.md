@@ -1,6 +1,6 @@
 # School ERP
 
-A school management system built module by module. Current state: **Module 10 (Audit Log & Admin Tools) complete**, the backend has since been migrated from PostgreSQL to MySQL, **Module 10.5 (Class Assignments)** adds teacher-owned homework with strict view/edit/delete ownership, a staff-recorded submission checklist per student, file attachments, and both bulk (.xlsx) and recurring-weekly creation, and **Module 10.6 (Student Portal)** gives every newly-admitted student their own read-only login (auto-provisioned at admission time) to see their own attendance and their own class's assignments — every create/update/delete on students, teachers, staff accounts, attendance and assignments is recorded with before/after values and who did it, viewable in a SUPER_ADMIN-only Audit Log screen. The MVP (Modules 6–7) shipped before this; everything from here improves the experience but isn't blocking.
+A school management system built module by module. Current state: **Module 10 (Audit Log & Admin Tools) complete**, the backend has since been migrated from PostgreSQL to MySQL, **Module 1.5 (Password Management)** forces a change-password screen on every login's first use and lets a SUPER_ADMIN reset anyone's password, **Module 10.5 (Class Assignments)** adds teacher-owned homework with strict view/edit/delete ownership, a staff-recorded submission checklist per student, file attachments, and both bulk (.xlsx) and recurring-weekly creation, **Module 10.6 (Student Portal)** gives every newly-admitted student their own read-only login (auto-provisioned at admission time) to see their own attendance and their own class's assignments, and **Module 10.7 (Announcements)** lets admin-tier staff post notices targeted at students, teachers, and/or admins — every create/update/delete on students, teachers, staff accounts, attendance, assignments and announcements is recorded with before/after values and who did it, viewable in a SUPER_ADMIN-only Audit Log screen. The MVP (Modules 6–7) shipped before this; everything from here improves the experience but isn't blocking.
 
 - **Backend** — NestJS 11 + Prisma 6 + MySQL
 - **Frontend** — React 19 + Vite 6 + TypeScript
@@ -84,8 +84,12 @@ SchoolERP/
 │   │   └── seed.ts           roles + permissions + SUPER_ADMIN login
 │   ├── src/
 │   │   ├── auth/             login/refresh/logout/me, JWT strategy,
-│   │   │                     PermissionGuard + @RequirePermission
-│   │   ├── users/             staff CRUD, SUPER_ADMIN-account protection
+│   │   │                     PermissionGuard + @RequirePermission, SuperAdminGuard;
+│   │   │                     POST /auth/change-password (own account, any role)
+│   │   ├── users/             staff CRUD, SUPER_ADMIN-account protection,
+│   │   │                     POST /users/:id/reset-password (SuperAdminGuard)
+│   │   ├── common/             generate-temp-password.ts — shared by student
+│   │   │                       admission and admin password resets
 │   │   ├── roles/               GET /roles (role dropdown lookup)
 │   │   ├── academic/             academic-years/classes/sections/subjects,
 │   │   │                          is_current exclusivity, delete-with-children guard
@@ -126,6 +130,10 @@ SchoolERP/
 │   │   │                            own class+section's homework; GET :id and :id/attachment carry
 │   │   │                            no @RequirePermission either — assertMayView() alone decides
 │   │   │                            (teacher-owns-only / student-own-class-only / admin unrestricted)
+│   │   ├── announcements/           GET /announcements(/:id) — unguarded, scoped by audience
+│   │   │                            group (admin-tier sees all, TEACHER/STUDENT see their own);
+│   │   │                            POST/PATCH/DELETE gated by announcement.create/edit/delete
+│   │   │                            (Management set only — a TEACHER can view but never post)
 │   │   ├── config/           env validation — fails fast on a bad .env
 │   │   ├── health/           GET /api/health
 │   │   ├── prisma/           global PrismaService (+ ping for health)
@@ -135,8 +143,13 @@ SchoolERP/
 ├── frontend/                 React + Vite
 │   └── src/
 │       ├── api/               typed fetch client (auto-attaches access token)
-│       ├── auth/               AuthProvider, ProtectedRoute, in-memory token store
-│       ├── pages/               LoginPage, DashboardHome, Users list/form,
+│       ├── auth/               AuthProvider (login/logout/changePassword), ProtectedRoute
+│       │                       (redirects to /change-password while mustChangePassword),
+│       │                       in-memory token store
+│       ├── components/          ChangePasswordForm — shared by ChangePasswordPage (forced)
+│       │                        and SettingsPage (voluntary)
+│       ├── pages/               LoginPage (+ Forgot-password contact-admin popup),
+│       │                         ChangePasswordPage, SettingsPage, DashboardHome, Users list/form,
 │       │                         AcademicSetupPage (+ academic/NamedItemList),
 │       │                         Teachers list/form/assignments, MyClassesPage,
 │       │                         Students list/admission form, MyStudentsPage,
@@ -155,7 +168,9 @@ SchoolERP/
 │       │                         dashboard/StudentDashboard (today's attendance, this month's %,
 │       │                         upcoming assignments), StudentAttendancePage (read-only history),
 │       │                         StudentAssignmentsPage (read-only, own class, attachment download,
-│       │                         own submitted/not-submitted badge) — all STUDENT-only
+│       │                         own submitted/not-submitted badge) — all STUDENT-only,
+│       │                         AnnouncementsListPage (every role, admin-tier gets manage
+│       │                         actions), AnnouncementFormPage (audience checkboxes)
 │       └── shell/                topbar + permission-and-role-driven sidebar
 │                                  (nav-config.ts), mobile drawer under 768px
 ├── .github/workflows/ci.yml
@@ -235,7 +250,7 @@ SchoolERP/
 - Node is 20.11.1, below Prisma 7's floor (20.19+), so Prisma is pinned to `^6`. Bump both `prisma` and `@prisma/client` together after upgrading Node.
 - `npm` hit `EACCES` writing to `~/.npm/_cacache` during setup. If you see it, `sudo chown -R $(whoami) ~/.npm` clears it.
 - Local MySQL runs via `docker compose up -d db` (image `mysql:8`, matching CI). The `schoolerp` user needs `GRANT ALL PRIVILEGES` (not just on `school_erp`) because `prisma migrate dev` creates a throwaway shadow database on every run — a scoped grant on just `school_erp` fails with Prisma error `P3014`.
-- `backend/tsconfig.json`'s `outDir` is `./compiled`, not the conventional `./dist` — on this machine, `backend/dist/` (and later `backend/build/`, after an earlier redirect) both ended up owned by `root` from some stray root-privileged process unrelated to this project's code, and Nest's `deleteOutDir: true` can't clear a root-owned directory without a password this environment doesn't have. If `npm run build`/`start:dev` ever throws `EACCES: permission denied, rmdir '.../<outDir>/...'` again, don't fight for root — repoint `outDir` (in both `tsconfig.json` and `tsconfig.build.json`'s `exclude`) and `start:prod` (in `package.json`) at a fresh, never-used folder name instead. Whatever process keeps running as root against this checkout is outside this repo's control; the workaround costs three one-line edits and no elevated access.
+- `backend/tsconfig.json`'s `outDir` is `./dist-out`, not the conventional `./dist` — on this machine, `backend/dist/`, `backend/build/`, and `backend/compiled/` (three separate redirects, each poisoned in turn) all ended up owned by `root`. **Root cause, found via `ps aux`**: `sudo npm run start` / `sudo npm run dev` processes for this exact project, left running in other terminal tabs — not a one-off stray process. Nest's `deleteOutDir: true` can't clear a root-owned directory without a password this environment doesn't have. If `npm run build`/`start:dev` throws `EACCES: permission denied, rmdir '.../<outDir>/...'` again: first check `ps aux | grep sudo` for a lingering `sudo npm run` and stop it (that fixes the cause); if you just need to get building again right now, repoint `outDir` (in both `tsconfig.json` and `tsconfig.build.json`'s `exclude`) and `start:prod` (in `package.json`) at a fresh, never-used folder name instead. Don't run this project's `npm run start`/`npm run dev`/`npm run build` under `sudo` — nothing here needs elevated privileges, and it's the thing causing the problem.
 - Against a remote/shared MySQL host that won't grant shadow-database privileges (`prisma migrate dev` fails with `P3014` the same way a mis-scoped grant does locally), generate migration SQL without a shadow database via `npx prisma migrate diff --from-schema-datasource prisma/schema.prisma --to-schema-datamodel prisma/schema.prisma --script`, hand-place the output under `prisma/migrations/<timestamp>_<name>/migration.sql`, then `npx prisma migrate deploy` (which never needs a shadow database, only `migrate dev` does). Used for the Module 10.6 `student_portal_login` migration.
 
 ---
@@ -278,6 +293,35 @@ Goal: Login works, and every future route can be permission-gated.
 - Basic authenticated shell (topbar + empty sidebar)
 
 **Done when:** You can log in as a seeded SUPER_ADMIN and hit a protected `/me` endpoint that returns user + role + permissions.
+
+## MODULE 1.5 — Password Management ✅
+
+Goal: Every login this app ever creates starts from a password the user didn't pick (seeded, admin-set, or generated) — force a change on first login, let anyone change their own password later, and give SUPER_ADMIN a way to reset a forgotten one. Not part of the original module list, added after Module 10.6 once the app had multiple kinds of admin-provisioned logins (staff, teacher, student) all sharing this same gap.
+
+**Tables:** `users` (extended: `mustChangePassword Boolean @default(true)`)
+
+**Backend:**
+
+- Migration `add_must_change_password`: the `@default(true)` applies to every existing row too, not just new ones — including the seeded SUPER_ADMIN, so the documented `ChangeMe123!` credential now also forces a change on its very next login. That's intentional, not an oversight: "any type of user" per the request that drove this module, and re-running `db:seed` never resets it back (the upsert's `update: {}` doesn't touch it).
+- `POST /auth/change-password` (`ChangePasswordDto { currentPassword, newPassword }`, any authenticated user, own account only) — verifies `currentPassword` against the stored hash, rejects a `newPassword` identical to the current one, hashes and saves the new one, flips `mustChangePassword` to `false`. **One endpoint serves both flows** — the forced first-login change and a later voluntary change from Settings — since the backend has no reason to care which UI screen called it; only the frontend's messaging differs.
+- `AuthenticatedUserView` (and therefore the login/refresh/`/me`/change-password response body) gained `mustChangePassword: boolean`. Deliberately **not** added to the JWT payload — access tokens are short-lived and stateless already, and baking a mutable flag into them would mean a stale token lies about it until it expires; the frontend instead re-reads this field fresh on every auth-related response.
+- `POST /users/:id/reset-password` (`SuperAdminGuard`, not `@RequirePermission('user.edit')`) — generates a temp password via a new shared `generateTempPassword()` util (`backend/src/common/generate-temp-password.ts`, extracted from Module 10.6's student-admission flow so both call sites share one implementation), sets `mustChangePassword: true`, and clears `hashedRefreshToken` so any session the target user already has open is killed immediately rather than continuing to work until its access token naturally expires. Gated by role, not permission, for the same reason `GET /audit-logs` is: Director/Principal/Admin hold `user.edit` too via the "Management" set, but must not be able to reset anyone's password — only a `SUPER_ADMIN` may.
+
+**Frontend:**
+
+- `ChangePasswordForm.tsx` — the one shared form (current/new/confirm password), reused by two different pages rather than duplicated:
+  - `ChangePasswordPage.tsx` (`/change-password`, standalone route outside `AppShell` like `LoginPage`) — the forced screen, reached only while `mustChangePassword` is `true`. Includes a "Log out instead" escape hatch for someone who got here by mistake or forgot their temp password.
+  - `SettingsPage.tsx` (`/settings`, inside `AppShell`, no permission — every authenticated role sees it in the nav) — the voluntary later change, shows a toast on success instead of redirecting.
+- `ProtectedRoute.tsx` grew one more check, ahead of the existing permission/role ones: if `state.user.mustChangePassword` and the current path isn't `/change-password`, redirect there. Because the top-level `<ProtectedRoute>` wraps `AppShell` (and therefore every nested route), this one change forces the redirect from anywhere in the app without touching individual pages.
+- `LoginPage.tsx` — a "Forgot password?" link opens a small dismissible popup ("contact your school administrator"). No backend route behind it; email/reset-token flows were explicitly out of scope for this module.
+- `UsersListPage.tsx` — a "Reset password" row action, visible only when the signed-in user's `role.name === 'SUPER_ADMIN'` (not `hasPermission('user.edit')`, which Director/Principal/Admin also hold) — mirrors how `AuditLogsPage`'s nav entry is `roles: ['SUPER_ADMIN']` rather than a permission check. The generated temp password is shown once, inline, in a dismissible card — same one-time-reveal pattern as Module 10.6's student-admission credentials card.
+
+**Decisions locked in for this module:**
+
+- No email/SMS reset flow — "contact the administrator" is the entire forgot-password story for v1. Revisit if the school ever needs self-service reset without an admin in the loop.
+- Server-side enforcement stops at the two password endpoints themselves (`change-password` checks the current password; `reset-password` is `SuperAdminGuard`-gated). `mustChangePassword` is **not** enforced as a global backend guard blocking every other route — a user who bypasses the frontend redirect (e.g. by calling the API directly) can still use the app normally until they change it. This was a deliberate scope call, not an oversight: enforcing it globally would mean touching every controller's guard chain in the app for a purely defense-in-depth gain, when the real target audience (school staff and students clicking through the actual UI) is already fully covered by the frontend redirect.
+
+**Done when:** A brand-new login (seeded, staff, teacher, or student) is forced through `/change-password` before it can reach anything else; the same account can voluntarily change its password again later from Settings; a non-SUPER_ADMIN gets 403 trying to reset anyone else's password; and a SUPER_ADMIN-issued reset immediately invalidates the target's existing session and forces them through the change screen again on their next login.
 
 ## MODULE 2 — User Management (Staff Accounts) ✅
 
@@ -540,6 +584,31 @@ Goal: Give students their own login so they can see their own attendance and ass
 
 **Done when:** A newly-admitted student can log in with their generated credentials and see only their own attendance history and their own class/section's assignments (with due dates and attachments) — and cannot see or affect any other student's data, or reach any teacher/admin-only route. Verified end-to-end: cross-class isolation (`GET /assignments/:id` for another class's assignment → 403), submissions-roster block (→ 403), every admin/teacher-only route (→ 403), and cascade delete (removing a `Student` invalidates their login immediately).
 
+## MODULE 10.7 — Announcements ✅
+
+Goal: Let admin-tier staff post a notice targeted at one or more audience groups (students, teachers, admins) — every role sees only the notices addressed to them. Not part of the original module list, added after Module 10.6.
+
+**Tables:** `announcements`, `announcement_audiences`
+
+**Backend:**
+
+- `AudienceRole` enum (`STUDENT` / `TEACHER` / `ADMIN`) — deliberately coarser than the six actual roles: `ADMIN` means every admin-tier role (`SUPER_ADMIN`/`DIRECTOR`/`PRINCIPAL`/`ADMIN`) collectively, the same informal grouping Assignments and Dashboards already use ("admin roles see all"), not a literal match on the `ADMIN` role name.
+- `AnnouncementAudience` is a join table (composite PK on `announcementId`+`audience`), the same shape as `RolePermission` — chosen over a `Json` array column so "which announcements target TEACHER" stays a plain, indexable relation filter (`audiences: { some: { audience: 'TEACHER' } }`) rather than app-side post-filtering. `Announcement.createdById` is nullable with `onDelete: SetNull`, same reasoning as `AuditLog.userId` — deleting the poster's account later shouldn't erase the announcement, just its attribution.
+- `GET /announcements`, `GET /announcements/:id` — no `@RequirePermission` on either: every authenticated role, including `STUDENT`/`TEACHER` who hold no `announcement.*` permission at all, may view announcements addressed to them. `AnnouncementsService` does the actual scoping — admin-tier roles see every announcement (they're the ones managing them, including ones not addressed to `ADMIN`); a `TEACHER`/`STUDENT` only sees rows whose audience list includes their own group. Same "shared route, service does the restriction" pattern used for attendance/assignments elsewhere in this app.
+- `POST/PATCH/DELETE /announcements(/:id)` — gated by new `announcement.create`/`.edit`/`.delete` permission keys, granted only to the Management set (`DIRECTOR`/`PRINCIPAL`/`ADMIN`, plus `SUPER_ADMIN` unconditionally) — a bare `TEACHER` cannot post, edit, or delete announcements, only view the ones addressed to `TEACHER`.
+- Editing a changed `audiences` list is delete-then-recreate inside one `$transaction`, not a nested Prisma "update" — `AnnouncementAudience` has no single-column id to key an update by (its PK is the `announcementId`+`audience` pair itself).
+- Every create/update/delete logs to the Module 10 audit trail (`entityType: 'Announcement'`).
+
+**Frontend:**
+
+- `AnnouncementsListPage.tsx` — every role sees the same list (server-filtered already); admin-tier roles additionally see audience badges and Edit/Delete actions per row plus a "New announcement" button, gated by `hasPermission('announcement.create'/'edit'/'delete')` exactly like Users/Teachers/Students list pages.
+- `AnnouncementFormPage.tsx` — title/body/audience-checkboxes, one shared form for create and edit (`isEdit` from `useParams`, same pattern as `StudentFormPage`/`UserFormPage`). Routes `/announcements/new` and `/announcements/:id/edit` are permission-gated; the plain `/announcements` list route isn't gated at all, matching the backend.
+- `navConfig.ts`'s "Announcements" entry has neither `permission` nor `roles` — visible to every authenticated user, same as "Dashboard" and "Settings".
+
+**Caught while testing, not by inspection:** a Playwright run logged in as a disposable `ADMIN`-role account and the "New announcement" button never rendered — `hasPermission('announcement.create')` was false even though `ADMIN` is in the Management set. Root cause wasn't the permission-guard logic; it was that `prisma/seed.ts`'s `PERMISSIONS` array had been edited to add the three new keys, but `npm run db:seed` was never re-run against the already-seeded local database, so the new `RolePermission` rows never existed. `SUPER_ADMIN` never surfaced this because it bypasses `PermissionGuard` unconditionally regardless of seeded rows — only `DIRECTOR`/`PRINCIPAL`/`ADMIN` actually depend on the seed. **Any time a new permission key is added to `PERMISSIONS`, re-run `npm run db:seed` against every environment that already has data** — a fresh `prisma migrate dev` does not do this for you.
+
+**Done when:** An admin-tier user can post an announcement targeted at any combination of the three audience groups; a `TEACHER`/`STUDENT` sees only announcements that include their own group and gets 403 fetching one by id that doesn't; a `TEACHER` gets 403 trying to create/edit/delete any announcement; and narrowing an existing announcement's audience away from a group immediately removes it from that group's list.
+
 ## MODULE 11 — Notifications (Optional but high-value)
 
 Goal: Proactive alerts, especially absentee notices.
@@ -574,6 +643,7 @@ Goal: Production readiness.
 ```
 0. Project Setup          ✅ done
 1. Auth & RBAC            ✅ done ─┐
+1.5 Password Management     ✅ done (not in the original spec)
 2. User Management        ✅ done │  Foundation — do not skip or reorder
 3. Academic Structure     ✅ done ─┘
 4. Teacher Management     ✅ done ─┐
@@ -585,6 +655,7 @@ Goal: Production readiness.
 10. Audit Log               ✅ done
 10.5 Class Assignments      ✅ done (not in the original spec)
 10.6 Student Portal         ✅ done (not in the original spec)
+10.7 Announcements          ✅ done (not in the original spec)
 11. Notifications          (optional, can slot in anytime after Module 6)
 12. Polish & Hardening
 ```

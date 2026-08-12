@@ -18,6 +18,25 @@ export function IconHome(props: IconProps) {
   );
 }
 
+export function IconMegaphone(props: IconProps) {
+  return (
+    <svg {...common} {...props}>
+      <path d="M3 10v4a1 1 0 0 0 1 1h2l2.5 5.5L11 19v-8" />
+      <path d="M8 10 18 5v14L8 14" />
+      <path d="M18 9.5a3 3 0 0 1 0 5" />
+    </svg>
+  );
+}
+
+export function IconSettings(props: IconProps) {
+  return (
+    <svg {...common} {...props}>
+      <circle cx="12" cy="12" r="3" />
+      <path d="M12 3.5v2.2M12 18.3v2.2M4.9 6.9l1.6 1.6M17.5 15.5l1.6 1.6M3.5 12h2.2M18.3 12h2.2M4.9 17.1l1.6-1.6M17.5 8.5l1.6-1.6" />
+    </svg>
+  );
+}
+
 export function IconUsersGroup(props: IconProps) {
   return (
     <svg {...common} {...props}>

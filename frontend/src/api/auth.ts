@@ -6,6 +6,9 @@ export interface AuthUser {
   name: string;
   role: { id: number; name: string };
   permissions: string[];
+  /** True until this user sets their own password — the frontend forces a
+   * change-password screen while this is true, regardless of role. */
+  mustChangePassword: boolean;
   /** Only present when role.name === 'STUDENT'. */
   student?: {
     id: number;
@@ -34,4 +37,15 @@ export function logout(): Promise<void> {
 
 export function me(): Promise<AuthUser> {
   return apiGet<AuthUser>('/auth/me');
+}
+
+export interface ChangePasswordPayload {
+  currentPassword: string;
+  newPassword: string;
+}
+
+/** Serves both the forced first-login change and a later voluntary change
+ * from Settings — only the caller's UI messaging differs. */
+export function changePassword(payload: ChangePasswordPayload): Promise<{ user: AuthUser }> {
+  return apiPost<{ user: AuthUser }>('/auth/change-password', payload);
 }

@@ -13,6 +13,7 @@ export function LoginPage() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
 
   if (state.status === 'authenticated') {
     const from = (location.state as { from?: { pathname: string } } | null)?.from;
@@ -78,7 +79,31 @@ export function LoginPage() {
         <button type="submit" disabled={submitting}>
           {submitting ? 'Signing in…' : 'Sign in'}
         </button>
+
+        <button
+          type="button"
+          className="link-button"
+          onClick={() => setShowForgotPassword(true)}
+        >
+          Forgot password?
+        </button>
       </form>
+
+      {showForgotPassword && (
+        <div className="modal-backdrop" onClick={() => setShowForgotPassword(false)}>
+          <div className="modal-card" role="alertdialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
+            <h3>Forgot your password?</h3>
+            <p className="muted">
+              Please contact your school administrator to have your password reset.
+            </p>
+            <div className="modal-actions">
+              <button onClick={() => setShowForgotPassword(false)} autoFocus>
+                OK
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }

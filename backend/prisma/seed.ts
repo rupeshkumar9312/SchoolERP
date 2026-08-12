@@ -32,6 +32,9 @@ const PERMISSIONS: Array<{ key: string; description: string }> = [
   { key: 'assignment.create', description: 'Create a class assignment' },
   { key: 'assignment.edit', description: 'Edit a class assignment (teacher may only edit their own)' },
   { key: 'assignment.delete', description: 'Delete a class assignment (teacher may only delete their own)' },
+  { key: 'announcement.create', description: 'Post an announcement/notice' },
+  { key: 'announcement.edit', description: 'Edit an announcement/notice' },
+  { key: 'announcement.delete', description: 'Delete an announcement/notice' },
 ];
 
 // Director/Principal/Admin share one "Management" permission set per the

@@ -14,7 +14,9 @@ import {
   IconGraduate,
   IconHistory,
   IconHome,
+  IconMegaphone,
   IconNotebookPen,
+  IconSettings,
   IconShieldCheck,
   IconUserCheck,
   IconUsersGroup,
@@ -38,7 +40,9 @@ const NAV_ICONS: Record<
   "/staff-attendance": IconClipboardList,
   "/reports": IconChartBar,
   "/assignments": IconNotebookPen,
+  "/announcements": IconMegaphone,
   "/audit-logs": IconShieldCheck,
+  "/settings": IconSettings,
 };
 
 export function AppShell() {

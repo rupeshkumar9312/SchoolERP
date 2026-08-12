@@ -13,6 +13,7 @@ import { ConfigService } from '@nestjs/config';
 import type { Request, Response } from 'express';
 import { AuthService } from './auth.service';
 import { CurrentUser } from './decorators/current-user.decorator';
+import { ChangePasswordDto } from './dto/change-password.dto';
 import { LoginDto } from './dto/login.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import type { AuthenticatedUser } from './auth.types';
@@ -61,6 +62,16 @@ export class AuthController {
   @Get('me')
   async me(@CurrentUser() user: AuthenticatedUser) {
     return this.auth.getMe(user.id);
+  }
+
+  // Serves both the forced first-login change and a later voluntary change
+  // from Settings — the frontend decides which screen to show, this endpoint
+  // doesn't care why it was called.
+  @UseGuards(JwtAuthGuard)
+  @Post('change-password')
+  @HttpCode(200)
+  async changePassword(@CurrentUser() user: AuthenticatedUser, @Body() dto: ChangePasswordDto) {
+    return { user: await this.auth.changePassword(user.id, dto.currentPassword, dto.newPassword) };
   }
 
   private setRefreshCookie(res: Response, refreshToken: string): void {

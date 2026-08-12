@@ -1,4 +1,4 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, Injectable, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService, JwtSignOptions } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
@@ -8,6 +8,7 @@ import { PermissionsService } from './permissions.service';
 import { STUDENT_ROLE } from './roles.constants';
 
 const REFRESH_TOKEN_BCRYPT_ROUNDS = 10;
+const PASSWORD_BCRYPT_ROUNDS = 10;
 
 export interface AuthTokens {
   accessToken: string;
@@ -20,6 +21,9 @@ export interface AuthenticatedUserView {
   name: string;
   role: { id: number; name: string };
   permissions: string[];
+  /** True until this user sets their own password — the frontend forces a
+   * change-password screen while this is true, regardless of role. */
+  mustChangePassword: boolean;
   /** Only populated when role.name === 'STUDENT' — mirrors how a Teacher's
    * profile isn't surfaced here either; the frontend fetches teacher profile
    * data from its own endpoints. Kept minimal: just enough for the shell/nav
@@ -40,6 +44,7 @@ type UserWithRole = {
   isActive: boolean;
   roleId: number;
   role: { id: number; name: string };
+  mustChangePassword: boolean;
   hashedRefreshToken: string | null;
 };
 
@@ -136,8 +141,38 @@ export class AuthService {
       name: user.name,
       role: { id: user.role.id, name: user.role.name },
       permissions,
+      mustChangePassword: user.mustChangePassword,
       student,
     };
+  }
+
+  /** Available to any authenticated user for their own account — the same
+   * endpoint serves both the forced first-login change and a later voluntary
+   * change from Settings; only the frontend's messaging differs between them. */
+  async changePassword(
+    userId: number,
+    currentPassword: string,
+    newPassword: string,
+  ): Promise<AuthenticatedUserView> {
+    const user = await this.prisma.user.findUniqueOrThrow({
+      where: { id: userId },
+      include: { role: true },
+    });
+
+    if (!(await bcrypt.compare(currentPassword, user.passwordHash))) {
+      throw new UnauthorizedException('Current password is incorrect');
+    }
+    if (currentPassword === newPassword) {
+      throw new BadRequestException('New password must be different from the current one');
+    }
+
+    const passwordHash = await bcrypt.hash(newPassword, PASSWORD_BCRYPT_ROUNDS);
+    const updated = await this.prisma.user.update({
+      where: { id: userId },
+      data: { passwordHash, mustChangePassword: false },
+      include: { role: true },
+    });
+    return this.toUserView(updated);
   }
 
   private async issueTokens(user: UserWithRole): Promise<AuthTokens> {
