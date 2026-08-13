@@ -11,6 +11,8 @@ import { MarkAttendanceScreen } from '../screens/teacher/MarkAttendanceScreen';
 import { MyAttendanceScreen } from '../screens/teacher/MyAttendanceScreen';
 import { NewAssignmentScreen } from '../screens/teacher/NewAssignmentScreen';
 import { RosterScreen } from '../screens/teacher/RosterScreen';
+import { StudentAttendanceHistoryScreen } from '../screens/teacher/StudentAttendanceHistoryScreen';
+import { StudentSearchScreen } from '../screens/teacher/StudentSearchScreen';
 import { TeacherAssignmentDetailScreen } from '../screens/teacher/TeacherAssignmentDetailScreen';
 import { TeacherAssignmentsListScreen } from '../screens/teacher/TeacherAssignmentsListScreen';
 import { TeacherDashboardScreen } from '../screens/teacher/TeacherDashboardScreen';
@@ -51,6 +53,8 @@ function ClassesStackNavigator(): React.JSX.Element {
       <ClassesStack.Screen name="ClassesList" component={ClassesListScreen} />
       <ClassesStack.Screen name="Roster" component={RosterScreen} />
       <ClassesStack.Screen name="MarkAttendance" component={MarkAttendanceScreen} />
+      <ClassesStack.Screen name="StudentSearch" component={StudentSearchScreen} />
+      <ClassesStack.Screen name="StudentAttendanceHistory" component={StudentAttendanceHistoryScreen} />
     </ClassesStack.Navigator>
   );
 }

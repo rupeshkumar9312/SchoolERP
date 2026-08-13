@@ -21,10 +21,20 @@ export interface ClassSectionRef {
   sectionName: string;
 }
 
+export interface StudentRef {
+  studentId: number;
+  studentName: string;
+  admissionNo: string;
+  className: string;
+  sectionName: string;
+}
+
 export type TeacherClassesStackParamList = {
   ClassesList: undefined;
   Roster: ClassSectionRef;
   MarkAttendance: ClassSectionRef;
+  StudentSearch: undefined;
+  StudentAttendanceHistory: StudentRef;
 };
 
 export type TeacherAssignmentsStackParamList = {

@@ -14,10 +14,9 @@ import { Touchable } from '../../components/Touchable';
 import { colors, fonts, radius, spacing } from '../../theme';
 import type { TeacherClassesStackParamList } from '../../navigation/types';
 
-type Props = NativeStackScreenProps<TeacherClassesStackParamList, 'Roster'>;
+type Props = NativeStackScreenProps<TeacherClassesStackParamList, 'StudentSearch'>;
 
-export function RosterScreen({ route, navigation }: Props): React.JSX.Element {
-  const { classId, sectionId, className, sectionName } = route.params;
+export function StudentSearchScreen({ navigation }: Props): React.JSX.Element {
   const [students, setStudents] = useState<Student[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -26,14 +25,13 @@ export function RosterScreen({ route, navigation }: Props): React.JSX.Element {
   const load = useCallback(async () => {
     setError(null);
     try {
-      const all = await listMyClassStudents();
-      setStudents(all.filter((s) => s.class.id === classId && s.section.id === sectionId));
+      setStudents(await listMyClassStudents());
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Could not load roster');
+      setError(err instanceof ApiError ? err.message : 'Could not load students');
     } finally {
       setLoading(false);
     }
-  }, [classId, sectionId]);
+  }, []);
 
   useFocusEffect(
     useCallback(() => {
@@ -43,29 +41,29 @@ export function RosterScreen({ route, navigation }: Props): React.JSX.Element {
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return students ?? [];
-    return (students ?? []).filter((s) => s.name.toLowerCase().includes(q));
+    if (!q) return [];
+    return (students ?? []).filter(
+      (s) => s.name.toLowerCase().includes(q) || s.admissionNo.toLowerCase().includes(q),
+    );
   }, [students, query]);
 
   if (loading) return <LoadingView />;
   if (error) return <Screen><ErrorView message={error} onRetry={load} /></Screen>;
 
   return (
-    <Screen refreshing={loading} onRefresh={load}>
+    <Screen>
       <View>
-        <Text style={styles.heading}>{className} - {sectionName}</Text>
-        <Text style={styles.subtitle}>Read-only — students in this class.</Text>
+        <Text style={styles.heading}>Search students</Text>
+        <Text style={styles.subtitle}>Find any student across your classes to view their attendance history.</Text>
       </View>
 
-      {students && students.length > 0 && (
-        <SearchInput value={query} onChangeText={setQuery} placeholder="Search by name…" />
+      <SearchInput value={query} onChangeText={setQuery} placeholder="Search by name or admission no…" />
+
+      {!query.trim() && (
+        <Card><Text style={styles.muted}>Start typing a student's name or admission number.</Text></Card>
       )}
 
-      {students && students.length === 0 && (
-        <Card><Text style={styles.muted}>No students in this class yet.</Text></Card>
-      )}
-
-      {students && students.length > 0 && filtered.length === 0 && (
+      {query.trim().length > 0 && filtered.length === 0 && (
         <Card><Text style={styles.muted}>No students match "{query.trim()}".</Text></Card>
       )}
 
@@ -84,11 +82,9 @@ export function RosterScreen({ route, navigation }: Props): React.JSX.Element {
           }
         >
           <Card style={styles.recordCard}>
-            <DataRowText label="Admission No." value={s.admissionNo} />
             <DataRowText label="Name" value={s.name} />
-            <DataRowText label="Class" value={s.class.name} />
-            <DataRowText label="Section" value={s.section.name} />
-            <DataRowText label="Guardian" value={s.guardianName ?? '—'} />
+            <DataRowText label="Admission No." value={s.admissionNo} />
+            <DataRowText label="Class" value={`${s.class.name} - ${s.section.name}`} />
           </Card>
         </Touchable>
       ))}

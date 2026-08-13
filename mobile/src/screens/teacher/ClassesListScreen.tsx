@@ -52,9 +52,12 @@ export function ClassesListScreen({ navigation }: Props): React.JSX.Element {
 
   return (
     <Screen refreshing={loading} onRefresh={load}>
-      <View>
-        <Text style={styles.heading}>My Classes</Text>
-        <Text style={styles.subtitle}>Classes, sections and subjects assigned to you.</Text>
+      <View style={styles.headerRow}>
+        <View style={styles.headerText}>
+          <Text style={styles.heading}>My Classes</Text>
+          <Text style={styles.subtitle}>Classes, sections and subjects assigned to you.</Text>
+        </View>
+        <Button label="Search students" variant="secondary" onPress={() => navigation.navigate('StudentSearch')} />
       </View>
 
       {assignments.length === 0 ? (
@@ -86,6 +89,8 @@ export function ClassesListScreen({ navigation }: Props): React.JSX.Element {
 }
 
 const styles = StyleSheet.create({
+  headerRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: spacing.sm },
+  headerText: { flex: 1 },
   heading: { fontSize: 20, fontFamily: fonts.headingBold, color: colors.text },
   subtitle: { fontSize: 14, fontFamily: fonts.body, color: colors.textMuted, marginTop: 2 },
   muted: { fontSize: 13, fontFamily: fonts.body, color: colors.textMuted },
