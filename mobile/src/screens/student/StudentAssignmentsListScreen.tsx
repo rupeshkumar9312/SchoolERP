@@ -10,7 +10,7 @@ import { ErrorView } from '../../components/ErrorView';
 import { LoadingView } from '../../components/LoadingView';
 import { Screen } from '../../components/Screen';
 import { Touchable } from '../../components/Touchable';
-import { colors, radius, spacing } from '../../theme';
+import { colors, fonts, radius, spacing } from '../../theme';
 import { formatDate } from '../../utils/format';
 import type { StudentAssignmentsStackParamList } from '../../navigation/types';
 
@@ -25,7 +25,9 @@ export function StudentAssignmentsListScreen({ navigation }: Props): React.JSX.E
     setError(null);
     try {
       const data = await listMyHomeworkAssignments();
-      data.sort((a, b) => a.dueDate.localeCompare(b.dueDate));
+      // Matches the backend's own ordering for this endpoint (dueDate desc) —
+      // don't invert it, or "most recent first" below would be a lie.
+      data.sort((a, b) => b.dueDate.localeCompare(a.dueDate));
       setAssignments(data);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not load assignments');
@@ -45,7 +47,11 @@ export function StudentAssignmentsListScreen({ navigation }: Props): React.JSX.E
 
   return (
     <Screen refreshing={loading} onRefresh={load}>
-      <Text style={styles.heading}>Assignments</Text>
+      <View>
+        <Text style={styles.heading}>My Assignments</Text>
+        <Text style={styles.subtitle}>Homework set for your class, most recent first.</Text>
+      </View>
+
       {assignments && assignments.length === 0 && (
         <Card><Text style={styles.muted}>No assignments yet.</Text></Card>
       )}
@@ -70,11 +76,12 @@ export function StudentAssignmentsListScreen({ navigation }: Props): React.JSX.E
 }
 
 const styles = StyleSheet.create({
-  heading: { fontSize: 20, fontWeight: '800', color: colors.text },
-  muted: { fontSize: 13, color: colors.textMuted },
+  heading: { fontSize: 20, fontFamily: fonts.headingBold, color: colors.text },
+  subtitle: { fontSize: 14, fontFamily: fonts.body, color: colors.textMuted, marginTop: 2 },
+  muted: { fontSize: 13, fontFamily: fonts.body, color: colors.textMuted },
   touchable: { borderRadius: radius.lg, overflow: 'hidden' },
   card: { gap: spacing.xs },
-  title: { fontSize: 16, fontWeight: '600', color: colors.text },
+  title: { fontSize: 16, fontFamily: fonts.bodySemiBold, color: colors.text },
   footerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: spacing.xs },
-  due: { fontSize: 13, color: colors.textMuted },
+  due: { fontSize: 13, fontFamily: fonts.body, color: colors.textMuted },
 });
