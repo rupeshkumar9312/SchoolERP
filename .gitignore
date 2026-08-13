@@ -4,6 +4,8 @@ build/
 compiled/
 dist-out/
 nest-out/
+nest-run/
+nest-dev-out/
 coverage/
 backend/uploads/
 

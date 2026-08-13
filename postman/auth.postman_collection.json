@@ -1,0 +1,164 @@
+{
+  "info": {
+    "name": "School ERP - Auth",
+    "description": "Endpoints from backend/src/auth/auth.controller.ts. All routes live under the /api prefix.\n\nFlow: run \"Login\" first (or \"Login - Seeded SUPER_ADMIN\") — it saves the access token into the {{accessToken}} collection variable and stores the httpOnly refresh cookie automatically via Postman's cookie jar (scoped to /api/auth, sameSite=lax). Every other request in this collection inherits Bearer auth from the collection level using {{accessToken}}.\n\nNote: a freshly seeded or freshly admitted/reset login always has mustChangePassword: true in the response body — the real app forces a change-password screen before anything else. POST /auth/login and POST /auth/refresh return the current value of that flag on every call.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:4000/api", "type": "string" },
+    { "key": "accessToken", "value": "", "type": "string" },
+    { "key": "email", "value": "admin@schoolerp.dev", "type": "string" },
+    { "key": "password", "value": "ChangeMe123!", "type": "string" }
+  ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }]
+  },
+  "event": [],
+  "item": [
+    {
+      "name": "Login",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "auth": { "type": "noauth" },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/auth/login",
+          "host": ["{{baseUrl}}"],
+          "path": ["auth", "login"]
+        },
+        "description": "Public. Body: LoginDto { email, password }. Sets an httpOnly refresh_token cookie (scoped to /api/auth) and returns { accessToken, user }. user.mustChangePassword tells you whether this login must go through POST /auth/change-password before doing anything else in the real app."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const status = pm.response.code;",
+              "pm.test('Status is 200', () => pm.expect(status).to.eql(200));",
+              "if (status === 200) {",
+              "  const body = pm.response.json();",
+              "  pm.collectionVariables.set('accessToken', body.accessToken);",
+              "  pm.test('Response has user.mustChangePassword', () => {",
+              "    pm.expect(body.user).to.have.property('mustChangePassword');",
+              "  });",
+              "  console.log('mustChangePassword:', body.user.mustChangePassword);",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Refresh",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "auth": { "type": "noauth" },
+        "body": { "mode": "raw", "raw": "" },
+        "url": {
+          "raw": "{{baseUrl}}/auth/refresh",
+          "host": ["{{baseUrl}}"],
+          "path": ["auth", "refresh"]
+        },
+        "description": "Public, but requires the refresh_token httpOnly cookie set by Login (Postman's cookie jar sends it automatically for requests to this host). Rotates the refresh token and returns a new { accessToken, user }. 401 if no cookie was sent or the stored token was already rotated/revoked."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "if (pm.response.code === 200) {",
+              "  pm.collectionVariables.set('accessToken', pm.response.json().accessToken);",
+              "}",
+              "pm.test('Status is 200 or 401', () => pm.expect(pm.response.code).to.be.oneOf([200, 401]));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Me",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/auth/me",
+          "host": ["{{baseUrl}}"],
+          "path": ["auth", "me"]
+        },
+        "description": "Requires Bearer {{accessToken}} (set by Login/Refresh). Returns the same AuthenticatedUserView shape as login/refresh: id, email, name, role, permissions, mustChangePassword, and student (only when role is STUDENT)."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status is 200', () => pm.response.to.have.status(200));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Change Password",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"currentPassword\": \"{{password}}\",\n  \"newPassword\": \"NewPassword123\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/auth/change-password",
+          "host": ["{{baseUrl}}"],
+          "path": ["auth", "change-password"]
+        },
+        "description": "Requires Bearer {{accessToken}}. Body: ChangePasswordDto { currentPassword, newPassword (min 8 chars, must differ from current) }. Serves both the forced first-login change and a later voluntary change from Settings — same endpoint either way. On success, sets mustChangePassword to false and returns { user }. Does NOT issue new tokens.\n\n401 if currentPassword is wrong. 400 if newPassword is under 8 characters or identical to currentPassword.\n\nHeads up: running this against the seeded SUPER_ADMIN will actually change its password away from ChangeMe123! — point {{email}}/{{password}} at a disposable test account first if you just want to exercise this endpoint."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status is 200 or a validation/auth error', () => pm.expect(pm.response.code).to.be.oneOf([200, 400, 401]));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Logout",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/auth/logout",
+          "host": ["{{baseUrl}}"],
+          "path": ["auth", "logout"]
+        },
+        "description": "Requires Bearer {{accessToken}}. Clears the caller's stored hashedRefreshToken server-side (revokes it) and clears the refresh_token cookie. Returns 204 with no body."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status is 204', () => pm.response.to.have.status(204));",
+              "pm.collectionVariables.set('accessToken', '');"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}
