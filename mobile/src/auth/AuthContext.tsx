@@ -13,6 +13,7 @@ interface AuthContextValue {
   logout: () => Promise<void>;
   changePassword: (payload: authApi.ChangePasswordPayload) => Promise<void>;
   clearError: () => void;
+  hasPermission: (permission: string) => boolean;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -85,8 +86,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }): React
     }
   };
 
+  const hasPermission = (permission: string) => !!user?.permissions.includes(permission);
+
   const value = useMemo(
-    () => ({ status, user, error, login, logout, changePassword, clearError: () => setError(null) }),
+    () => ({ status, user, error, login, logout, changePassword, clearError: () => setError(null), hasPermission }),
     [status, user, error],
   );
 

@@ -2,9 +2,8 @@ import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
-import { HeaderLogo } from '../components/HeaderLogo';
-import { HeaderLogoutButton } from '../components/HeaderLogoutButton';
-import { AnnouncementsScreen } from '../screens/AnnouncementsScreen';
+import { AnnouncementsStackNavigator } from './AnnouncementsStackNavigator';
+import { brandedHeaderOptions } from './brandedHeaderOptions';
 import { SettingsScreen } from '../screens/SettingsScreen';
 import { ClassesListScreen } from '../screens/teacher/ClassesListScreen';
 import { MarkAttendanceScreen } from '../screens/teacher/MarkAttendanceScreen';
@@ -28,15 +27,6 @@ const Tab = createBottomTabNavigator<TeacherTabsParamList>();
 const DashboardStack = createNativeStackNavigator<TeacherDashboardStackParamList>();
 const ClassesStack = createNativeStackNavigator<TeacherClassesStackParamList>();
 const AssignmentsStack = createNativeStackNavigator<TeacherAssignmentsStackParamList>();
-
-// Every screen shows the EDVANCE mark + a logout icon instead of a title —
-// mirrors the web app's AppShell topbar, which is identical on every page.
-const brandedHeaderOptions = {
-  headerTintColor: colors.primary,
-  headerTitle: () => <HeaderLogo />,
-  headerTitleAlign: 'center' as const,
-  headerRight: () => <HeaderLogoutButton />,
-};
 
 function DashboardStackNavigator(): React.JSX.Element {
   return (
@@ -104,7 +94,11 @@ export function TeacherTabs(): React.JSX.Element {
         component={AssignmentsStackNavigator}
         options={{ title: 'Assignments', headerShown: false }}
       />
-      <Tab.Screen name="Announcements" component={AnnouncementsScreen} options={{ title: 'Announcements' }} />
+      <Tab.Screen
+        name="Announcements"
+        component={AnnouncementsStackNavigator}
+        options={{ title: 'Announcements', headerShown: false }}
+      />
       <Tab.Screen name="Settings" component={SettingsScreen} options={{ title: 'Settings' }} />
     </Tab.Navigator>
   );

@@ -21,7 +21,11 @@ export function Screen({ children, scroll = true, refreshing, onRefresh }: Scree
 
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
-      <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+      {/* Android already resizes the window for the keyboard via app.json's
+          softwareKeyboardLayoutMode: "resize" — behavior="height" here would
+          double up on that and can lock in a stale, too-short height after a
+          tab switch, clipping the ScrollView so its tail can't be reached. */}
+      <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView
           contentContainerStyle={styles.content}
           keyboardShouldPersistTaps="handled"
@@ -41,5 +45,5 @@ export function Screen({ children, scroll = true, refreshing, onRefresh }: Scree
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.bg },
   flex: { flex: 1 },
-  content: { padding: spacing.lg, gap: spacing.md },
+  content: { padding: spacing.lg, paddingBottom: spacing.xxl, gap: spacing.md },
 });

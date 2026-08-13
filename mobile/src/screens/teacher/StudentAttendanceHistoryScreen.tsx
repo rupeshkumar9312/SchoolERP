@@ -1,5 +1,4 @@
 import React, { useCallback, useState } from 'react';
-import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useFocusEffect } from '@react-navigation/native';
 import { StyleSheet, Text, View } from 'react-native';
 import { AttendanceRecord, getStudentAttendanceHistory } from '../../api/attendance';
@@ -12,9 +11,14 @@ import { Screen } from '../../components/Screen';
 import { ATTENDANCE_STATUS_META } from '../../constants';
 import { colors, fonts, spacing } from '../../theme';
 import { formatDate } from '../../utils/format';
-import type { TeacherClassesStackParamList } from '../../navigation/types';
+import type { StudentRef } from '../../navigation/types';
 
-type Props = NativeStackScreenProps<TeacherClassesStackParamList, 'StudentAttendanceHistory'>;
+// Deliberately not typed against a specific stack's ParamList — this screen
+// is pushed from both TeacherClassesStackParamList and
+// AdminAttendanceStackParamList, and only ever reads route.params.
+interface Props {
+  route: { params: StudentRef };
+}
 
 export function StudentAttendanceHistoryScreen({ route }: Props): React.JSX.Element {
   const { studentId, studentName, admissionNo, className, sectionName } = route.params;
