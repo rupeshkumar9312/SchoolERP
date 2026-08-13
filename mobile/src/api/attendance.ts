@@ -47,7 +47,7 @@ export function listMyAttendance(): Promise<AttendanceRecord[]> {
 }
 
 /** Full history for an arbitrary student — the server scopes a TEACHER to
- * students they teach or are homeroom teacher for; ADMIN-tier is unrestricted. */
+ * students they teach or are homeroom teacher for. */
 export function getStudentAttendanceHistory(studentId: number): Promise<AttendanceRecord[]> {
   return apiGet<AttendanceRecord[]>(`/attendance/students/${studentId}/history`);
 }

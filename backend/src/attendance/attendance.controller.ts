@@ -37,6 +37,15 @@ export class AttendanceController {
     return this.attendance.findForStudent(actor.id);
   }
 
+  @Get(':studentId/history')
+  @RequirePermission('attendance.student.view')
+  findHistoryForStudent(
+    @Param('studentId', ParseIntPipe) studentId: number,
+    @CurrentUser() actor: AuthenticatedUser,
+  ) {
+    return this.attendance.findHistoryForStudent(studentId, actor);
+  }
+
   @Post()
   @RequirePermission('attendance.student.mark')
   markBulk(@Body() dto: MarkAttendanceDto, @CurrentUser() actor: AuthenticatedUser) {

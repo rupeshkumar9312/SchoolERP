@@ -114,6 +114,48 @@ export class AttendanceService {
     return rows.map((r) => this.toView(r));
   }
 
+  /**
+   * Full attendance history for a single student, regardless of date — backs
+   * the "search any student" flows on web and mobile. ADMIN-tier can look up
+   * anyone; a TEACHER is scoped to students in a class/section they teach a
+   * subject in or are the homeroom teacher of. Deliberately broader than the
+   * homeroom-only scope used for marking/editing, since this is read-only and
+   * mirrors what StudentsService.findForTeacher already exposes via
+   * /students/my-classes.
+   */
+  async findHistoryForStudent(studentId: number, actor: AuthenticatedUser): Promise<AttendanceView[]> {
+    const student = await this.prisma.student.findUnique({ where: { id: studentId } });
+    if (!student) throw new NotFoundException('Student not found');
+
+    if (this.isScopedToOwnClasses(actor)) {
+      await this.assertCanViewStudent(actor.id, student.classId, student.sectionId);
+    }
+
+    const rows = await this.prisma.studentAttendance.findMany({
+      where: { studentId },
+      include: ATTENDANCE_INCLUDE,
+      orderBy: { date: 'desc' },
+    });
+    return rows.map((r) => this.toView(r));
+  }
+
+  private async assertCanViewStudent(userId: number, classId: number, sectionId: number): Promise<void> {
+    const teacher = await this.prisma.teacher.findUnique({ where: { userId } });
+    if (!teacher) throw new ForbiddenException('No teacher profile for this account');
+
+    const [teaches, isClassTeacher] = await Promise.all([
+      this.prisma.teacherClassSubject.findFirst({
+        where: { teacherId: teacher.id, classId, sectionId },
+      }),
+      this.prisma.section.findFirst({
+        where: { id: sectionId, classId, classTeacherId: teacher.id },
+      }),
+    ]);
+    if (!teaches && !isClassTeacher) {
+      throw new ForbiddenException('You do not teach this student');
+    }
+  }
+
   async findAll(
     query: ListAttendanceQueryDto,
     actor: AuthenticatedUser,

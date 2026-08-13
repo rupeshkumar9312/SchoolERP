@@ -1,6 +1,6 @@
 # School ERP
 
-A school management system built module by module. Current state: **Module 10 (Audit Log & Admin Tools) complete**, the backend has since been migrated from PostgreSQL to MySQL, **Module 1.5 (Password Management)** forces a change-password screen on every login's first use and lets a SUPER_ADMIN reset anyone's password, **Module 10.5 (Class Assignments)** adds teacher-owned homework with strict view/edit/delete ownership, a staff-recorded submission checklist per student, file attachments, and both bulk (.xlsx) and recurring-weekly creation, **Module 10.6 (Student Portal)** gives every newly-admitted student their own read-only login (auto-provisioned at admission time) to see their own attendance and their own class's assignments, and **Module 10.7 (Announcements)** lets admin-tier staff post notices targeted at students, teachers, and/or admins — every create/update/delete on students, teachers, staff accounts, attendance, assignments and announcements is recorded with before/after values and who did it, viewable in a SUPER_ADMIN-only Audit Log screen. The MVP (Modules 6–7) shipped before this; everything from here improves the experience but isn't blocking.
+A school management system built module by module. Current state: **Module 10 (Audit Log & Admin Tools) complete**, the backend has since been migrated from PostgreSQL to MySQL, **Module 1.5 (Password Management)** forces a change-password screen on every login's first use and lets a SUPER_ADMIN reset anyone's password, **Module 10.5 (Class Assignments)** adds teacher-owned homework with strict view/edit/delete ownership, a staff-recorded submission checklist per student, file attachments, and both bulk (.xlsx) and recurring-weekly creation, **Module 10.6 (Student Portal)** gives every newly-admitted student their own read-only login (auto-provisioned at admission time) to see their own attendance and their own class's assignments, **Module 10.7 (Announcements)** lets admin-tier staff post notices targeted at students, teachers, and/or admins, and **Module 10.8 (Mobile App)** adds a separate React Native/Expo Android app in `mobile/` for STUDENT and TEACHER logins only (dashboard, attendance, assignments, announcements, mark-attendance for teachers) — every create/update/delete on students, teachers, staff accounts, attendance, assignments and announcements is recorded with before/after values and who did it, viewable in a SUPER_ADMIN-only Audit Log screen. The MVP (Modules 6–7) shipped before this; everything from here improves the experience but isn't blocking.
 
 - **Backend** — NestJS 11 + Prisma 6 + MySQL
 - **Frontend** — React 19 + Vite 6 + TypeScript
@@ -71,6 +71,14 @@ curl -s http://localhost:3000/api/health
   "dependencies": { "database": { "status": "up" } }
 }
 ```
+
+**5. Mobile app** (optional, Android only — see Module 10.8):
+
+```bash
+cd mobile && cp .env.example .env && npm install && npm run android
+```
+
+Edit `mobile/.env` first: `EXPO_PUBLIC_API_URL` — `http://10.0.2.2:4000/api` reaches the host's backend from the Android emulator, or use your machine's LAN IP for a physical device. Scan the QR code with the **Expo Go** app (SDK 54, currently the newest version Expo Go's public release supports — see Module 10.8 if a newer Expo SDK is in use by the time you read this). Log in as a `STUDENT` or `TEACHER` (not `SUPER_ADMIN`/`DIRECTOR`/etc. — those roles are shown an "unsupported" screen and logged out).
 
 ---
 
@@ -173,6 +181,14 @@ SchoolERP/
 │       │                         actions), AnnouncementFormPage (audience checkboxes)
 │       └── shell/                topbar + permission-and-role-driven sidebar
 │                                  (nav-config.ts), mobile drawer under 768px
+├── mobile/                   React Native (Expo, Android-only for now) app —
+│   └── src/                  STUDENT and TEACHER logins only; ADMIN-tier roles
+│       ├── api/                see UnsupportedRoleScreen and are logged out
+│       ├── auth/                SecureStore token persistence, refresh-on-401
+│       ├── navigation/          RootNavigator switches on auth/role; separate
+│       │                        StudentTabs / TeacherTabs bottom-tab stacks
+│       └── screens/             student/, teacher/, + shared Announcements/
+│                                 Settings/Login/ChangePassword screens
 ├── .github/workflows/ci.yml
 └── docker-compose.yml        MySQL 8
 ```
@@ -250,8 +266,9 @@ SchoolERP/
 - Node is 20.11.1, below Prisma 7's floor (20.19+), so Prisma is pinned to `^6`. Bump both `prisma` and `@prisma/client` together after upgrading Node.
 - `npm` hit `EACCES` writing to `~/.npm/_cacache` during setup. If you see it, `sudo chown -R $(whoami) ~/.npm` clears it.
 - Local MySQL runs via `docker compose up -d db` (image `mysql:8`, matching CI). The `schoolerp` user needs `GRANT ALL PRIVILEGES` (not just on `school_erp`) because `prisma migrate dev` creates a throwaway shadow database on every run — a scoped grant on just `school_erp` fails with Prisma error `P3014`.
-- `backend/tsconfig.json`'s `outDir` is `./dist-out`, not the conventional `./dist` — on this machine, `backend/dist/`, `backend/build/`, and `backend/compiled/` (three separate redirects, each poisoned in turn) all ended up owned by `root`. **Root cause, found via `ps aux`**: `sudo npm run start` / `sudo npm run dev` processes for this exact project, left running in other terminal tabs — not a one-off stray process. Nest's `deleteOutDir: true` can't clear a root-owned directory without a password this environment doesn't have. If `npm run build`/`start:dev` throws `EACCES: permission denied, rmdir '.../<outDir>/...'` again: first check `ps aux | grep sudo` for a lingering `sudo npm run` and stop it (that fixes the cause); if you just need to get building again right now, repoint `outDir` (in both `tsconfig.json` and `tsconfig.build.json`'s `exclude`) and `start:prod` (in `package.json`) at a fresh, never-used folder name instead. Don't run this project's `npm run start`/`npm run dev`/`npm run build` under `sudo` — nothing here needs elevated privileges, and it's the thing causing the problem.
-- Against a remote/shared MySQL host that won't grant shadow-database privileges (`prisma migrate dev` fails with `P3014` the same way a mis-scoped grant does locally), generate migration SQL without a shadow database via `npx prisma migrate diff --from-schema-datasource prisma/schema.prisma --to-schema-datamodel prisma/schema.prisma --script`, hand-place the output under `prisma/migrations/<timestamp>_<name>/migration.sql`, then `npx prisma migrate deploy` (which never needs a shadow database, only `migrate dev` does). Used for the Module 10.6 `student_portal_login` migration.
+- `backend/tsconfig.json`'s `outDir` is `./nest-dev-out`, not the conventional `./dist` — on this machine, `backend/dist/`, `backend/build/`, `backend/compiled/`, `backend/dist-out/`, `backend/nest-out/`, and `backend/nest-run/` (six separate redirects, each poisoned in turn) all ended up owned by `root`. **Root cause, found via `ps aux`**: `sudo npm run start` / `sudo npm run dev` processes for this exact project, left running in other terminal tabs — not a one-off stray process, and as of Module 10.8 still not fully resolved (a `sudo npm run start` from an earlier session was still holding port 4000 with stale code, requiring a workaround of running the dev server on a different port for testing). Nest's `deleteOutDir: true` can't clear a root-owned directory without a password this environment doesn't have, and a root-owned listener on the real port can't be freed either. If `npm run build`/`start:dev` throws `EACCES: permission denied, rmdir '.../<outDir>/...'` or `EADDRINUSE` on the real port again: first check `ps aux | grep sudo` for a lingering `sudo npm run` and stop it (that fixes the cause, `kill -9` needs the actual user's password since these run as `root`); if you just need to get building/testing again right now, repoint `outDir` (in both `tsconfig.json` and `tsconfig.build.json`'s `exclude`) and `start:prod` (in `package.json`) at a fresh, never-used folder name, and/or run the dev server on a scratch `PORT=` for the session. Don't run this project's `npm run start`/`npm run dev`/`npm run build` under `sudo` — nothing here needs elevated privileges, and it's the thing causing the problem.
+- Against a remote/shared MySQL host that won't grant shadow-database privileges (`prisma migrate dev` fails with `P3014` the same way a mis-scoped grant does locally), generate migration SQL without a shadow database via `npx prisma migrate diff --from-schema-datasource prisma/schema.prisma --to-schema-datamodel prisma/schema.prisma --script`, hand-place the output under `prisma/migrations/<timestamp>_<name>/migration.sql`, then `npx prisma migrate deploy` (which never needs a shadow database, only `migrate dev` does). Used for the Module 10.6 `student_portal_login` migration, and again to sync the remote host's schema/seed data after Module 10.7.
+- `mobile/` was originally scaffolded on Expo SDK 57, whose CLI requires Node ≥20.19.4 — this machine's system Node (20.11.1, same one `backend/`/`frontend/` use) was one minor version short and failed with a cryptic `util.parseEnv is not a function`. Rather than keep a Node-version workaround (an `nvm`-managed Node 22 was installed for this, now removed), the project was downgraded to **SDK 54** — the newest version Expo Go's public Play Store/App Store release actually supports as of writing (SDK 57 and even SDK 56 reject with "Project is incompatible with this version of Expo Go" on a stock Expo Go install) — via `npx expo install expo@^54.0.0 && npx expo install --fix`, which also dropped the Node requirement back down to whatever the system already has. `nvm` itself is still installed on this machine but nothing in this repo depends on it anymore; if a future SDK bump reintroduces a Node-version floor above what's installed, reach for `nvm install <version> && nvm use <version>` scoped to `mobile/` (a `.nvmrc` there) rather than upgrading the system Node other projects rely on.
 
 ---
 
@@ -609,6 +626,37 @@ Goal: Let admin-tier staff post a notice targeted at one or more audience groups
 
 **Done when:** An admin-tier user can post an announcement targeted at any combination of the three audience groups; a `TEACHER`/`STUDENT` sees only announcements that include their own group and gets 403 fetching one by id that doesn't; a `TEACHER` gets 403 trying to create/edit/delete any announcement; and narrowing an existing announcement's audience away from a group immediately removes it from that group's list.
 
+## MODULE 10.8 — Mobile App (Student/Teacher) ✅
+
+Goal: A real, installable Android app — not a webview wrapper — for the two roles that need day-to-day mobile access: STUDENT (view own attendance/assignments/announcements) and TEACHER (mark attendance, set homework, view submissions). Not part of the original module list, added after Module 10.7. iOS was explicitly out of scope; the app hasn't been built or tested for it.
+
+**Why a separate project, same repo:** React Native and React-DOM components aren't shareable, so `mobile/` is its own Expo/TypeScript package (own `package.json`, own `node_modules`) rather than living inside `frontend/`. It stays in this repo (not a separate one) so backend API changes and the mobile client can be coordinated in one place; nothing beyond the REST API contract is shared with `frontend/` — no shared npm workspace was set up for this pass.
+
+**Backend changes (the only backend changes this module needed):**
+
+- `POST /auth/login` and `POST /auth/refresh` now also return `refreshToken` in the **JSON body**, but only when the request carries an `X-Client: mobile` header — the web SPA never sends that header, so its behavior (refresh token *only* in the httpOnly cookie, never readable by JS) is byte-for-byte unchanged. Native apps can't rely on an httpOnly cookie surviving app restarts the way a browser does, so the mobile app stores the refresh token itself, in `expo-secure-store`.
+- `POST /auth/refresh` accepts an optional `refreshToken` in the body (new `RefreshDto`) as a fallback when no cookie is present: `token = cookie ?? dto.refreshToken`. Web still relies solely on the cookie.
+- Nothing else on the backend changed — every screen in the mobile app calls existing Module 1.5/6/7/10.5/10.6/10.7 endpoints unmodified (`/dashboard/teacher-summary`, `/dashboard/student-summary`, `/attendance/students(/me)`, `/assignments(/me)`, `/teachers/me/*`, `/students/my-classes`, `/announcements`). The identity-pinned "me" routes and service-layer scoping built for the web app's STUDENT/TEACHER flows carry over directly.
+
+**Mobile app (`mobile/`):**
+
+- Expo SDK 54 + React Native 0.81 + TypeScript, Android-only (`app.json` has no `ios`/`web` keys). Originally scaffolded on SDK 57, then downgraded (`npx expo install expo@^54.0.0 && npx expo install --fix`) after discovering the public Expo Go app doesn't yet support SDK 57 ("Project is incompatible with this version of Expo Go") — SDK 54 is the newest version confirmed to install and run via a stock Expo Go from the Play Store/App Store. `expo-sharing` had to be dropped from `app.json`'s `plugins` array during the downgrade — at SDK 54 it has no config plugin at all (unlike SDK 57's autolinked entry), and leaving it listed breaks `expo export`/`expo start` with a plugin-resolution error. If a later upgrade moves past whatever SDK Expo Go currently supports, either wait for Expo Go to catch up or switch to a custom development build (`expo-dev-client` + `eas build --profile development`, already scaffolded in `mobile/eas.json`) instead of relying on Expo Go at all.
+- `src/api/client.ts` — a `fetch`-based client mirroring `frontend/src/api/client.ts`'s shape, plus what a browser's cookie jar gave the web app for free: a 401 on any call (other than login/refresh itself) triggers a single in-flight `POST /auth/refresh` (concurrent 401s share one promise, not one refresh call each) using the stored refresh token; a failed refresh clears tokens and flips `AuthContext` back to `unauthenticated`.
+- `src/auth/tokenStore.ts` — access token cached in memory (sync reads on every call) and persisted via `expo-secure-store`; refresh token lives only in SecureStore.
+- `src/navigation/RootNavigator.tsx` — switches purely on client-side state: `loading` → spinner, unauthenticated → `LoginScreen`, `mustChangePassword` → forced change-password screen (same UX contract as the web app's Module 1.5 `ProtectedRoute` redirect), `role === STUDENT` → `StudentTabs`, `role === TEACHER` → `TeacherTabs`, anything else → `UnsupportedRoleScreen` with a log-out button. This restriction is enforced only in the mobile client, not the backend — an ADMIN/SUPER_ADMIN account can still log in (the API doesn't know or care which client is calling), the app just refuses to show them anything and offers to log out.
+- Teacher "Mark Attendance" has no date picker — `AttendanceService.markBulk()`/`updateAttendance()` on the backend already reject any date other than today for a `TEACHER` (`assertSameDayForTeacher`, UTC-based via `toISOString().slice(0,10)`), so the screen always targets today and the app's own `todayIsoDate()` util uses the same UTC-based calculation to stay consistent with that check.
+- Assignment attachment "download" (`src/utils/download.ts`) uses `expo-file-system`'s SDK-51+ `File.downloadFileAsync(url, destination, { headers })` (not the older `FileSystem.downloadAsync`) to fetch the file with the caller's `Authorization` header, then hands it to `expo-sharing`'s `shareAsync()` — there's no in-app document viewer, so the OS's own "open with" sheet is the resolution. Upload (teacher, add/replace/remove an attachment from `TeacherAssignmentDetailScreen`) uses `expo-document-picker` to pick a file, then a dedicated `apiUpload()` in `api/client.ts` — React Native's `fetch`/`FormData` takes a file as `{ uri, name, type }` in place of a `Blob`, so it can't reuse the JSON-only `request()` helper; it duplicates just the 401-refresh-retry logic instead of forcing a shared abstraction across two different `FormData` shapes.
+- No native date-picker or dropdown-picker dependency was added; due-date entry is a plain `YYYY-MM-DD` text field and class/subject selection uses a small custom `SelectField` (Modal + FlatList) — kept deliberately dependency-light since this build could only be verified via `tsc`/Metro bundling, not an actual device or emulator (no Android SDK/`adb` in this environment).
+
+**Decisions locked in for this module:**
+
+- Android only, for now — no `ios`/`web` Expo config, no App Store build attempted.
+- STUDENT and TEACHER only; every other role sees `UnsupportedRoleScreen`, enforced client-side only.
+- Read/write parity with the web app's self-service pages, not full parity with the admin web app — no user/teacher/student management, no reports, no audit log in the mobile app.
+- `X-Client: mobile` is a plain request header, not an auth mechanism — it only changes whether `refreshToken` appears in the response body, and is safe for any caller to set (it grants no extra access).
+
+**Done when:** A STUDENT can log in on Android, see their dashboard/attendance/assignments/announcements, and change their password. A TEACHER can log in, mark today's attendance for a class they're class-teacher of, view their roster, create/view/delete homework with an attachment, toggle a student's submission status, and view announcements. Both flows were verified end-to-end against a live backend + local MySQL over `curl` with disposable test accounts (mobile login returns `refreshToken` in body + `mustChangePassword: true`; web-style login does not; body-based `/auth/refresh` rotates both tokens; attendance/assignment/announcement create-read-update-delete all round-trip correctly; an uploaded attachment downloads back byte-identical) — the Android UI itself could not be visually verified in this environment (no `adb`/emulator available), only that the JS bundle exports cleanly via `expo export --platform android` (964 modules on SDK 54, 0 errors) and the whole `mobile/` package type-checks with `tsc --noEmit`.
+
 ## MODULE 11 — Notifications (Optional but high-value)
 
 Goal: Proactive alerts, especially absentee notices.
@@ -656,6 +704,7 @@ Goal: Production readiness.
 10.5 Class Assignments      ✅ done (not in the original spec)
 10.6 Student Portal         ✅ done (not in the original spec)
 10.7 Announcements          ✅ done (not in the original spec)
+10.8 Mobile App (Student/Teacher) ✅ done (not in the original spec)
 11. Notifications          (optional, can slot in anytime after Module 6)
 12. Polish & Hardening
 ```

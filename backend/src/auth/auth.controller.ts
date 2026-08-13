@@ -15,12 +15,24 @@ import { AuthService } from './auth.service';
 import { CurrentUser } from './decorators/current-user.decorator';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { LoginDto } from './dto/login.dto';
+import { RefreshDto } from './dto/refresh.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import type { AuthenticatedUser } from './auth.types';
 
 const REFRESH_COOKIE_NAME = 'refresh_token';
 /** Scoped to /api/auth so the cookie is never sent on unrelated requests. */
 const REFRESH_COOKIE_PATH = '/api/auth';
+/** Sent by the React Native app only — never by the web SPA. Native clients
+ * can't rely on an httpOnly cookie surviving app restarts, so for them (and
+ * only them) the refresh token is also handed back in the JSON body for the
+ * app to store itself. Including it in the body for web would defeat the
+ * whole point of httpOnly (an XSS payload could just read the fetch response). */
+const MOBILE_CLIENT_HEADER = 'x-client';
+const MOBILE_CLIENT_VALUE = 'mobile';
+
+function isMobileClient(req: Request): boolean {
+  return req.headers[MOBILE_CLIENT_HEADER] === MOBILE_CLIENT_VALUE;
+}
 
 @Controller('auth')
 export class AuthController {
@@ -31,23 +43,41 @@ export class AuthController {
 
   @Post('login')
   @HttpCode(200)
-  async login(@Body() dto: LoginDto, @Res({ passthrough: true }) res: Response) {
+  async login(
+    @Body() dto: LoginDto,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ) {
     const { tokens, user } = await this.auth.login(dto.email, dto.password);
     this.setRefreshCookie(res, tokens.refreshToken);
-    return { accessToken: tokens.accessToken, user };
+    return {
+      accessToken: tokens.accessToken,
+      ...(isMobileClient(req) ? { refreshToken: tokens.refreshToken } : {}),
+      user,
+    };
   }
 
   @Post('refresh')
   @HttpCode(200)
-  async refresh(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
-    const token = (req.cookies as Record<string, string> | undefined)?.[REFRESH_COOKIE_NAME];
+  async refresh(
+    @Body() dto: RefreshDto,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const token =
+      (req.cookies as Record<string, string> | undefined)?.[REFRESH_COOKIE_NAME] ??
+      dto.refreshToken;
     if (!token) {
       throw new UnauthorizedException('No refresh token supplied');
     }
 
     const { tokens, user } = await this.auth.refresh(token);
     this.setRefreshCookie(res, tokens.refreshToken);
-    return { accessToken: tokens.accessToken, user };
+    return {
+      accessToken: tokens.accessToken,
+      ...(isMobileClient(req) ? { refreshToken: tokens.refreshToken } : {}),
+      user,
+    };
   }
 
   @UseGuards(JwtAuthGuard)

@@ -1,0 +1,134 @@
+import React, { useCallback, useState } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
+import { StyleSheet, Text, View } from 'react-native';
+import { AttendanceStatus } from '../../api/attendance';
+import { ApiError } from '../../api/client';
+import { listMyTeacherAttendance, markTeacherAttendance, TeacherAttendanceRecord } from '../../api/teacherAttendance';
+import { Badge } from '../../components/Badge';
+import { Card } from '../../components/Card';
+import { ErrorView } from '../../components/ErrorView';
+import { LoadingView } from '../../components/LoadingView';
+import { Screen } from '../../components/Screen';
+import { Touchable } from '../../components/Touchable';
+import { ATTENDANCE_STATUS_META } from '../../constants';
+import { colors, fonts, radius, spacing } from '../../theme';
+import { formatDate, todayIsoDate } from '../../utils/format';
+
+const STATUSES: AttendanceStatus[] = ['PRESENT', 'ABSENT', 'LATE', 'LEAVE'];
+const TONE_COLORS = {
+  success: { bg: colors.successTint, fg: colors.success },
+  danger: { bg: colors.dangerTint, fg: colors.danger },
+  warning: { bg: colors.warningTint, fg: colors.warning },
+  info: { bg: colors.infoTint, fg: colors.info },
+} as const;
+
+export function MyAttendanceScreen(): React.JSX.Element {
+  const today = todayIsoDate();
+  const [history, setHistory] = useState<TeacherAttendanceRecord[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    setError(null);
+    try {
+      const data = await listMyTeacherAttendance();
+      data.sort((a, b) => b.date.localeCompare(a.date));
+      setHistory(data);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Could not load your attendance');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      load();
+    }, [load]),
+  );
+
+  const handleMark = async (status: AttendanceStatus) => {
+    setSaveError(null);
+    setSaving(true);
+    try {
+      const updated = await markTeacherAttendance({ date: today, status });
+      setHistory((prev) => [updated, ...(prev ?? []).filter((r) => r.date !== today)]);
+    } catch (err) {
+      setSaveError(err instanceof ApiError ? err.message : 'Could not mark attendance');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (loading) return <LoadingView />;
+  if (error || !history) return <Screen><ErrorView message={error ?? 'No data'} onRetry={load} /></Screen>;
+
+  const todayStatus = history.find((r) => r.date === today)?.status ?? 'PRESENT';
+
+  return (
+    <Screen refreshing={loading} onRefresh={load}>
+      <Card style={styles.card}>
+        <Text style={styles.heading}>Today ({formatDate(today)})</Text>
+        <View style={styles.statusRow}>
+          {STATUSES.map((status) => {
+            const meta = ATTENDANCE_STATUS_META[status];
+            const tone = TONE_COLORS[meta.tone];
+            const active = todayStatus === status;
+            return (
+              <Touchable
+                key={status}
+                onPress={() => handleMark(status)}
+                disabled={saving}
+                rippleColor={tone.bg}
+                style={[styles.statusChip, active && { backgroundColor: tone.bg }]}
+              >
+                <Text style={[styles.statusChipText, active && { color: tone.fg }]}>{meta.label}</Text>
+              </Touchable>
+            );
+          })}
+        </View>
+        {saveError && <Text style={styles.error}>{saveError}</Text>}
+      </Card>
+
+      <Text style={styles.sectionTitle}>Recent history</Text>
+      {history.length === 0 ? (
+        <Card><Text style={styles.muted}>No attendance marked yet.</Text></Card>
+      ) : (
+        history.slice(0, 14).map((r) => {
+          const meta = ATTENDANCE_STATUS_META[r.status];
+          return (
+            <Card key={r.id} style={styles.row}>
+              <View>
+                <Text style={styles.date}>{formatDate(r.date)}</Text>
+                <Text style={styles.muted}>Marked by {r.markedBy.name}</Text>
+              </View>
+              <Badge label={meta.label} tone={meta.tone} />
+            </Card>
+          );
+        })
+      )}
+    </Screen>
+  );
+}
+
+const styles = StyleSheet.create({
+  card: { gap: spacing.sm },
+  heading: { fontSize: 15, fontFamily: fonts.headingBold, color: colors.text },
+  sectionTitle: { fontSize: 16, fontFamily: fonts.headingBold, color: colors.text, marginTop: spacing.sm },
+  muted: { fontSize: 13, fontFamily: fonts.body, color: colors.textMuted },
+  date: { fontSize: 15, fontFamily: fonts.bodySemiBold, color: colors.text },
+  row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  statusRow: { flexDirection: 'row', gap: spacing.xs },
+  statusChip: {
+    flex: 1,
+    borderRadius: radius.sm,
+    paddingVertical: spacing.sm,
+    alignItems: 'center',
+    backgroundColor: colors.surfaceHover,
+    overflow: 'hidden',
+  },
+  statusChipText: { fontSize: 12, fontFamily: fonts.bodySemiBold, color: colors.textMuted },
+  error: { color: colors.danger, fontSize: 13, fontFamily: fonts.body },
+});
