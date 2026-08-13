@@ -9,7 +9,7 @@ import { ErrorView } from '../../components/ErrorView';
 import { LoadingView } from '../../components/LoadingView';
 import { Screen } from '../../components/Screen';
 import { ATTENDANCE_STATUS_META } from '../../constants';
-import { colors, spacing } from '../../theme';
+import { colors, fonts, spacing } from '../../theme';
 import { formatDate } from '../../utils/format';
 
 export function StudentAttendanceScreen(): React.JSX.Element {
@@ -41,7 +41,11 @@ export function StudentAttendanceScreen(): React.JSX.Element {
 
   return (
     <Screen refreshing={loading} onRefresh={load}>
-      <Text style={styles.heading}>My Attendance</Text>
+      <View>
+        <Text style={styles.heading}>My Attendance</Text>
+        <Text style={styles.subtitle}>Your attendance history, most recent first.</Text>
+      </View>
+
       {records && records.length === 0 && (
         <Card><Text style={styles.muted}>No attendance records yet.</Text></Card>
       )}
@@ -49,7 +53,10 @@ export function StudentAttendanceScreen(): React.JSX.Element {
         const meta = ATTENDANCE_STATUS_META[r.status];
         return (
           <Card key={r.id} style={styles.row}>
-            <Text style={styles.date}>{formatDate(r.date)}</Text>
+            <View>
+              <Text style={styles.date}>{formatDate(r.date)}</Text>
+              <Text style={styles.muted}>Marked by {r.markedBy.name}</Text>
+            </View>
             <Badge label={meta.label} tone={meta.tone} />
           </Card>
         );
@@ -59,8 +66,9 @@ export function StudentAttendanceScreen(): React.JSX.Element {
 }
 
 const styles = StyleSheet.create({
-  heading: { fontSize: 20, fontWeight: '800', color: colors.text },
-  muted: { fontSize: 13, color: colors.textMuted },
+  heading: { fontSize: 20, fontFamily: fonts.headingBold, color: colors.text },
+  subtitle: { fontSize: 14, fontFamily: fonts.body, color: colors.textMuted, marginTop: 2 },
+  muted: { fontSize: 13, fontFamily: fonts.body, color: colors.textMuted },
   row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  date: { fontSize: 15, color: colors.text, fontWeight: '500' },
+  date: { fontSize: 15, fontFamily: fonts.bodySemiBold, color: colors.text },
 });

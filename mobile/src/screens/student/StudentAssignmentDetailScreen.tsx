@@ -5,7 +5,7 @@ import { Badge } from '../../components/Badge';
 import { Button } from '../../components/Button';
 import { Card } from '../../components/Card';
 import { Screen } from '../../components/Screen';
-import { colors, spacing } from '../../theme';
+import { colors, fonts, spacing } from '../../theme';
 import { formatBytes, formatDate } from '../../utils/format';
 import { openAttachment } from '../../utils/download';
 import type { StudentAssignmentsStackParamList } from '../../navigation/types';
@@ -62,10 +62,10 @@ export function StudentAssignmentDetailScreen({ route }: Props): React.JSX.Eleme
 
 const styles = StyleSheet.create({
   card: { gap: spacing.sm },
-  title: { fontSize: 19, fontWeight: '800', color: colors.text },
-  muted: { fontSize: 13, color: colors.textMuted },
-  due: { fontSize: 13, color: colors.textMuted },
-  sectionTitle: { fontSize: 14, fontWeight: '700', color: colors.text },
-  body: { fontSize: 14, color: colors.text, lineHeight: 20 },
-  error: { color: colors.danger, fontSize: 13 },
+  title: { fontSize: 19, fontFamily: fonts.headingBold, color: colors.text },
+  muted: { fontSize: 13, fontFamily: fonts.body, color: colors.textMuted },
+  due: { fontSize: 13, fontFamily: fonts.body, color: colors.textMuted },
+  sectionTitle: { fontSize: 14, fontFamily: fonts.headingBold, color: colors.text },
+  body: { fontSize: 14, fontFamily: fonts.body, color: colors.text, lineHeight: 20 },
+  error: { color: colors.danger, fontSize: 13, fontFamily: fonts.body },
 });
