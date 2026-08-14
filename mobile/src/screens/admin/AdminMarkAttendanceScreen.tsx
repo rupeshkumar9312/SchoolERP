@@ -1,11 +1,12 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { StyleSheet, Text, TextInput, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import { AcademicYear, listAcademicYears, listClasses, listSections, SchoolClass, Section } from '../../api/academic';
 import { AttendanceStatus, listAttendance, markAttendance } from '../../api/attendance';
 import { ApiError } from '../../api/client';
 import { listStudents, Student } from '../../api/students';
 import { Button } from '../../components/Button';
 import { Card } from '../../components/Card';
+import { DateField } from '../../components/DateField';
 import { Screen } from '../../components/Screen';
 import { SelectField } from '../../components/SelectField';
 import { Touchable } from '../../components/Touchable';
@@ -124,10 +125,7 @@ export function AdminMarkAttendanceScreen(): React.JSX.Element {
         <SelectField label="Academic year" value={year} onChange={setYear} options={years.map((y) => ({ value: y, label: y.name }))} />
         <SelectField label="Class" value={klass} onChange={setKlass} options={classes.map((c) => ({ value: c, label: c.name }))} />
         <SelectField label="Section" value={section} onChange={setSection} options={sections.map((s) => ({ value: s, label: s.name }))} />
-        <View>
-          <Text style={styles.label}>Date (YYYY-MM-DD)</Text>
-          <TextInput style={styles.input} value={date} onChangeText={setDate} placeholder={todayIsoDate()} placeholderTextColor={colors.textMuted} />
-        </View>
+        <DateField label="Date" value={date} onChange={setDate} placeholder={todayIsoDate()} />
       </Card>
 
       {error && <Text style={styles.error}>{error}</Text>}
@@ -184,18 +182,6 @@ const styles = StyleSheet.create({
   heading: { fontSize: 20, fontFamily: fonts.headingBold, color: colors.text },
   subtitle: { fontSize: 14, fontFamily: fonts.body, color: colors.textMuted, marginTop: 2 },
   filters: { gap: spacing.md },
-  label: { fontSize: 13, fontFamily: fonts.bodySemiBold, color: colors.textMuted, marginBottom: spacing.xs },
-  input: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.md,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm + 2,
-    fontSize: 15,
-    fontFamily: fonts.body,
-    color: colors.text,
-    backgroundColor: colors.surface,
-  },
   muted: { fontSize: 13, fontFamily: fonts.body, color: colors.textMuted },
   error: { color: colors.danger, fontSize: 13, fontFamily: fonts.body },
   success: { color: colors.success, fontSize: 13, fontFamily: fonts.body },

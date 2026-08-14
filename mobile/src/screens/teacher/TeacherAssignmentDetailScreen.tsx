@@ -19,7 +19,7 @@ import { ErrorView } from '../../components/ErrorView';
 import { LoadingView } from '../../components/LoadingView';
 import { Screen } from '../../components/Screen';
 import { Touchable } from '../../components/Touchable';
-import { colors, fonts, spacing } from '../../theme';
+import { colors, fonts, radius, spacing } from '../../theme';
 import { formatBytes, formatDate } from '../../utils/format';
 import { openAttachment } from '../../utils/download';
 import type { TeacherAssignmentsStackParamList } from '../../navigation/types';
@@ -66,16 +66,25 @@ export function TeacherAssignmentDetailScreen({ route, navigation }: Props): Rea
     }
   };
 
-  const handleToggle = async (studentId: number, submitted: boolean) => {
-    setTogglingId(studentId);
-    try {
-      const updated = await setHomeworkSubmission(assignment.id, studentId, { submitted: !submitted });
-      setSubmissions((prev) => prev?.map((s) => (s.student.id === studentId ? updated : s)) ?? null);
-    } catch {
-      // Leave state as-is; the row's button remains actionable to retry.
-    } finally {
-      setTogglingId(null);
-    }
+  const handleToggle = (student: HomeworkSubmission['student'], submitted: boolean) => {
+    const nextLabel = submitted ? 'Pending' : 'Submitted';
+    Alert.alert(`Mark as ${nextLabel}?`, `${student.name} will be marked as ${nextLabel.toLowerCase()}.`, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Confirm',
+        onPress: async () => {
+          setTogglingId(student.id);
+          try {
+            const updated = await setHomeworkSubmission(assignment.id, student.id, { submitted: !submitted });
+            setSubmissions((prev) => prev?.map((s) => (s.student.id === student.id ? updated : s)) ?? null);
+          } catch {
+            // Leave state as-is; the row's control remains actionable to retry.
+          } finally {
+            setTogglingId(null);
+          }
+        },
+      },
+    ]);
   };
 
   const handlePickAttachment = async () => {
@@ -184,19 +193,20 @@ export function TeacherAssignmentDetailScreen({ route, navigation }: Props): Rea
         {loading && <LoadingView />}
         {error && <ErrorView message={error} onRetry={load} />}
         {submissions?.map((s) => (
-          <Touchable
-            key={s.student.id}
-            onPress={() => handleToggle(s.student.id, s.submitted)}
-            disabled={togglingId === s.student.id}
-          >
-            <View style={styles.submissionRow}>
-              <View>
-                <Text style={styles.name}>{s.student.name}</Text>
-                <Text style={styles.muted}>{s.student.admissionNo}</Text>
-              </View>
-              <Badge label={s.submitted ? 'Submitted' : 'Pending'} tone={s.submitted ? 'success' : 'warning'} />
+          <View key={s.student.id} style={styles.submissionRow}>
+            <View>
+              <Text style={styles.name}>{s.student.name}</Text>
+              <Text style={styles.muted}>{s.student.admissionNo}</Text>
             </View>
-          </Touchable>
+            <Touchable
+              onPress={() => handleToggle(s.student, s.submitted)}
+              disabled={togglingId === s.student.id}
+              style={styles.statusTouchable}
+              hitSlop={8}
+            >
+              <Badge label={s.submitted ? 'Submitted' : 'Pending'} tone={s.submitted ? 'success' : 'warning'} />
+            </Touchable>
+          </View>
         ))}
       </Card>
 
@@ -222,4 +232,5 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.border,
   },
   name: { fontSize: 14, fontFamily: fonts.bodySemiBold, color: colors.text },
+  statusTouchable: { borderRadius: radius.sm, overflow: 'hidden' },
 });

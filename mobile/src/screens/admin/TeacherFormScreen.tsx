@@ -5,6 +5,7 @@ import { ApiError } from '../../api/client';
 import { createTeacher, updateTeacher } from '../../api/teachers';
 import { Button } from '../../components/Button';
 import { Card } from '../../components/Card';
+import { DateField } from '../../components/DateField';
 import { Screen } from '../../components/Screen';
 import { Touchable } from '../../components/Touchable';
 import { colors, fonts, radius, spacing } from '../../theme';
@@ -122,16 +123,7 @@ export function TeacherFormScreen({ route, navigation }: Props): React.JSX.Eleme
           />
         </View>
 
-        <View>
-          <Text style={styles.label}>Joining date</Text>
-          <TextInput
-            style={styles.input}
-            value={joiningDate}
-            onChangeText={setJoiningDate}
-            placeholder="YYYY-MM-DD"
-            placeholderTextColor={colors.textMuted}
-          />
-        </View>
+        <DateField label="Joining date" value={joiningDate} onChange={setJoiningDate} />
 
         {isEdit && (
           <Touchable style={styles.checkboxRow} onPress={() => setIsActive((v) => !v)}>

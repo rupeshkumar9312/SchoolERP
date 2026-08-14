@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { AnnouncementsStackNavigator } from './AnnouncementsStackNavigator';
 import { brandedHeaderOptions } from './brandedHeaderOptions';
 import { SettingsScreen } from '../screens/SettingsScreen';
+import { ClassAttendanceHistoryScreen } from '../screens/teacher/ClassAttendanceHistoryScreen';
 import { ClassesListScreen } from '../screens/teacher/ClassesListScreen';
 import { MarkAttendanceScreen } from '../screens/teacher/MarkAttendanceScreen';
 import { MyAttendanceScreen } from '../screens/teacher/MyAttendanceScreen';
@@ -43,6 +44,7 @@ function ClassesStackNavigator(): React.JSX.Element {
       <ClassesStack.Screen name="ClassesList" component={ClassesListScreen} />
       <ClassesStack.Screen name="Roster" component={RosterScreen} />
       <ClassesStack.Screen name="MarkAttendance" component={MarkAttendanceScreen} />
+      <ClassesStack.Screen name="ClassAttendanceHistory" component={ClassAttendanceHistoryScreen} />
       <ClassesStack.Screen name="StudentSearch" component={StudentSearchScreen} />
       <ClassesStack.Screen name="StudentAttendanceHistory" component={StudentAttendanceHistoryScreen} />
     </ClassesStack.Navigator>

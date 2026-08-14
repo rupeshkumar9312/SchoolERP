@@ -46,6 +46,7 @@ export type TeacherClassesStackParamList = {
   ClassesList: undefined;
   Roster: ClassSectionRef;
   MarkAttendance: ClassSectionRef;
+  ClassAttendanceHistory: ClassSectionRef;
   StudentSearch: undefined;
   StudentAttendanceHistory: StudentRef;
 };

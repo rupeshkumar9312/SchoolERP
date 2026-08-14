@@ -7,6 +7,7 @@ import { Badge } from '../../components/Badge';
 import { Button } from '../../components/Button';
 import { Card } from '../../components/Card';
 import { DataRowText } from '../../components/DataRow';
+import { DateField } from '../../components/DateField';
 import { LoadingView } from '../../components/LoadingView';
 import { Screen } from '../../components/Screen';
 import { SelectField } from '../../components/SelectField';
@@ -213,14 +214,8 @@ export function ReportsScreen(): React.JSX.Element {
             )}
           </>
         )}
-        <View>
-          <Text style={styles.label}>From</Text>
-          <TextInput style={styles.input} value={from} onChangeText={setFrom} placeholder="YYYY-MM-DD" placeholderTextColor={colors.textMuted} />
-        </View>
-        <View>
-          <Text style={styles.label}>To</Text>
-          <TextInput style={styles.input} value={to} onChangeText={setTo} placeholder="YYYY-MM-DD" placeholderTextColor={colors.textMuted} />
-        </View>
+        <DateField label="From" value={from} onChange={setFrom} maximumDate={to ? new Date(`${to}T00:00:00`) : undefined} />
+        <DateField label="To" value={to} onChange={setTo} minimumDate={from ? new Date(`${from}T00:00:00`) : undefined} />
         {tab === 'defaulters' && (
           <View>
             <Text style={styles.label}>Threshold %</Text>

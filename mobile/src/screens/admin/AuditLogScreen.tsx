@@ -1,10 +1,11 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { StyleSheet, Text, TextInput, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import { AuditAction, AuditLogEntry, listAuditLogs } from '../../api/auditLogs';
 import { ApiError } from '../../api/client';
 import { UserListItem, listUsers } from '../../api/users';
 import { Badge } from '../../components/Badge';
 import { Card } from '../../components/Card';
+import { DateField } from '../../components/DateField';
 import { ErrorView } from '../../components/ErrorView';
 import { LoadingView } from '../../components/LoadingView';
 import { Screen } from '../../components/Screen';
@@ -94,14 +95,8 @@ export function AuditLogScreen(): React.JSX.Element {
           placeholder="All users"
           options={users.map((u) => ({ value: u.id, label: u.name }))}
         />
-        <View>
-          <Text style={styles.label}>From</Text>
-          <TextInput style={styles.input} value={from} onChangeText={setFrom} placeholder="YYYY-MM-DD" placeholderTextColor={colors.textMuted} />
-        </View>
-        <View>
-          <Text style={styles.label}>To</Text>
-          <TextInput style={styles.input} value={to} onChangeText={setTo} placeholder="YYYY-MM-DD" placeholderTextColor={colors.textMuted} />
-        </View>
+        <DateField label="From" value={from} onChange={setFrom} maximumDate={to ? new Date(`${to}T00:00:00`) : undefined} />
+        <DateField label="To" value={to} onChange={setTo} minimumDate={from ? new Date(`${from}T00:00:00`) : undefined} />
       </Card>
 
       {error && entries && <Text style={styles.error}>{error}</Text>}
@@ -152,18 +147,6 @@ const styles = StyleSheet.create({
   muted: { fontSize: 13, fontFamily: fonts.body, color: colors.textMuted },
   error: { color: colors.danger, fontSize: 13, fontFamily: fonts.body },
   card: { gap: spacing.sm },
-  label: { fontSize: 13, fontFamily: fonts.bodySemiBold, color: colors.textMuted, marginBottom: spacing.xs },
-  input: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.md,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm + 2,
-    fontSize: 15,
-    fontFamily: fonts.body,
-    color: colors.text,
-    backgroundColor: colors.surface,
-  },
   rowHead: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   entity: { fontSize: 14, fontFamily: fonts.bodySemiBold, color: colors.text },
   toggle: { alignSelf: 'flex-start', paddingVertical: spacing.xs },

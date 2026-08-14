@@ -1,9 +1,10 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { AcademicYear, listAcademicYears, listClasses, listSections, SchoolClass, Section } from '../../api/academic';
 import { AttendanceRecord, AttendanceStatus, listAttendance, updateAttendance } from '../../api/attendance';
 import { ApiError } from '../../api/client';
 import { Card } from '../../components/Card';
+import { DateField } from '../../components/DateField';
 import { SelectField } from '../../components/SelectField';
 import { Screen } from '../../components/Screen';
 import { ATTENDANCE_STATUS_META } from '../../constants';
@@ -110,16 +111,7 @@ export function ClassAttendanceScreen(): React.JSX.Element {
           onChange={setSection}
           options={sections.map((s) => ({ value: s, label: s.name }))}
         />
-        <View>
-          <Text style={styles.label}>Date (YYYY-MM-DD)</Text>
-          <TextInput
-            style={styles.input}
-            value={date}
-            onChangeText={setDate}
-            placeholder={todayIsoDate()}
-            placeholderTextColor={colors.textMuted}
-          />
-        </View>
+        <DateField label="Date" value={date} onChange={setDate} placeholder={todayIsoDate()} />
       </Card>
 
       {error && <Text style={styles.error}>{error}</Text>}
@@ -165,18 +157,6 @@ const styles = StyleSheet.create({
   heading: { fontSize: 20, fontFamily: fonts.headingBold, color: colors.text },
   subtitle: { fontSize: 14, fontFamily: fonts.body, color: colors.textMuted, marginTop: 2 },
   filters: { gap: spacing.md },
-  label: { fontSize: 13, fontFamily: fonts.bodySemiBold, color: colors.textMuted, marginBottom: spacing.xs },
-  input: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.md,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm + 2,
-    fontSize: 15,
-    fontFamily: fonts.body,
-    color: colors.text,
-    backgroundColor: colors.surface,
-  },
   muted: { fontSize: 13, fontFamily: fonts.body, color: colors.textMuted },
   error: { color: colors.danger, fontSize: 13, fontFamily: fonts.body },
   recordCard: { gap: spacing.sm },

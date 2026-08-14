@@ -29,6 +29,24 @@ export function listAttendance(query: AttendanceQuery): Promise<AttendanceRecord
   return apiGet<AttendanceRecord[]>(`/attendance/students?${params.toString()}`);
 }
 
+export interface ClassAttendanceHistoryQuery {
+  classId: number;
+  sectionId: number;
+  from?: string;
+  to?: string;
+}
+
+/** Optionally date-bounded attendance for a whole class/section — unlike
+ * listAttendance() (a single exact day, for the mark-attendance flows), this
+ * lists every record in the range. A TEACHER is scoped server-side to
+ * sections they're the class teacher of. */
+export function listAttendanceHistory(query: ClassAttendanceHistoryQuery): Promise<AttendanceRecord[]> {
+  const params = new URLSearchParams({ classId: String(query.classId), sectionId: String(query.sectionId) });
+  if (query.from) params.set('from', query.from);
+  if (query.to) params.set('to', query.to);
+  return apiGet<AttendanceRecord[]>(`/attendance/students?${params.toString()}`);
+}
+
 export function markAttendance(payload: {
   classId: number;
   sectionId: number;
@@ -46,8 +64,17 @@ export function listMyAttendance(): Promise<AttendanceRecord[]> {
   return apiGet<AttendanceRecord[]>('/attendance/students/me');
 }
 
-/** Full history for an arbitrary student — the server scopes a TEACHER to
- * students they teach or are homeroom teacher for. */
-export function getStudentAttendanceHistory(studentId: number): Promise<AttendanceRecord[]> {
-  return apiGet<AttendanceRecord[]>(`/attendance/students/${studentId}/history`);
+export interface HistoryDateRange {
+  from?: string;
+  to?: string;
+}
+
+/** Full (optionally date-bounded) history for an arbitrary student — the
+ * server scopes a TEACHER to students they teach or are homeroom teacher for. */
+export function getStudentAttendanceHistory(studentId: number, range: HistoryDateRange = {}): Promise<AttendanceRecord[]> {
+  const params = new URLSearchParams();
+  if (range.from) params.set('from', range.from);
+  if (range.to) params.set('to', range.to);
+  const query = params.toString();
+  return apiGet<AttendanceRecord[]>(`/attendance/students/${studentId}/history${query ? `?${query}` : ''}`);
 }

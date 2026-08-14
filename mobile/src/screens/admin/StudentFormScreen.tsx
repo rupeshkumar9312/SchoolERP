@@ -6,6 +6,7 @@ import { ApiError } from '../../api/client';
 import { createStudent, getStudent, updateStudent } from '../../api/students';
 import { Button } from '../../components/Button';
 import { Card } from '../../components/Card';
+import { DateField } from '../../components/DateField';
 import { LoadingView } from '../../components/LoadingView';
 import { Screen } from '../../components/Screen';
 import { SelectField } from '../../components/SelectField';
@@ -167,16 +168,7 @@ export function StudentFormScreen({ route, navigation }: Props): React.JSX.Eleme
           <TextInput style={styles.input} value={name} onChangeText={setName} placeholderTextColor={colors.textMuted} />
         </View>
 
-        <View>
-          <Text style={styles.label}>Date of birth</Text>
-          <TextInput
-            style={styles.input}
-            value={dateOfBirth}
-            onChangeText={setDateOfBirth}
-            placeholder="YYYY-MM-DD"
-            placeholderTextColor={colors.textMuted}
-          />
-        </View>
+        <DateField label="Date of birth" value={dateOfBirth} onChange={setDateOfBirth} maximumDate={new Date()} />
 
         <SelectField label="Gender" value={gender} onChange={setGender} options={GENDER_OPTIONS} placeholder="Prefer not to say" />
 
@@ -205,16 +197,7 @@ export function StudentFormScreen({ route, navigation }: Props): React.JSX.Eleme
 
         <SelectField label="Section" value={sectionId} onChange={setSectionId} placeholder="Select a section" options={sections.map((s) => ({ value: s.id, label: s.name }))} />
 
-        <View>
-          <Text style={styles.label}>Admission date</Text>
-          <TextInput
-            style={styles.input}
-            value={admissionDate}
-            onChangeText={setAdmissionDate}
-            placeholder="YYYY-MM-DD"
-            placeholderTextColor={colors.textMuted}
-          />
-        </View>
+        <DateField label="Admission date" value={admissionDate} onChange={setAdmissionDate} />
 
         <View>
           <Text style={styles.label}>Guardian name</Text>

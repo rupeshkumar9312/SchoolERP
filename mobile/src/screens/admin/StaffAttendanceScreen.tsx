@@ -1,10 +1,11 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { AttendanceStatus } from '../../api/attendance';
 import { ApiError } from '../../api/client';
 import { listTeacherAttendanceForDate, markTeacherAttendance, TeacherAttendanceRecord } from '../../api/teacherAttendance';
 import { listTeachers, Teacher } from '../../api/teachers';
 import { Card } from '../../components/Card';
+import { DateField } from '../../components/DateField';
 import { Screen } from '../../components/Screen';
 import { ATTENDANCE_STATUS_META } from '../../constants';
 import { colors, fonts, radius, spacing } from '../../theme';
@@ -67,14 +68,7 @@ export function StaffAttendanceScreen(): React.JSX.Element {
       </View>
 
       <Card style={styles.filters}>
-        <Text style={styles.label}>Date (YYYY-MM-DD)</Text>
-        <TextInput
-          style={styles.input}
-          value={date}
-          onChangeText={setDate}
-          placeholder={todayIsoDate()}
-          placeholderTextColor={colors.textMuted}
-        />
+        <DateField label="Date" value={date} onChange={setDate} placeholder={todayIsoDate()} />
       </Card>
 
       {error && <Text style={styles.error}>{error}</Text>}
@@ -121,18 +115,6 @@ const styles = StyleSheet.create({
   heading: { fontSize: 20, fontFamily: fonts.headingBold, color: colors.text },
   subtitle: { fontSize: 14, fontFamily: fonts.body, color: colors.textMuted, marginTop: 2 },
   filters: { gap: spacing.sm },
-  label: { fontSize: 13, fontFamily: fonts.bodySemiBold, color: colors.textMuted },
-  input: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.md,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm + 2,
-    fontSize: 15,
-    fontFamily: fonts.body,
-    color: colors.text,
-    backgroundColor: colors.surface,
-  },
   muted: { fontSize: 13, fontFamily: fonts.body, color: colors.textMuted },
   error: { color: colors.danger, fontSize: 13, fontFamily: fonts.body },
   recordCard: { gap: spacing.sm },

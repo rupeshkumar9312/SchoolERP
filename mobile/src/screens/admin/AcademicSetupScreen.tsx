@@ -9,6 +9,7 @@ import { useAuth } from '../../auth/AuthContext';
 import { Badge } from '../../components/Badge';
 import { Button } from '../../components/Button';
 import { Card } from '../../components/Card';
+import { DateField } from '../../components/DateField';
 import { LoadingView } from '../../components/LoadingView';
 import { NamedItemList } from '../../components/NamedItemList';
 import { Screen } from '../../components/Screen';
@@ -320,13 +321,7 @@ export function AcademicSetupScreen(): React.JSX.Element {
 
         {canManage && (
           <View style={styles.holidayAddRow}>
-            <TextInput
-              style={styles.addInput}
-              value={newHolidayDate}
-              onChangeText={setNewHolidayDate}
-              placeholder="YYYY-MM-DD"
-              placeholderTextColor={colors.textMuted}
-            />
+            <DateField label="Date" value={newHolidayDate} onChange={setNewHolidayDate} />
             <TextInput
               style={styles.addInput}
               value={newHolidayName}

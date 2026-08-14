@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { FlatList, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, fonts, radius, spacing } from '../theme';
 import { Touchable } from './Touchable';
 
@@ -25,6 +26,7 @@ export function SelectField<T>({
 }: SelectFieldProps<T>): React.JSX.Element {
   const [open, setOpen] = useState(false);
   const selected = options.find((o) => o.value === value);
+  const insets = useSafeAreaInsets();
 
   return (
     <View>
@@ -37,7 +39,10 @@ export function SelectField<T>({
 
       <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
         <Pressable style={styles.backdrop} onPress={() => setOpen(false)}>
-          <View style={styles.sheet}>
+          {/* A Modal renders outside the app's normal SafeAreaView tree, so
+              it never picks up bottom-inset padding on its own — without
+              this it sits flush behind the Android system nav bar. */}
+          <View style={[styles.sheet, { paddingBottom: spacing.lg + insets.bottom }]}>
             <Text style={styles.sheetTitle}>{label}</Text>
             <FlatList
               data={options}
