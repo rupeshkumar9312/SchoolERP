@@ -13,6 +13,7 @@ import {
 import { useAuth } from '../auth/AuthContext';
 import { Button } from '../components/Button';
 import { Card } from '../components/Card';
+import { PasswordField } from '../components/PasswordField';
 import { Touchable } from '../components/Touchable';
 import { colors, radius, spacing } from '../theme';
 
@@ -51,28 +52,17 @@ export function LoginScreen(): React.JSX.Element {
         <Card style={styles.card}>
           <Text style={styles.heading}>Sign in</Text>
           <View>
-            <Text style={styles.label}>Email</Text>
+            <Text style={styles.label}>Email or login ID</Text>
             <TextInput
               style={styles.input}
               value={email}
               onChangeText={setEmail}
               autoCapitalize="none"
-              keyboardType="email-address"
-              placeholder="you@schoolerp.dev"
+              placeholder="Login ID or email"
               placeholderTextColor={colors.textMuted}
             />
           </View>
-          <View>
-            <Text style={styles.label}>Password</Text>
-            <TextInput
-              style={styles.input}
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry
-              autoCapitalize="none"
-              placeholderTextColor={colors.textMuted}
-            />
-          </View>
+          <PasswordField label="Password" value={password} onChangeText={setPassword} />
           {error && <Text style={styles.error}>{error}</Text>}
           <Button label="Log in" onPress={handleSubmit} loading={submitting} disabled={!email || !password} />
           <Touchable onPress={() => setShowForgotModal(true)} borderless style={styles.forgotTouchable}>

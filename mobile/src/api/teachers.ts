@@ -5,6 +5,7 @@ export interface Teacher {
   userId: number;
   name: string;
   email: string;
+  edvanceId: string;
   phone: string | null;
   isActive: boolean;
   qualification: string | null;
@@ -12,18 +13,21 @@ export interface Teacher {
   createdAt: string;
 }
 
+/** Shown once, in the create response only — never retrievable again. */
+export interface TeacherCreateResult extends Teacher {
+  login: { email: string; alias: string; temporaryPassword: string };
+}
+
+/** No email/password — both are auto-generated server-side. */
 export interface CreateTeacherPayload {
   name: string;
-  email: string;
   phone?: string;
-  password: string;
   qualification?: string;
   joiningDate: string;
 }
 
 export interface UpdateTeacherPayload {
   name?: string;
-  email?: string;
   phone?: string;
   qualification?: string;
   joiningDate?: string;
@@ -39,8 +43,8 @@ export function getTeacher(id: number): Promise<Teacher> {
   return apiGet<Teacher>(`/teachers/${id}`);
 }
 
-export function createTeacher(payload: CreateTeacherPayload): Promise<Teacher> {
-  return apiPost<Teacher>('/teachers', payload);
+export function createTeacher(payload: CreateTeacherPayload): Promise<TeacherCreateResult> {
+  return apiPost<TeacherCreateResult>('/teachers', payload);
 }
 
 export function updateTeacher(id: number, payload: UpdateTeacherPayload): Promise<Teacher> {

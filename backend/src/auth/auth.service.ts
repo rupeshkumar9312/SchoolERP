@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, UnauthorizedException } from '@nestjs/
 import { ConfigService } from '@nestjs/config';
 import { JwtService, JwtSignOptions } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
+import { resolveEdvanceIdFromAlias } from '../common/generate-edvance-id';
 import { PrismaService } from '../prisma/prisma.service';
 import { JwtPayload } from './auth.types';
 import { PermissionsService } from './permissions.service';
@@ -58,13 +59,10 @@ export class AuthService {
   ) {}
 
   async login(
-    email: string,
+    identifier: string,
     password: string,
   ): Promise<{ tokens: AuthTokens; user: AuthenticatedUserView }> {
-    const user = await this.prisma.user.findUnique({
-      where: { email },
-      include: { role: true },
-    });
+    const user = await this.findUserByIdentifier(identifier);
 
     if (!user || !user.isActive || !(await bcrypt.compare(password, user.passwordHash))) {
       throw new UnauthorizedException('Invalid email or password');
@@ -73,6 +71,23 @@ export class AuthService {
     const tokens = await this.issueTokens(user);
     const view = await this.toUserView(user);
     return { tokens, user: view };
+  }
+
+  /** Tries an exact `email` match first (the common case); if that misses,
+   * treats the identifier as a short login alias (e.g. 'tch000123'),
+   * reverses it back to the canonical edvanceId, and looks up by that
+   * instead. A real email never matches the alias shape, so this never
+   * shadows a legitimate email login. */
+  private async findUserByIdentifier(identifier: string): Promise<UserWithRole | null> {
+    const byEmail = await this.prisma.user.findUnique({
+      where: { email: identifier },
+      include: { role: true },
+    });
+    if (byEmail) return byEmail;
+
+    const edvanceId = resolveEdvanceIdFromAlias(identifier);
+    if (!edvanceId) return null;
+    return this.prisma.user.findUnique({ where: { edvanceId }, include: { role: true } });
   }
 
   async refresh(

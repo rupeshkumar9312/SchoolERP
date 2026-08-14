@@ -1,14 +1,11 @@
-import { IsBoolean, IsDateString, IsEmail, IsOptional, IsString, MinLength } from 'class-validator';
+import { IsBoolean, IsDateString, IsOptional, IsString, MinLength } from 'class-validator';
 
+/** email/edvanceId are immutable once generated at create time. */
 export class UpdateTeacherDto {
   @IsOptional()
   @IsString()
   @MinLength(1)
   name?: string;
-
-  @IsOptional()
-  @IsEmail()
-  email?: string;
 
   @IsOptional()
   @IsString()

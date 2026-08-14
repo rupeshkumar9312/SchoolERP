@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { StyleSheet, Text, TextInput, View } from 'react-native';
-import { colors, radius, spacing } from '../theme';
+import { StyleSheet, Text, View } from 'react-native';
+import { colors, spacing } from '../theme';
 import { Button } from './Button';
+import { PasswordField } from './PasswordField';
 
 interface ChangePasswordFormProps {
   onSubmit: (payload: { currentPassword: string; newPassword: string }) => Promise<void>;
@@ -43,39 +44,9 @@ export function ChangePasswordForm({
 
   return (
     <View style={styles.form}>
-      <View>
-        <Text style={styles.label}>Current password</Text>
-        <TextInput
-          style={styles.input}
-          value={currentPassword}
-          onChangeText={setCurrentPassword}
-          secureTextEntry
-          autoCapitalize="none"
-          placeholderTextColor={colors.textMuted}
-        />
-      </View>
-      <View>
-        <Text style={styles.label}>New password</Text>
-        <TextInput
-          style={styles.input}
-          value={newPassword}
-          onChangeText={setNewPassword}
-          secureTextEntry
-          autoCapitalize="none"
-          placeholderTextColor={colors.textMuted}
-        />
-      </View>
-      <View>
-        <Text style={styles.label}>Confirm new password</Text>
-        <TextInput
-          style={styles.input}
-          value={confirmPassword}
-          onChangeText={setConfirmPassword}
-          secureTextEntry
-          autoCapitalize="none"
-          placeholderTextColor={colors.textMuted}
-        />
-      </View>
+      <PasswordField label="Current password" value={currentPassword} onChangeText={setCurrentPassword} />
+      <PasswordField label="New password" value={newPassword} onChangeText={setNewPassword} />
+      <PasswordField label="Confirm new password" value={confirmPassword} onChangeText={setConfirmPassword} />
       {localError && <Text style={styles.error}>{localError}</Text>}
       <Button label={submitLabel} onPress={handleSubmit} loading={submitting} />
     </View>
@@ -84,16 +55,5 @@ export function ChangePasswordForm({
 
 const styles = StyleSheet.create({
   form: { gap: spacing.md },
-  label: { fontSize: 13, fontWeight: '600', color: colors.textMuted, marginBottom: spacing.xs },
-  input: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.md,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm + 2,
-    fontSize: 15,
-    color: colors.text,
-    backgroundColor: colors.surface,
-  },
   error: { color: colors.danger, fontSize: 13 },
 });

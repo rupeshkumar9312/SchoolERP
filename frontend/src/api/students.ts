@@ -16,12 +16,14 @@ export interface Student {
   admissionDate: string;
   createdAt: string;
   hasLogin: boolean;
+  /** null when hasLogin is false. */
+  edvanceId: string | null;
 }
 
 /** Only returned once, from createStudent() — the plaintext password can't be
  * retrieved again after this response, so the UI must show it immediately. */
 export interface StudentCreateResult extends Student {
-  login: { email: string; temporaryPassword: string };
+  login: { email: string; alias: string; temporaryPassword: string };
 }
 
 export interface StudentFilters {

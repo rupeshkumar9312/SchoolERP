@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import * as academic from '../api/academic';
 import { ApiError } from '../api/client';
 import { createStudent, getStudent, updateStudent } from '../api/students';
+import { shareCredentialsViaWhatsApp } from '../utils/whatsapp';
 
 export function StudentFormPage() {
   const { id } = useParams();
@@ -30,7 +31,7 @@ export function StudentFormPage() {
   const [loading, setLoading] = useState(isEdit);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [createdLogin, setCreatedLogin] = useState<{ email: string; temporaryPassword: string } | null>(null);
+  const [createdLogin, setCreatedLogin] = useState<{ email: string; alias: string; temporaryPassword: string } | null>(null);
 
   useEffect(() => {
     void academic.listAcademicYears().then(setYears);
@@ -135,6 +136,10 @@ export function StudentFormPage() {
             <input value={createdLogin.email} readOnly onFocus={(e) => e.target.select()} />
           </label>
           <label className="field">
+            <span>Short login ID (use this to sign in instead)</span>
+            <input value={createdLogin.alias} readOnly onFocus={(e) => e.target.select()} />
+          </label>
+          <label className="field">
             <span>Temporary password</span>
             <input
               value={createdLogin.temporaryPassword}
@@ -143,6 +148,19 @@ export function StudentFormPage() {
             />
           </label>
           <div className="form-actions">
+            <button
+              type="button"
+              className="secondary"
+              onClick={() =>
+                shareCredentialsViaWhatsApp({
+                  name,
+                  loginId: createdLogin.alias,
+                  password: createdLogin.temporaryPassword,
+                })
+              }
+            >
+              Share via WhatsApp
+            </button>
             <button type="button" onClick={() => navigate('/students')}>
               Done
             </button>

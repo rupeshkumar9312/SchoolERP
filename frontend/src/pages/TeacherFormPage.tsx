@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ApiError } from '../api/client';
 import { createTeacher, getTeacher, updateTeacher } from '../api/teachers';
+import { shareCredentialsViaWhatsApp } from '../utils/whatsapp';
 
 export function TeacherFormPage() {
   const { id } = useParams();
@@ -10,8 +11,8 @@ export function TeacherFormPage() {
 
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
+  const [edvanceId, setEdvanceId] = useState('');
   const [phone, setPhone] = useState('');
-  const [password, setPassword] = useState('');
   const [qualification, setQualification] = useState('');
   const [joiningDate, setJoiningDate] = useState('');
   const [isActive, setIsActive] = useState(true);
@@ -19,6 +20,7 @@ export function TeacherFormPage() {
   const [loading, setLoading] = useState(isEdit);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [createdLogin, setCreatedLogin] = useState<{ email: string; alias: string; temporaryPassword: string } | null>(null);
 
   useEffect(() => {
     if (!id) return;
@@ -27,6 +29,7 @@ export function TeacherFormPage() {
       .then((teacher) => {
         setName(teacher.name);
         setEmail(teacher.email);
+        setEdvanceId(teacher.edvanceId);
         setPhone(teacher.phone ?? '');
         setQualification(teacher.qualification ?? '');
         setJoiningDate(teacher.joiningDate.slice(0, 10));
@@ -44,23 +47,21 @@ export function TeacherFormPage() {
       if (isEdit) {
         await updateTeacher(Number(id), {
           name,
-          email,
           phone: phone || undefined,
           qualification: qualification || undefined,
           joiningDate: joiningDate || undefined,
           isActive,
         });
+        navigate('/teachers');
       } else {
-        await createTeacher({
+        const created = await createTeacher({
           name,
-          email,
           phone: phone || undefined,
-          password,
           qualification: qualification || undefined,
           joiningDate,
         });
+        setCreatedLogin(created.login);
       }
-      navigate('/teachers');
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Failed to save teacher');
     } finally {
@@ -69,6 +70,54 @@ export function TeacherFormPage() {
   };
 
   if (loading) return <p className="muted">Loading…</p>;
+
+  if (createdLogin) {
+    return (
+      <>
+        <h1>Teacher added</h1>
+        <div className="card">
+          <p>
+            A login was created automatically. Copy these credentials now — the password can't be
+            shown again after you leave this page.
+          </p>
+          <label className="field">
+            <span>Login email</span>
+            <input value={createdLogin.email} readOnly onFocus={(e) => e.target.select()} />
+          </label>
+          <label className="field">
+            <span>Short login ID (use this to sign in instead)</span>
+            <input value={createdLogin.alias} readOnly onFocus={(e) => e.target.select()} />
+          </label>
+          <label className="field">
+            <span>Temporary password</span>
+            <input
+              value={createdLogin.temporaryPassword}
+              readOnly
+              onFocus={(e) => e.target.select()}
+            />
+          </label>
+          <div className="form-actions">
+            <button
+              type="button"
+              className="secondary"
+              onClick={() =>
+                shareCredentialsViaWhatsApp({
+                  name,
+                  loginId: createdLogin.alias,
+                  password: createdLogin.temporaryPassword,
+                })
+              }
+            >
+              Share via WhatsApp
+            </button>
+            <button type="button" onClick={() => navigate('/teachers')}>
+              Done
+            </button>
+          </div>
+        </div>
+      </>
+    );
+  }
 
   return (
     <>
@@ -80,28 +129,23 @@ export function TeacherFormPage() {
           <input value={name} onChange={(e) => setName(e.target.value)} required />
         </label>
 
-        <label className="field">
-          <span>Email</span>
-          <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
-        </label>
+        {isEdit && (
+          <>
+            <label className="field">
+              <span>Login ID</span>
+              <input value={email} readOnly disabled />
+            </label>
+            <label className="field">
+              <span>Edvance ID</span>
+              <input value={edvanceId} readOnly disabled />
+            </label>
+          </>
+        )}
 
         <label className="field">
           <span>Phone</span>
           <input value={phone} onChange={(e) => setPhone(e.target.value)} />
         </label>
-
-        {!isEdit && (
-          <label className="field">
-            <span>Password</span>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              minLength={8}
-              required
-            />
-          </label>
-        )}
 
         <label className="field">
           <span>Qualification</span>
@@ -127,6 +171,10 @@ export function TeacherFormPage() {
             <input type="checkbox" checked={isActive} onChange={(e) => setIsActive(e.target.checked)} />
             <span>Active</span>
           </label>
+        )}
+
+        {!isEdit && (
+          <p className="muted">A login email and temporary password will be generated automatically.</p>
         )}
 
         {error && (

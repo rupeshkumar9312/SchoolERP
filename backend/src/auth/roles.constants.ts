@@ -8,3 +8,11 @@ export const TEACHER_ROLE = 'TEACHER';
 
 /** The role every login provisioned by StudentsService.create() is hard-wired to. */
 export const STUDENT_ROLE = 'STUDENT';
+
+/** Directors/Principals/Admins share the seeded "Management" permission set. */
+export const MANAGEMENT_ROLES = ['DIRECTOR', 'PRINCIPAL', 'ADMIN'] as const;
+
+/** Every role creatable through POST /users — i.e. every login that gets an
+ * 'ADM'-prefixed Edvance ID and a name-derived @admin.edvance.edu email
+ * (see UsersService.create()). */
+export const ADMIN_TIER_ROLES = [SUPER_ADMIN_ROLE, ...MANAGEMENT_ROLES] as const;

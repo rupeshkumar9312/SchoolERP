@@ -86,7 +86,7 @@ export function TeachersListPage() {
             <thead>
               <tr>
                 <th>Name</th>
-                <th>Email</th>
+                <th>Login ID</th>
                 <th>Phone</th>
                 <th>Qualification</th>
                 <th>Joined</th>
@@ -98,7 +98,7 @@ export function TeachersListPage() {
               {teachers.map((teacher) => (
                 <tr key={teacher.id}>
                   <td data-label="Name">{teacher.name}</td>
-                  <td data-label="Email">{teacher.email}</td>
+                  <td data-label="Login ID">{teacher.email}</td>
                   <td data-label="Phone">{teacher.phone ?? '—'}</td>
                   <td data-label="Qualification">{teacher.qualification ?? '—'}</td>
                   <td data-label="Joined">{new Date(teacher.joiningDate).toLocaleDateString()}</td>

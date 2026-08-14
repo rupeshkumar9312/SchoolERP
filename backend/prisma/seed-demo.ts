@@ -202,11 +202,17 @@ async function main() {
   const passwordHash = await bcrypt.hash(TEACHER_PASSWORD, PASSWORD_BCRYPT_ROUNDS);
   const credentials: Array<{ name: string; email: string; role: string }> = [];
 
-  for (const plan of TEACHER_PLAN) {
+  for (const [index, plan] of TEACHER_PLAN.entries()) {
+    // Literal, memorable demo emails stay as-is (this script's whole point is
+    // human-readable manual-testing logins, not exercising the real
+    // generated-Edvance-ID path) — just reserve a distinct edvanceId per
+    // teacher since the column is now required+unique. 'DEMOxx' can never
+    // collide with the real numeric counter (see generate-edvance-id.ts).
+    const edvanceId = `EDV-TCH-DEMO${String(index + 1).padStart(2, '0')}`;
     const user = await prisma.user.upsert({
       where: { email: plan.email },
       update: {},
-      create: { name: plan.name, email: plan.email, passwordHash, roleId: teacherRole.id },
+      create: { name: plan.name, email: plan.email, edvanceId, passwordHash, roleId: teacherRole.id },
     });
     const teacher = await prisma.teacher.upsert({
       where: { userId: user.id },

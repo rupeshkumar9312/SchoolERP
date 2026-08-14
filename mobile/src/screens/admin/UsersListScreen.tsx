@@ -1,7 +1,7 @@
 import React, { useCallback, useState } from 'react';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useFocusEffect } from '@react-navigation/native';
-import { Alert, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert, Modal, StyleSheet, Text, TextInput, View } from 'react-native';
 import { ApiError } from '../../api/client';
 import { Role, listRoles } from '../../api/roles';
 import { UserListItem, deleteUser, listUsers, resetUserPassword } from '../../api/users';
@@ -15,6 +15,7 @@ import { LoadingView } from '../../components/LoadingView';
 import { Screen } from '../../components/Screen';
 import { SelectField } from '../../components/SelectField';
 import { colors, fonts, radius, spacing } from '../../theme';
+import { edvanceLoginAlias, sharePasswordResetViaWhatsApp } from '../../utils/whatsapp';
 import type { ManageStackParamList } from '../../navigation/types';
 
 type Props = NativeStackScreenProps<ManageStackParamList, 'UsersList'>;
@@ -33,7 +34,9 @@ export function UsersListScreen({ navigation }: Props): React.JSX.Element {
   const [loading, setLoading] = useState(true);
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [resettingId, setResettingId] = useState<number | null>(null);
-  const [resetResult, setResetResult] = useState<{ email: string; temporaryPassword: string } | null>(null);
+  const [resetResult, setResetResult] = useState<
+    { name: string; email: string; edvanceId: string; temporaryPassword: string } | null
+  >(null);
 
   const load = useCallback(async (filter: number | null) => {
     setError(null);
@@ -92,7 +95,7 @@ export function UsersListScreen({ navigation }: Props): React.JSX.Element {
             setResettingId(u.id);
             try {
               const { temporaryPassword } = await resetUserPassword(u.id);
-              setResetResult({ email: u.email, temporaryPassword });
+              setResetResult({ name: u.name, email: u.email, edvanceId: u.edvanceId, temporaryPassword });
             } catch (err) {
               setError(err instanceof ApiError ? err.message : 'Could not reset password');
             } finally {
@@ -124,17 +127,6 @@ export function UsersListScreen({ navigation }: Props): React.JSX.Element {
 
       {error && users && <Text style={styles.error}>{error}</Text>}
 
-      {resetResult && (
-        <Card style={styles.resetCard}>
-          <Text style={styles.body}>
-            Password reset for <Text style={styles.bold}>{resetResult.email}</Text>. Copy this now — it can't be shown
-            again after you leave this screen.
-          </Text>
-          <TextInput style={styles.tempInput} value={resetResult.temporaryPassword} editable={false} selectTextOnFocus />
-          <Button label="Dismiss" variant="secondary" onPress={() => setResetResult(null)} />
-        </Card>
-      )}
-
       {users && users.length === 0 && (
         <Card>
           <Text style={styles.muted}>No users found. Try a different role filter, or create the first one.</Text>
@@ -147,7 +139,7 @@ export function UsersListScreen({ navigation }: Props): React.JSX.Element {
             <Text style={styles.name}>{u.name}</Text>
             <Badge label={u.isActive ? 'Active' : 'Inactive'} tone={u.isActive ? 'success' : 'muted'} />
           </View>
-          <DataRowText label="Email" value={u.email} />
+          <DataRowText label="Login ID" value={u.email} />
           <DataRowText label="Phone" value={u.phone ?? '—'} />
           <DataRow label="Role">
             <Badge label={u.role.name} tone="primary" />
@@ -179,6 +171,42 @@ export function UsersListScreen({ navigation }: Props): React.JSX.Element {
           )}
         </Card>
       ))}
+
+      <Modal
+        visible={!!resetResult}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setResetResult(null)}
+      >
+        <View style={styles.modalBackdrop}>
+          <Card style={styles.modalCard}>
+            <Text style={styles.heading}>Password reset</Text>
+            <Text style={styles.body}>
+              New temporary password for <Text style={styles.bold}>{resetResult?.name}</Text> (
+              {resetResult?.email}). Copy this now — it can't be shown again after you leave this screen.
+            </Text>
+            <TextInput
+              style={styles.tempInput}
+              value={resetResult?.temporaryPassword ?? ''}
+              editable={false}
+              selectTextOnFocus
+            />
+            <Button
+              label="Share via WhatsApp"
+              variant="secondary"
+              onPress={() =>
+                resetResult &&
+                sharePasswordResetViaWhatsApp({
+                  name: resetResult.name,
+                  loginId: edvanceLoginAlias(resetResult.edvanceId),
+                  password: resetResult.temporaryPassword,
+                })
+              }
+            />
+            <Button label="Done" onPress={() => setResetResult(null)} />
+          </Card>
+        </View>
+      </Modal>
     </Screen>
   );
 }
@@ -195,7 +223,14 @@ const styles = StyleSheet.create({
   name: { fontSize: 16, fontFamily: fonts.headingBold, color: colors.text },
   actions: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.xs },
   actionThird: { flex: 1 },
-  resetCard: { gap: spacing.sm },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.5)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: spacing.xl,
+  },
+  modalCard: { width: '100%', gap: spacing.sm },
   tempInput: {
     borderWidth: 1,
     borderColor: colors.border,

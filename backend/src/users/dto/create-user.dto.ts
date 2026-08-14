@@ -1,21 +1,18 @@
 import { Type } from 'class-transformer';
-import { IsEmail, IsInt, IsOptional, IsString, MinLength } from 'class-validator';
+import { IsInt, IsOptional, IsString, MinLength } from 'class-validator';
 
+/** No email/password here — both are auto-generated (see UsersService.create()):
+ * email is derived from `name` (fullname@admin.edvance.edu, with a numeric
+ * suffix on collision), password via generateTempPassword(). Returned once
+ * in the create response's `login` field. */
 export class CreateUserDto {
   @IsString()
   @MinLength(1)
   name!: string;
 
-  @IsEmail()
-  email!: string;
-
   @IsOptional()
   @IsString()
   phone?: string;
-
-  @IsString()
-  @MinLength(8, { message: 'password must be at least 8 characters' })
-  password!: string;
 
   @Type(() => Number)
   @IsInt()

@@ -10,6 +10,7 @@ import { Screen } from '../../components/Screen';
 import { SelectField } from '../../components/SelectField';
 import { Touchable } from '../../components/Touchable';
 import { colors, fonts, radius, spacing } from '../../theme';
+import { shareCredentialsViaWhatsApp } from '../../utils/whatsapp';
 import type { ManageStackParamList } from '../../navigation/types';
 
 type Props = NativeStackScreenProps<ManageStackParamList, 'UserForm'>;
@@ -20,13 +21,12 @@ export function UserFormScreen({ route, navigation }: Props): React.JSX.Element 
 
   const [roles, setRoles] = useState<Role[]>([]);
   const [name, setName] = useState(existing?.name ?? '');
-  const [email, setEmail] = useState(existing?.email ?? '');
   const [phone, setPhone] = useState(existing?.phone ?? '');
-  const [password, setPassword] = useState('');
   const [roleId, setRoleId] = useState<number | null>(existing?.role.id ?? null);
   const [isActive, setIsActive] = useState(existing?.isActive ?? true);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [createdLogin, setCreatedLogin] = useState<{ email: string; alias: string; temporaryPassword: string } | null>(null);
 
   React.useEffect(() => {
     void listRoles().then(setRoles);
@@ -34,12 +34,8 @@ export function UserFormScreen({ route, navigation }: Props): React.JSX.Element 
 
   const handleSubmit = async () => {
     setError(null);
-    if (!name.trim() || !email.trim() || !roleId) {
-      setError('Name, email, and role are required.');
-      return;
-    }
-    if (!isEdit && password.length < 8) {
-      setError('Password must be at least 8 characters.');
+    if (!name.trim() || !roleId) {
+      setError('Name and role are required.');
       return;
     }
     setSubmitting(true);
@@ -47,27 +43,63 @@ export function UserFormScreen({ route, navigation }: Props): React.JSX.Element 
       if (isEdit && existing) {
         await updateUser(existing.id, {
           name: name.trim(),
-          email: email.trim(),
           phone: phone.trim() || undefined,
           roleId,
           isActive,
         });
+        navigation.goBack();
       } else {
-        await createUser({
+        const created = await createUser({
           name: name.trim(),
-          email: email.trim(),
           phone: phone.trim() || undefined,
-          password,
           roleId,
         });
+        setCreatedLogin(created.login);
       }
-      navigation.goBack();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not save user');
     } finally {
       setSubmitting(false);
     }
   };
+
+  if (createdLogin) {
+    return (
+      <Screen>
+        <Card style={styles.card}>
+          <Text style={styles.heading}>User created</Text>
+          <Text style={styles.body}>
+            A login was created automatically. Copy these credentials now — the password can't be shown again
+            after you leave this screen.
+          </Text>
+          <View>
+            <Text style={styles.label}>Login email</Text>
+            <TextInput style={styles.input} value={createdLogin.email} editable={false} selectTextOnFocus />
+          </View>
+          <View>
+            <Text style={styles.label}>Short login ID (use this to sign in instead)</Text>
+            <TextInput style={styles.input} value={createdLogin.alias} editable={false} selectTextOnFocus />
+          </View>
+          <View>
+            <Text style={styles.label}>Temporary password</Text>
+            <TextInput style={styles.input} value={createdLogin.temporaryPassword} editable={false} selectTextOnFocus />
+          </View>
+          <Button
+            label="Share via WhatsApp"
+            variant="secondary"
+            onPress={() =>
+              shareCredentialsViaWhatsApp({
+                name,
+                loginId: createdLogin.alias,
+                password: createdLogin.temporaryPassword,
+              })
+            }
+          />
+          <Button label="Done" onPress={() => navigation.goBack()} />
+        </Card>
+      </Screen>
+    );
+  }
 
   return (
     <Screen>
@@ -79,17 +111,18 @@ export function UserFormScreen({ route, navigation }: Props): React.JSX.Element 
           <TextInput style={styles.input} value={name} onChangeText={setName} placeholderTextColor={colors.textMuted} />
         </View>
 
-        <View>
-          <Text style={styles.label}>Email</Text>
-          <TextInput
-            style={styles.input}
-            value={email}
-            onChangeText={setEmail}
-            keyboardType="email-address"
-            autoCapitalize="none"
-            placeholderTextColor={colors.textMuted}
-          />
-        </View>
+        {isEdit && existing && (
+          <>
+            <View>
+              <Text style={styles.label}>Login ID</Text>
+              <TextInput style={styles.input} value={existing.email} editable={false} />
+            </View>
+            <View>
+              <Text style={styles.label}>Edvance ID</Text>
+              <TextInput style={styles.input} value={existing.edvanceId} editable={false} />
+            </View>
+          </>
+        )}
 
         <View>
           <Text style={styles.label}>Phone</Text>
@@ -101,19 +134,6 @@ export function UserFormScreen({ route, navigation }: Props): React.JSX.Element 
             placeholderTextColor={colors.textMuted}
           />
         </View>
-
-        {!isEdit && (
-          <View>
-            <Text style={styles.label}>Password</Text>
-            <TextInput
-              style={styles.input}
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry
-              placeholderTextColor={colors.textMuted}
-            />
-          </View>
-        )}
 
         <SelectField
           label="Role"
@@ -130,6 +150,10 @@ export function UserFormScreen({ route, navigation }: Props): React.JSX.Element 
           </Touchable>
         )}
 
+        {!isEdit && (
+          <Text style={styles.body}>A login email and temporary password will be generated automatically.</Text>
+        )}
+
         {error && <Text style={styles.error}>{error}</Text>}
         <Button label={isEdit ? 'Save changes' : 'Create user'} onPress={handleSubmit} loading={submitting} />
       </Card>
@@ -140,6 +164,7 @@ export function UserFormScreen({ route, navigation }: Props): React.JSX.Element 
 const styles = StyleSheet.create({
   card: { gap: spacing.md },
   heading: { fontSize: 18, fontFamily: fonts.headingBold, color: colors.text },
+  body: { fontSize: 13, fontFamily: fonts.body, color: colors.text, lineHeight: 19 },
   label: { fontSize: 13, fontFamily: fonts.bodySemiBold, color: colors.textMuted, marginBottom: spacing.xs },
   input: {
     borderWidth: 1,

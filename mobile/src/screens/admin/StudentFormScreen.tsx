@@ -12,6 +12,7 @@ import { Screen } from '../../components/Screen';
 import { SelectField } from '../../components/SelectField';
 import { Touchable } from '../../components/Touchable';
 import { colors, fonts, radius, spacing } from '../../theme';
+import { shareCredentialsViaWhatsApp } from '../../utils/whatsapp';
 import type { ManageStackParamList } from '../../navigation/types';
 
 type Props = NativeStackScreenProps<ManageStackParamList, 'StudentForm'>;
@@ -48,7 +49,7 @@ export function StudentFormScreen({ route, navigation }: Props): React.JSX.Eleme
   const [loading, setLoading] = useState(isEdit);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [createdLogin, setCreatedLogin] = useState<{ email: string; temporaryPassword: string } | null>(null);
+  const [createdLogin, setCreatedLogin] = useState<{ email: string; alias: string; temporaryPassword: string } | null>(null);
 
   useEffect(() => {
     void academic.listAcademicYears().then(setYears);
@@ -144,9 +145,24 @@ export function StudentFormScreen({ route, navigation }: Props): React.JSX.Eleme
             <TextInput style={styles.input} value={createdLogin.email} editable={false} selectTextOnFocus />
           </View>
           <View>
+            <Text style={styles.label}>Short login ID (use this to sign in instead)</Text>
+            <TextInput style={styles.input} value={createdLogin.alias} editable={false} selectTextOnFocus />
+          </View>
+          <View>
             <Text style={styles.label}>Temporary password</Text>
             <TextInput style={styles.input} value={createdLogin.temporaryPassword} editable={false} selectTextOnFocus />
           </View>
+          <Button
+            label="Share via WhatsApp"
+            variant="secondary"
+            onPress={() =>
+              shareCredentialsViaWhatsApp({
+                name,
+                loginId: createdLogin.alias,
+                password: createdLogin.temporaryPassword,
+              })
+            }
+          />
           <Button label="Done" onPress={() => navigation.goBack()} />
         </Card>
       </Screen>

@@ -4,6 +4,7 @@ import { ApiError } from '../api/client';
 import type { Role } from '../api/roles';
 import { listRoles } from '../api/roles';
 import { createUser, getUser, updateUser } from '../api/users';
+import { shareCredentialsViaWhatsApp } from '../utils/whatsapp';
 
 export function UserFormPage() {
   const { id } = useParams();
@@ -13,14 +14,15 @@ export function UserFormPage() {
   const [roles, setRoles] = useState<Role[]>([]);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
+  const [edvanceId, setEdvanceId] = useState('');
   const [phone, setPhone] = useState('');
-  const [password, setPassword] = useState('');
   const [roleId, setRoleId] = useState('');
   const [isActive, setIsActive] = useState(true);
 
   const [loading, setLoading] = useState(isEdit);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [createdLogin, setCreatedLogin] = useState<{ email: string; alias: string; temporaryPassword: string } | null>(null);
 
   useEffect(() => {
     void listRoles().then(setRoles);
@@ -33,6 +35,7 @@ export function UserFormPage() {
       .then((user) => {
         setName(user.name);
         setEmail(user.email);
+        setEdvanceId(user.edvanceId);
         setPhone(user.phone ?? '');
         setRoleId(String(user.role.id));
         setIsActive(user.isActive);
@@ -49,21 +52,19 @@ export function UserFormPage() {
       if (isEdit) {
         await updateUser(Number(id), {
           name,
-          email,
           phone: phone || undefined,
           roleId: roleId ? Number(roleId) : undefined,
           isActive,
         });
+        navigate('/users');
       } else {
-        await createUser({
+        const created = await createUser({
           name,
-          email,
           phone: phone || undefined,
-          password,
           roleId: Number(roleId),
         });
+        setCreatedLogin(created.login);
       }
-      navigate('/users');
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Failed to save user');
     } finally {
@@ -72,6 +73,54 @@ export function UserFormPage() {
   };
 
   if (loading) return <p className="muted">Loading…</p>;
+
+  if (createdLogin) {
+    return (
+      <>
+        <h1>User created</h1>
+        <div className="card">
+          <p>
+            A login was created automatically. Copy these credentials now — the password can't be
+            shown again after you leave this page.
+          </p>
+          <label className="field">
+            <span>Login email</span>
+            <input value={createdLogin.email} readOnly onFocus={(e) => e.target.select()} />
+          </label>
+          <label className="field">
+            <span>Short login ID (use this to sign in instead)</span>
+            <input value={createdLogin.alias} readOnly onFocus={(e) => e.target.select()} />
+          </label>
+          <label className="field">
+            <span>Temporary password</span>
+            <input
+              value={createdLogin.temporaryPassword}
+              readOnly
+              onFocus={(e) => e.target.select()}
+            />
+          </label>
+          <div className="form-actions">
+            <button
+              type="button"
+              className="secondary"
+              onClick={() =>
+                shareCredentialsViaWhatsApp({
+                  name,
+                  loginId: createdLogin.alias,
+                  password: createdLogin.temporaryPassword,
+                })
+              }
+            >
+              Share via WhatsApp
+            </button>
+            <button type="button" onClick={() => navigate('/users')}>
+              Done
+            </button>
+          </div>
+        </div>
+      </>
+    );
+  }
 
   return (
     <>
@@ -83,28 +132,23 @@ export function UserFormPage() {
           <input value={name} onChange={(e) => setName(e.target.value)} required />
         </label>
 
-        <label className="field">
-          <span>Email</span>
-          <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
-        </label>
+        {isEdit && (
+          <>
+            <label className="field">
+              <span>Login ID</span>
+              <input value={email} readOnly disabled />
+            </label>
+            <label className="field">
+              <span>Edvance ID</span>
+              <input value={edvanceId} readOnly disabled />
+            </label>
+          </>
+        )}
 
         <label className="field">
           <span>Phone</span>
           <input value={phone} onChange={(e) => setPhone(e.target.value)} />
         </label>
-
-        {!isEdit && (
-          <label className="field">
-            <span>Password</span>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              minLength={8}
-              required
-            />
-          </label>
-        )}
 
         <label className="field">
           <span>Role</span>
@@ -125,6 +169,10 @@ export function UserFormPage() {
             <input type="checkbox" checked={isActive} onChange={(e) => setIsActive(e.target.checked)} />
             <span>Active</span>
           </label>
+        )}
+
+        {!isEdit && (
+          <p className="muted">A login email and temporary password will be generated automatically.</p>
         )}
 
         {error && (

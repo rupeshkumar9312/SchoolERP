@@ -61,6 +61,14 @@ const TEACHER_PERMISSION_KEYS = [
 
 const SUPER_ADMIN_EMAIL = 'admin@schoolerp.dev';
 const SUPER_ADMIN_PASSWORD = 'ChangeMe123!';
+// Reserved, not drawn from the IdSequence counter (which starts real ADM
+// numbering at 001) — this is the one hardcoded bootstrap login, kept as a
+// well-known documented credential rather than generated like every other
+// account UsersService.create() provisions from here on. Width matches
+// generate-edvance-id.ts's 3-digit ADM format.
+const SUPER_ADMIN_EDVANCE_ID = 'EDV-ADM-000';
+
+const ID_SEQUENCE_PREFIXES = ['ADM', 'TCH', 'STU'] as const;
 
 async function main() {
   const roles = new Map<string, number>();
@@ -101,6 +109,14 @@ async function main() {
     });
   }
 
+  for (const prefix of ID_SEQUENCE_PREFIXES) {
+    await prisma.idSequence.upsert({
+      where: { prefix },
+      update: {},
+      create: { prefix, lastValue: 0 },
+    });
+  }
+
   const superAdminRoleId = roles.get('SUPER_ADMIN')!;
   const passwordHash = await bcrypt.hash(SUPER_ADMIN_PASSWORD, 10);
   await prisma.user.upsert({
@@ -108,6 +124,7 @@ async function main() {
     update: {},
     create: {
       email: SUPER_ADMIN_EMAIL,
+      edvanceId: SUPER_ADMIN_EDVANCE_ID,
       passwordHash,
       name: 'Super Admin',
       roleId: superAdminRoleId,

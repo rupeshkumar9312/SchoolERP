@@ -4,6 +4,7 @@ import edvanceLogoDark from '../assets/edvance-logo-dark.png';
 import edvanceLogo from '../assets/edvance-logo.png';
 import { ApiError } from '../api/client';
 import { useAuth } from '../auth/useAuth';
+import { PasswordField } from '../components/PasswordField';
 
 export function LoginPage() {
   const { state, login } = useAuth();
@@ -48,26 +49,24 @@ export function LoginPage() {
 
       <form className="card" onSubmit={onSubmit}>
         <label className="field">
-          <span>Email</span>
+          <span>Email or login ID</span>
           <input
-            type="email"
+            type="text"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             autoComplete="username"
+            autoCapitalize="none"
             required
           />
         </label>
 
-        <label className="field">
-          <span>Password</span>
-          <input
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            autoComplete="current-password"
-            required
-          />
-        </label>
+        <PasswordField
+          label="Password"
+          value={password}
+          onChange={setPassword}
+          autoComplete="current-password"
+          required
+        />
 
         {error && (
           <div className="status down">
