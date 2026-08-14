@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ApiError } from '../api/client';
 import { createTeacher, getTeacher, updateTeacher } from '../api/teachers';
+import { shareCredentialsViaWhatsApp } from '../utils/whatsapp';
 
 export function TeacherFormPage() {
   const { id } = useParams();
@@ -96,6 +97,19 @@ export function TeacherFormPage() {
             />
           </label>
           <div className="form-actions">
+            <button
+              type="button"
+              className="secondary"
+              onClick={() =>
+                shareCredentialsViaWhatsApp({
+                  name,
+                  loginId: createdLogin.alias,
+                  password: createdLogin.temporaryPassword,
+                })
+              }
+            >
+              Share via WhatsApp
+            </button>
             <button type="button" onClick={() => navigate('/teachers')}>
               Done
             </button>

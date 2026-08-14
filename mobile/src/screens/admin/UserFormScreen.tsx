@@ -10,6 +10,7 @@ import { Screen } from '../../components/Screen';
 import { SelectField } from '../../components/SelectField';
 import { Touchable } from '../../components/Touchable';
 import { colors, fonts, radius, spacing } from '../../theme';
+import { shareCredentialsViaWhatsApp } from '../../utils/whatsapp';
 import type { ManageStackParamList } from '../../navigation/types';
 
 type Props = NativeStackScreenProps<ManageStackParamList, 'UserForm'>;
@@ -83,6 +84,17 @@ export function UserFormScreen({ route, navigation }: Props): React.JSX.Element 
             <Text style={styles.label}>Temporary password</Text>
             <TextInput style={styles.input} value={createdLogin.temporaryPassword} editable={false} selectTextOnFocus />
           </View>
+          <Button
+            label="Share via WhatsApp"
+            variant="secondary"
+            onPress={() =>
+              shareCredentialsViaWhatsApp({
+                name,
+                loginId: createdLogin.alias,
+                password: createdLogin.temporaryPassword,
+              })
+            }
+          />
           <Button label="Done" onPress={() => navigation.goBack()} />
         </Card>
       </Screen>

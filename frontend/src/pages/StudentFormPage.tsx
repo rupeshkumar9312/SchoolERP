@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import * as academic from '../api/academic';
 import { ApiError } from '../api/client';
 import { createStudent, getStudent, updateStudent } from '../api/students';
+import { shareCredentialsViaWhatsApp } from '../utils/whatsapp';
 
 export function StudentFormPage() {
   const { id } = useParams();
@@ -147,6 +148,19 @@ export function StudentFormPage() {
             />
           </label>
           <div className="form-actions">
+            <button
+              type="button"
+              className="secondary"
+              onClick={() =>
+                shareCredentialsViaWhatsApp({
+                  name,
+                  loginId: createdLogin.alias,
+                  password: createdLogin.temporaryPassword,
+                })
+              }
+            >
+              Share via WhatsApp
+            </button>
             <button type="button" onClick={() => navigate('/students')}>
               Done
             </button>

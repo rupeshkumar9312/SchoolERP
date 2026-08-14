@@ -144,6 +144,38 @@ pre {
   color-scheme: light dark;
 }
 
+.password-field {
+  position: relative;
+}
+
+.password-field input {
+  padding-right: 2.5rem;
+}
+
+.password-toggle {
+  position: absolute;
+  top: 50%;
+  right: 0.35rem;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.35rem;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  box-shadow: none;
+}
+
+.password-toggle:hover:not(:disabled) {
+  color: var(--color-text);
+  background: var(--color-surface-hover);
+  box-shadow: none;
+  transform: translateY(-50%);
+}
+
 .field-inline {
   flex-direction: row;
   align-items: center;

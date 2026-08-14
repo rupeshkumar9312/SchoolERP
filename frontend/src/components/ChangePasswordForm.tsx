@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { ApiError } from '../api/client';
 import { useAuth } from '../auth/useAuth';
+import { PasswordField } from './PasswordField';
 
 export function ChangePasswordForm({ onSuccess }: { onSuccess: () => void }) {
   const { changePassword } = useAuth();
@@ -39,40 +40,31 @@ export function ChangePasswordForm({ onSuccess }: { onSuccess: () => void }) {
 
   return (
     <form className="card" onSubmit={onSubmit}>
-      <label className="field">
-        <span>Current password</span>
-        <input
-          type="password"
-          value={currentPassword}
-          onChange={(e) => setCurrentPassword(e.target.value)}
-          autoComplete="current-password"
-          required
-        />
-      </label>
+      <PasswordField
+        label="Current password"
+        value={currentPassword}
+        onChange={setCurrentPassword}
+        autoComplete="current-password"
+        required
+      />
 
-      <label className="field">
-        <span>New password</span>
-        <input
-          type="password"
-          value={newPassword}
-          onChange={(e) => setNewPassword(e.target.value)}
-          autoComplete="new-password"
-          minLength={8}
-          required
-        />
-      </label>
+      <PasswordField
+        label="New password"
+        value={newPassword}
+        onChange={setNewPassword}
+        autoComplete="new-password"
+        minLength={8}
+        required
+      />
 
-      <label className="field">
-        <span>Confirm new password</span>
-        <input
-          type="password"
-          value={confirmPassword}
-          onChange={(e) => setConfirmPassword(e.target.value)}
-          autoComplete="new-password"
-          minLength={8}
-          required
-        />
-      </label>
+      <PasswordField
+        label="Confirm new password"
+        value={confirmPassword}
+        onChange={setConfirmPassword}
+        autoComplete="new-password"
+        minLength={8}
+        required
+      />
 
       {error && (
         <div className="status down">

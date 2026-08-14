@@ -10,6 +10,7 @@ import { useConfirm } from '../components/useConfirm';
 import { useToast } from '../components/useToast';
 import { EmptyState } from '../components/EmptyState';
 import { TableSkeleton } from '../components/Skeleton';
+import { edvanceLoginAlias, sharePasswordResetViaWhatsApp } from '../utils/whatsapp';
 
 export function UsersListPage() {
   const { state, hasPermission } = useAuth();
@@ -23,7 +24,9 @@ export function UsersListPage() {
   const [error, setError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [resettingId, setResettingId] = useState<number | null>(null);
-  const [resetResult, setResetResult] = useState<{ email: string; temporaryPassword: string } | null>(null);
+  const [resetResult, setResetResult] = useState<
+    { name: string; email: string; edvanceId: string; temporaryPassword: string } | null
+  >(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -74,7 +77,7 @@ export function UsersListPage() {
     setResettingId(user.id);
     try {
       const { temporaryPassword } = await resetUserPassword(user.id);
-      setResetResult({ email: user.email, temporaryPassword });
+      setResetResult({ name: user.name, email: user.email, edvanceId: user.edvanceId, temporaryPassword });
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Failed to reset password');
     } finally {
@@ -109,24 +112,6 @@ export function UsersListPage() {
         <div className="status down">
           <strong>Error</strong>
           <p>{error}</p>
-        </div>
-      )}
-
-      {resetResult && (
-        <div className="card">
-          <p>
-            Password reset for <strong>{resetResult.email}</strong>. Copy this now — it can't be
-            shown again after you leave this page.
-          </p>
-          <label className="field">
-            <span>Temporary password</span>
-            <input value={resetResult.temporaryPassword} readOnly onFocus={(e) => e.target.select()} />
-          </label>
-          <div className="form-actions">
-            <button type="button" className="secondary" onClick={() => setResetResult(null)}>
-              Dismiss
-            </button>
-          </div>
         </div>
       )}
 
@@ -190,6 +175,40 @@ export function UsersListPage() {
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {resetResult && (
+        <div className="modal-backdrop" onClick={() => setResetResult(null)}>
+          <div className="modal-card" role="alertdialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
+            <h3>Password reset</h3>
+            <p>
+              New temporary password for <strong>{resetResult.name}</strong> ({resetResult.email}). Copy this
+              now — it can't be shown again after you leave this page.
+            </p>
+            <label className="field">
+              <span>Temporary password</span>
+              <input value={resetResult.temporaryPassword} readOnly onFocus={(e) => e.target.select()} />
+            </label>
+            <div className="modal-actions">
+              <button
+                type="button"
+                className="secondary"
+                onClick={() =>
+                  sharePasswordResetViaWhatsApp({
+                    name: resetResult.name,
+                    loginId: edvanceLoginAlias(resetResult.edvanceId),
+                    password: resetResult.temporaryPassword,
+                  })
+                }
+              >
+                Share via WhatsApp
+              </button>
+              <button type="button" onClick={() => setResetResult(null)} autoFocus>
+                Done
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </>

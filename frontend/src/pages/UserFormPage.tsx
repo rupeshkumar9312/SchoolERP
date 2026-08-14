@@ -4,6 +4,7 @@ import { ApiError } from '../api/client';
 import type { Role } from '../api/roles';
 import { listRoles } from '../api/roles';
 import { createUser, getUser, updateUser } from '../api/users';
+import { shareCredentialsViaWhatsApp } from '../utils/whatsapp';
 
 export function UserFormPage() {
   const { id } = useParams();
@@ -99,6 +100,19 @@ export function UserFormPage() {
             />
           </label>
           <div className="form-actions">
+            <button
+              type="button"
+              className="secondary"
+              onClick={() =>
+                shareCredentialsViaWhatsApp({
+                  name,
+                  loginId: createdLogin.alias,
+                  password: createdLogin.temporaryPassword,
+                })
+              }
+            >
+              Share via WhatsApp
+            </button>
             <button type="button" onClick={() => navigate('/users')}>
               Done
             </button>
