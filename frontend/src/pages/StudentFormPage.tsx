@@ -30,7 +30,7 @@ export function StudentFormPage() {
   const [loading, setLoading] = useState(isEdit);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [createdLogin, setCreatedLogin] = useState<{ email: string; temporaryPassword: string } | null>(null);
+  const [createdLogin, setCreatedLogin] = useState<{ email: string; alias: string; temporaryPassword: string } | null>(null);
 
   useEffect(() => {
     void academic.listAcademicYears().then(setYears);
@@ -133,6 +133,10 @@ export function StudentFormPage() {
           <label className="field">
             <span>Login email</span>
             <input value={createdLogin.email} readOnly onFocus={(e) => e.target.select()} />
+          </label>
+          <label className="field">
+            <span>Short login ID (use this to sign in instead)</span>
+            <input value={createdLogin.alias} readOnly onFocus={(e) => e.target.select()} />
           </label>
           <label className="field">
             <span>Temporary password</span>

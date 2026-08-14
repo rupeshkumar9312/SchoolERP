@@ -8,6 +8,7 @@ import { Prisma } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import { AuditLogService } from '../audit/audit-log.service';
 import { STUDENT_ROLE } from '../auth/roles.constants';
+import { edvanceLoginAlias, nextEdvanceId } from '../common/generate-edvance-id';
 import { generateTempPassword } from '../common/generate-temp-password';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateStudentDto } from './dto/create-student.dto';
@@ -16,9 +17,9 @@ import { UpdateStudentDto } from './dto/update-student.dto';
 
 const PASSWORD_BCRYPT_ROUNDS = 10;
 /** Synthetic login domain — students have no real email on file, only a
- * guardian's, so the login address is derived from the (unique) admission
- * number rather than asking an admin to invent one at admission time. */
-const STUDENT_LOGIN_EMAIL_DOMAIN = 'student.schoolerp.local';
+ * guardian's, so the login address is derived from the generated Edvance ID
+ * rather than asking an admin to invent one at admission time. */
+const STUDENT_LOGIN_EMAIL_DOMAIN = 'student.edvance.edu';
 
 export interface StudentView {
   id: number;
@@ -36,15 +37,20 @@ export interface StudentView {
   admissionDate: Date;
   createdAt: Date;
   hasLogin: boolean;
+  /** null when hasLogin is false (a student admitted with no portal login). */
+  edvanceId: string | null;
 }
 
 /** Only returned once, from create() — the plaintext password is never stored
- * or retrievable again, so an admin must copy/share it immediately. */
+ * or retrievable again, so an admin must copy/share it immediately.
+ * `alias` is the short form of `email` (e.g. 'stu000123') — both work at login. */
 export interface StudentCreateResult extends StudentView {
-  login: { email: string; temporaryPassword: string };
+  login: { email: string; alias: string; temporaryPassword: string };
 }
 
-type StudentWithRefs = Prisma.StudentGetPayload<{ include: { class: true; section: true } }>;
+type StudentWithRefs = Prisma.StudentGetPayload<{
+  include: { class: true; section: true; user: true };
+}>;
 
 @Injectable()
 export class StudentsService {
@@ -67,7 +73,7 @@ export class StudentsService {
             }
           : {}),
       },
-      include: { class: true, section: true },
+      include: { class: true, section: true, user: true },
       orderBy: { name: 'asc' },
     });
     return students.map((s) => this.toView(s));
@@ -76,7 +82,7 @@ export class StudentsService {
   async findOne(id: number): Promise<StudentView> {
     const student = await this.prisma.student.findUnique({
       where: { id },
-      include: { class: true, section: true },
+      include: { class: true, section: true, user: true },
     });
     if (!student) throw new NotFoundException('Student not found');
     return this.toView(student);
@@ -93,7 +99,6 @@ export class StudentsService {
     const role = await this.prisma.role.findUnique({ where: { name: STUDENT_ROLE } });
     if (!role) throw new BadRequestException('STUDENT role is not seeded');
 
-    const loginEmail = `${dto.admissionNo.toLowerCase()}@${STUDENT_LOGIN_EMAIL_DOMAIN}`;
     const temporaryPassword = generateTempPassword();
     const passwordHash = await bcrypt.hash(temporaryPassword, PASSWORD_BCRYPT_ROUNDS);
 
@@ -104,11 +109,13 @@ export class StudentsService {
       // connect }` for every field once one relation is nested, which would
       // mean rewriting classId/sectionId too. A transaction keeps the same
       // atomicity with the plain scalar-FK style used everywhere else here.
-      const student = await this.prisma.$transaction(async (tx) => {
+      const { student, loginEmail } = await this.prisma.$transaction(async (tx) => {
+        const edvanceId = await nextEdvanceId(tx, 'STU');
+        const loginEmail = `${edvanceId.toLowerCase()}@${STUDENT_LOGIN_EMAIL_DOMAIN}`;
         const user = await tx.user.create({
-          data: { name: dto.name, email: loginEmail, passwordHash, roleId: role.id },
+          data: { name: dto.name, email: loginEmail, edvanceId, passwordHash, roleId: role.id },
         });
-        return tx.student.create({
+        const student = await tx.student.create({
           data: {
             admissionNo: dto.admissionNo,
             name: dto.name,
@@ -123,8 +130,9 @@ export class StudentsService {
             admissionDate: dto.admissionDate ? new Date(dto.admissionDate) : undefined,
             userId: user.id,
           },
-          include: { class: true, section: true },
+          include: { class: true, section: true, user: true },
         });
+        return { student, loginEmail };
       });
       await this.audit.record({
         entityType: 'Student',
@@ -133,7 +141,14 @@ export class StudentsService {
         userId: actorId,
         newValues: student,
       });
-      return { ...this.toView(student), login: { email: loginEmail, temporaryPassword } };
+      return {
+        ...this.toView(student),
+        login: {
+          email: loginEmail,
+          alias: edvanceLoginAlias(student.user!.edvanceId),
+          temporaryPassword,
+        },
+      };
     } catch (error) {
       throw this.mapError(error, 'A student with this admission number already exists');
     }
@@ -168,7 +183,7 @@ export class StudentsService {
           admissionDate: dto.admissionDate ? new Date(dto.admissionDate) : undefined,
           isActive: dto.isActive,
         },
-        include: { class: true, section: true },
+        include: { class: true, section: true, user: true },
       });
       await this.audit.record({
         entityType: 'Student',
@@ -235,7 +250,7 @@ export class StudentsService {
       where: {
         OR: [...scopes.values()].map((a) => ({ classId: a.classId, sectionId: a.sectionId })),
       },
-      include: { class: true, section: true },
+      include: { class: true, section: true, user: true },
       orderBy: { name: 'asc' },
     });
     return students.map((s) => this.toView(s));
@@ -269,6 +284,7 @@ export class StudentsService {
       admissionDate: student.admissionDate,
       createdAt: student.createdAt,
       hasLogin: student.userId !== null,
+      edvanceId: student.user?.edvanceId ?? null,
     };
   }
 

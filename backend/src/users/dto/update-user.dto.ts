@@ -1,15 +1,13 @@
 import { Type } from 'class-transformer';
-import { IsBoolean, IsEmail, IsInt, IsOptional, IsString, MinLength } from 'class-validator';
+import { IsBoolean, IsInt, IsOptional, IsString, MinLength } from 'class-validator';
 
+/** email/edvanceId are immutable once generated at create time — neither is
+ * exposed here, matching CreateStudentDto's existing convention. */
 export class UpdateUserDto {
   @IsOptional()
   @IsString()
   @MinLength(1)
   name?: string;
-
-  @IsOptional()
-  @IsEmail()
-  email?: string;
 
   @IsOptional()
   @IsString()

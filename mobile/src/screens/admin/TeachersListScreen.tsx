@@ -91,7 +91,7 @@ export function TeachersListScreen({ navigation }: Props): React.JSX.Element {
             <Text style={styles.name}>{t.name}</Text>
             <Badge label={t.isActive ? 'Active' : 'Inactive'} tone={t.isActive ? 'success' : 'muted'} />
           </View>
-          <DataRowText label="Email" value={t.email} />
+          <DataRowText label="Login ID" value={t.email} />
           <DataRowText label="Phone" value={t.phone ?? '—'} />
           <DataRowText label="Qualification" value={t.qualification ?? '—'} />
           <DataRowText label="Joined" value={formatDate(t.joiningDate)} />

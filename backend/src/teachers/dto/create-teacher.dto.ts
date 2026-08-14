@@ -1,20 +1,16 @@
-import { IsDateString, IsEmail, IsOptional, IsString, MinLength } from 'class-validator';
+import { IsDateString, IsOptional, IsString, MinLength } from 'class-validator';
 
+/** No email/password here — both are auto-generated (see TeachersService.create()):
+ * email is `{edvanceId}@teacher.edvance.edu`, password via
+ * generateTempPassword(). Returned once in the create response's `login` field. */
 export class CreateTeacherDto {
   @IsString()
   @MinLength(1)
   name!: string;
 
-  @IsEmail()
-  email!: string;
-
   @IsOptional()
   @IsString()
   phone?: string;
-
-  @IsString()
-  @MinLength(8, { message: 'password must be at least 8 characters' })
-  password!: string;
 
   @IsOptional()
   @IsString()

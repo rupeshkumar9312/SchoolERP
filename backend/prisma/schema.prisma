@@ -46,6 +46,12 @@ model RolePermission {
 model User {
   id                      Int                 @id @default(autoincrement())
   email                   String              @unique
+  /// Auto-generated, immutable identity code: 'EDV-ADM-000123' /
+  /// 'EDV-TCH-000123' / 'EDV-STU-000123'. For TEACHER/STUDENT this is also
+  /// the lowercased local part of `email`; for admin-tier roles `email` is
+  /// instead derived from `name`, so the two are independent there. Never
+  /// editable after creation — no update DTO exposes it.
+  edvanceId               String              @unique
   passwordHash            String
   name                    String
   phone                   String?
@@ -71,6 +77,18 @@ model User {
   pushTokens              PushToken[]
 
   @@map("users")
+}
+
+/// One row per Edvance-ID prefix ('ADM' | 'TCH' | 'STU'). lastValue is
+/// incremented transactionally alongside the User create that consumes it —
+/// the UPDATE takes a row lock, so concurrent creates never collide.
+/// See backend/src/common/generate-edvance-id.ts.
+model IdSequence {
+  prefix    String   @id
+  lastValue Int      @default(0)
+  updatedAt DateTime @updatedAt
+
+  @@map("id_sequences")
 }
 
 /// One row per device a user is logged into. `token` is unique (not

@@ -48,7 +48,7 @@ export function StudentFormScreen({ route, navigation }: Props): React.JSX.Eleme
   const [loading, setLoading] = useState(isEdit);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [createdLogin, setCreatedLogin] = useState<{ email: string; temporaryPassword: string } | null>(null);
+  const [createdLogin, setCreatedLogin] = useState<{ email: string; alias: string; temporaryPassword: string } | null>(null);
 
   useEffect(() => {
     void academic.listAcademicYears().then(setYears);
@@ -142,6 +142,10 @@ export function StudentFormScreen({ route, navigation }: Props): React.JSX.Eleme
           <View>
             <Text style={styles.label}>Login email</Text>
             <TextInput style={styles.input} value={createdLogin.email} editable={false} selectTextOnFocus />
+          </View>
+          <View>
+            <Text style={styles.label}>Short login ID (use this to sign in instead)</Text>
+            <TextInput style={styles.input} value={createdLogin.alias} editable={false} selectTextOnFocus />
           </View>
           <View>
             <Text style={styles.label}>Temporary password</Text>

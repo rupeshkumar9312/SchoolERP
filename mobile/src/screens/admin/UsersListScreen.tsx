@@ -147,7 +147,7 @@ export function UsersListScreen({ navigation }: Props): React.JSX.Element {
             <Text style={styles.name}>{u.name}</Text>
             <Badge label={u.isActive ? 'Active' : 'Inactive'} tone={u.isActive ? 'success' : 'muted'} />
           </View>
-          <DataRowText label="Email" value={u.email} />
+          <DataRowText label="Login ID" value={u.email} />
           <DataRowText label="Phone" value={u.phone ?? '—'} />
           <DataRow label="Role">
             <Badge label={u.role.name} tone="primary" />

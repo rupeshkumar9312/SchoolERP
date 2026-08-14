@@ -8,6 +8,8 @@ import { Prisma } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import { AuditLogService } from '../audit/audit-log.service';
 import { TEACHER_ROLE } from '../auth/roles.constants';
+import { edvanceLoginAlias, nextEdvanceId } from '../common/generate-edvance-id';
+import { generateTempPassword } from '../common/generate-temp-password';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateAssignmentDto } from './dto/create-assignment.dto';
 import { CreateTeacherDto } from './dto/create-teacher.dto';
@@ -15,17 +17,25 @@ import { SetClassTeacherDto } from './dto/set-class-teacher.dto';
 import { UpdateTeacherDto } from './dto/update-teacher.dto';
 
 const PASSWORD_BCRYPT_ROUNDS = 10;
+const TEACHER_LOGIN_EMAIL_DOMAIN = 'teacher.edvance.edu';
 
 export interface TeacherView {
   id: number;
   userId: number;
   name: string;
   email: string;
+  edvanceId: string;
   phone: string | null;
   isActive: boolean;
   qualification: string | null;
   joiningDate: Date;
   createdAt: Date;
+}
+
+export interface TeacherCreateResult extends TeacherView {
+  /** Shown once, in the create response only — never retrievable again.
+   * `alias` is the short form of `email` (e.g. 'tch000123') — both work at login. */
+  login: { email: string; alias: string; temporaryPassword: string };
 }
 
 export interface AssignmentView {
@@ -73,27 +83,33 @@ export class TeachersService {
     return this.toView(teacher);
   }
 
-  async create(dto: CreateTeacherDto, actorId?: number): Promise<TeacherView> {
+  async create(dto: CreateTeacherDto, actorId?: number): Promise<TeacherCreateResult> {
     const role = await this.prisma.role.findUnique({ where: { name: TEACHER_ROLE } });
     if (!role) throw new BadRequestException('TEACHER role is not seeded');
 
-    const passwordHash = await bcrypt.hash(dto.password, PASSWORD_BCRYPT_ROUNDS);
+    const temporaryPassword = generateTempPassword();
+    const passwordHash = await bcrypt.hash(temporaryPassword, PASSWORD_BCRYPT_ROUNDS);
     try {
-      const teacher = await this.prisma.teacher.create({
-        data: {
-          qualification: dto.qualification,
-          joiningDate: new Date(dto.joiningDate),
-          user: {
-            create: {
-              name: dto.name,
-              email: dto.email,
-              phone: dto.phone,
-              passwordHash,
-              roleId: role.id,
+      const teacher = await this.prisma.$transaction(async (tx) => {
+        const edvanceId = await nextEdvanceId(tx, 'TCH');
+        const email = `${edvanceId.toLowerCase()}@${TEACHER_LOGIN_EMAIL_DOMAIN}`;
+        return tx.teacher.create({
+          data: {
+            qualification: dto.qualification,
+            joiningDate: new Date(dto.joiningDate),
+            user: {
+              create: {
+                name: dto.name,
+                email,
+                edvanceId,
+                phone: dto.phone,
+                passwordHash,
+                roleId: role.id,
+              },
             },
           },
-        },
-        include: { user: true },
+          include: { user: true },
+        });
       });
       await this.audit.record({
         entityType: 'Teacher',
@@ -102,9 +118,16 @@ export class TeachersService {
         userId: actorId,
         newValues: teacher,
       });
-      return this.toView(teacher);
+      return {
+        ...this.toView(teacher),
+        login: {
+          email: teacher.user.email,
+          alias: edvanceLoginAlias(teacher.user.edvanceId),
+          temporaryPassword,
+        },
+      };
     } catch (error) {
-      throw this.mapError(error, 'A user with this email already exists');
+      throw this.mapError(error, 'A teacher login could not be created — please retry');
     }
   }
 
@@ -124,7 +147,6 @@ export class TeachersService {
           user: {
             update: {
               name: dto.name,
-              email: dto.email,
               phone: dto.phone,
               isActive: dto.isActive,
             },
@@ -142,7 +164,7 @@ export class TeachersService {
       });
       return this.toView(teacher);
     } catch (error) {
-      throw this.mapError(error, 'A user with this email already exists');
+      throw this.mapError(error, 'Could not update this teacher');
     }
   }
 
@@ -309,6 +331,7 @@ export class TeachersService {
       userId: teacher.userId,
       name: teacher.user.name,
       email: teacher.user.email,
+      edvanceId: teacher.user.edvanceId,
       phone: teacher.user.phone,
       isActive: teacher.user.isActive,
       qualification: teacher.qualification,

@@ -140,7 +140,7 @@ export function UsersListPage() {
             <thead>
               <tr>
                 <th>Name</th>
-                <th>Email</th>
+                <th>Login ID</th>
                 <th>Phone</th>
                 <th>Role</th>
                 <th>Status</th>
@@ -151,7 +151,7 @@ export function UsersListPage() {
               {users.map((user) => (
                 <tr key={user.id}>
                   <td data-label="Name">{user.name}</td>
-                  <td data-label="Email">{user.email}</td>
+                  <td data-label="Login ID">{user.email}</td>
                   <td data-label="Phone">{user.phone ?? '—'}</td>
                   <td data-label="Role">
                     <span className="role-chip">{user.role.name}</span>

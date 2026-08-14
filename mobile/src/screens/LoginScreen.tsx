@@ -51,14 +51,13 @@ export function LoginScreen(): React.JSX.Element {
         <Card style={styles.card}>
           <Text style={styles.heading}>Sign in</Text>
           <View>
-            <Text style={styles.label}>Email</Text>
+            <Text style={styles.label}>Email or login ID</Text>
             <TextInput
               style={styles.input}
               value={email}
               onChangeText={setEmail}
               autoCapitalize="none"
-              keyboardType="email-address"
-              placeholder="you@schoolerp.dev"
+              placeholder="Login ID or email"
               placeholderTextColor={colors.textMuted}
             />
           </View>

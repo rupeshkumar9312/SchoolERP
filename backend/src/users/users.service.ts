@@ -10,6 +10,7 @@ import * as bcrypt from 'bcrypt';
 import { AuditLogService } from '../audit/audit-log.service';
 import { AuthenticatedUser } from '../auth/auth.types';
 import { SUPER_ADMIN_ROLE } from '../auth/roles.constants';
+import { edvanceLoginAlias, nextEdvanceId } from '../common/generate-edvance-id';
 import { generateTempPassword } from '../common/generate-temp-password';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateUserDto } from './dto/create-user.dto';
@@ -17,15 +18,23 @@ import { ListUsersQueryDto } from './dto/list-users.query.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 
 const PASSWORD_BCRYPT_ROUNDS = 10;
+const ADMIN_LOGIN_EMAIL_DOMAIN = 'admin.edvance.edu';
 
 export interface UserView {
   id: number;
   email: string;
+  edvanceId: string;
   name: string;
   phone: string | null;
   isActive: boolean;
   role: { id: number; name: string };
   createdAt: Date;
+}
+
+export interface UserCreateResult extends UserView {
+  /** Shown once, in the create response only — never retrievable again.
+   * `alias` is the short form of `email` (e.g. 'adm001') — both work at login. */
+  login: { email: string; alias: string; temporaryPassword: string };
 }
 
 @Injectable()
@@ -57,22 +66,28 @@ export class UsersService {
     return this.toView(user);
   }
 
-  async create(dto: CreateUserDto, actor: AuthenticatedUser): Promise<UserView> {
+  async create(dto: CreateUserDto, actor: AuthenticatedUser): Promise<UserCreateResult> {
     const role = await this.prisma.role.findUnique({ where: { id: dto.roleId } });
     if (!role) throw new BadRequestException('Unknown roleId');
     this.assertMayAssignRole(role.name, actor);
 
-    const passwordHash = await bcrypt.hash(dto.password, PASSWORD_BCRYPT_ROUNDS);
+    const temporaryPassword = generateTempPassword();
+    const passwordHash = await bcrypt.hash(temporaryPassword, PASSWORD_BCRYPT_ROUNDS);
     try {
-      const user = await this.prisma.user.create({
-        data: {
-          name: dto.name,
-          email: dto.email,
-          phone: dto.phone,
-          passwordHash,
-          roleId: dto.roleId,
-        },
-        include: { role: true },
+      const user = await this.prisma.$transaction(async (tx) => {
+        const edvanceId = await nextEdvanceId(tx, 'ADM');
+        const email = `${edvanceId.toLowerCase()}@${ADMIN_LOGIN_EMAIL_DOMAIN}`;
+        return tx.user.create({
+          data: {
+            name: dto.name,
+            email,
+            edvanceId,
+            phone: dto.phone,
+            passwordHash,
+            roleId: dto.roleId,
+          },
+          include: { role: true },
+        });
       });
       await this.audit.record({
         entityType: 'User',
@@ -81,7 +96,14 @@ export class UsersService {
         userId: actor.id,
         newValues: this.redact(user),
       });
-      return this.toView(user);
+      return {
+        ...this.toView(user),
+        login: {
+          email: user.email,
+          alias: edvanceLoginAlias(user.edvanceId),
+          temporaryPassword,
+        },
+      };
     } catch (error) {
       throw this.mapWriteError(error);
     }
@@ -103,7 +125,6 @@ export class UsersService {
         where: { id },
         data: {
           name: dto.name,
-          email: dto.email,
           phone: dto.phone,
           roleId: dto.roleId,
           isActive: dto.isActive,
@@ -195,14 +216,27 @@ export class UsersService {
 
   private mapWriteError(error: unknown): Error {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
-      return new ConflictException('A user with this email already exists');
+      const target = this.conflictTarget(error);
+      if (target.includes('edvanceId')) {
+        return new ConflictException('Edvance ID collision — please retry');
+      }
+      if (target.includes('email')) {
+        return new ConflictException('A login with this generated email already exists — please retry');
+      }
+      return new ConflictException('A user with this value already exists');
     }
     return error as Error;
+  }
+
+  private conflictTarget(error: Prisma.PrismaClientKnownRequestError): string {
+    const target = error.meta?.target;
+    return Array.isArray(target) ? target.join(',') : String(target ?? '');
   }
 
   private toView(user: {
     id: number;
     email: string;
+    edvanceId: string;
     name: string;
     phone: string | null;
     isActive: boolean;
@@ -212,6 +246,7 @@ export class UsersService {
     return {
       id: user.id,
       email: user.email,
+      edvanceId: user.edvanceId,
       name: user.name,
       phone: user.phone,
       isActive: user.isActive,
