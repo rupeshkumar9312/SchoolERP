@@ -17,6 +17,13 @@ interface ExpoPushMessage {
   sound: 'default';
 }
 
+interface ExpoPushTicket {
+  status: 'ok' | 'error';
+  id?: string;
+  message?: string;
+  details?: { error?: string };
+}
+
 const EXPO_PUSH_API_URL = 'https://exp.host/--/api/v2/push/send';
 const EXPO_PUSH_CHUNK_SIZE = 100;
 
@@ -96,9 +103,24 @@ export class PushNotificationService {
           },
           body: JSON.stringify(batch),
         });
+
         if (!res.ok) {
           this.logger.error(`Expo push API responded with ${res.status}: ${await res.text()}`);
+          continue;
         }
+
+        // Expo returns 200 even when individual messages failed (bad
+        // credentials, unregistered device, etc.) — the failure only shows
+        // up per-entry in the body, which a bare `res.ok` check silently
+        // swallows. Surface it, keyed by which token it was for.
+        const body = (await res.json()) as { data?: ExpoPushTicket[] };
+        body.data?.forEach((ticket, i) => {
+          if (ticket.status === 'error') {
+            this.logger.error(
+              `Push to ${batch[i].to} failed: ${ticket.message ?? 'unknown error'} (${ticket.details?.error ?? 'no error code'})`,
+            );
+          }
+        });
       } catch (error) {
         this.logger.error('Failed to send a push notification batch', error instanceof Error ? error.stack : error);
       }
