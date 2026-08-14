@@ -10,3 +10,11 @@ export function navigateToAnnouncements(): void {
     navigationRef.navigate('Announcements' as never);
   }
 }
+
+/** New-assignment pushes only ever go to students, whose tab navigator names
+ * its assignments tab "Assignments" — same resolution pattern as above. */
+export function navigateToAssignments(): void {
+  if (navigationRef.isReady()) {
+    navigationRef.navigate('Assignments' as never);
+  }
+}
