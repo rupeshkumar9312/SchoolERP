@@ -85,6 +85,7 @@ export function AnnouncementFormScreen({ route, navigation }: Props): React.JSX.
                   key={audience}
                   onPress={() => toggleAudience(audience)}
                   rippleColor={colors.primaryTint}
+                  hitSlop={8}
                   style={[styles.audienceChip, active && styles.audienceChipActive]}
                 >
                   <Text style={[styles.audienceChipText, active && styles.audienceChipTextActive]}>
@@ -119,13 +120,19 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
   },
   multiline: { minHeight: 100, textAlignVertical: 'top' },
-  audienceRow: { flexDirection: 'row', gap: spacing.sm, flexWrap: 'wrap' },
+  // Explicit margins instead of `gap` — `gap` on a flexWrap row has shown up
+  // before as visually-correct-but-untappable on Android (the paint position
+  // updates but the native touch-hit rect doesn't always follow), while
+  // margin never has that class of bug.
+  audienceRow: { flexDirection: 'row', flexWrap: 'wrap', marginRight: -spacing.sm, marginBottom: -spacing.sm },
   audienceChip: {
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: radius.sm,
     paddingVertical: spacing.sm,
     paddingHorizontal: spacing.md,
+    marginRight: spacing.sm,
+    marginBottom: spacing.sm,
     backgroundColor: colors.surface,
     overflow: 'hidden',
   },

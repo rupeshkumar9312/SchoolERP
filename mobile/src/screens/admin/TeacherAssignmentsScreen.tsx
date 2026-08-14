@@ -271,6 +271,7 @@ export function TeacherAssignmentsScreen({ route, navigation }: Props): React.JS
                         key={s.id}
                         onPress={() => toggleSubject(s.id)}
                         rippleColor={colors.primaryTint}
+                        hitSlop={8}
                         style={[styles.subjectChip, active && styles.subjectChipActive]}
                       >
                         <Text style={[styles.subjectChipText, active && styles.subjectChipTextActive]}>{s.name}</Text>
@@ -311,13 +312,18 @@ const styles = StyleSheet.create({
   checkbox: { width: 20, height: 20, borderRadius: radius.sm, borderWidth: 1.5, borderColor: colors.border },
   checkboxChecked: { backgroundColor: colors.primary, borderColor: colors.primary },
   checkboxLabel: { flex: 1, fontSize: 13, fontFamily: fonts.body, color: colors.text },
-  subjectChips: { flexDirection: 'row', gap: spacing.sm, flexWrap: 'wrap' },
+  // Explicit margins instead of `gap` — see AnnouncementFormScreen's
+  // audienceRow for why (gap on a flexWrap row of Touchables has shown up
+  // as visually-correct-but-untappable on Android).
+  subjectChips: { flexDirection: 'row', flexWrap: 'wrap', marginRight: -spacing.sm, marginBottom: -spacing.sm },
   subjectChip: {
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: radius.sm,
     paddingVertical: spacing.sm,
     paddingHorizontal: spacing.md,
+    marginRight: spacing.sm,
+    marginBottom: spacing.sm,
     backgroundColor: colors.surface,
     overflow: 'hidden',
   },
