@@ -13,6 +13,12 @@ backend/uploads/
 .env.*
 !.env.example
 
+# Firebase Admin SDK service account keys (Firebase's default download name) —
+# a real secret (Firebase Admin access), unlike google-services.json which
+# is a client config file and stays tracked so EAS Build's git-aware archive
+# step actually includes it.
+*firebase-adminsdk*.json
+
 *.log
 npm-debug.log*
 .pnpm-debug.log*

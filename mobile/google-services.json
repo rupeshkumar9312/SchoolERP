@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "908427844560",
+    "project_id": "edvance-app-48ad9",
+    "storage_bucket": "edvance-app-48ad9.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:908427844560:android:77a08e640ac05cf24b37d5",
+        "android_client_info": {
+          "package_name": "dev.schoolerp.edvance"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBNpPOb2InCp3FLDFKGuWMFsNQLg1hSRVo"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

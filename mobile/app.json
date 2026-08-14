@@ -8,6 +8,7 @@
     "userInterfaceStyle": "light",
     "android": {
       "package": "dev.schoolerp.edvance",
+      "googleServicesFile": "./google-services.json",
       "softwareKeyboardLayoutMode": "resize",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
@@ -29,7 +30,14 @@
           "backgroundColor": "#f6f7fb"
         }
       ],
-      "@react-native-community/datetimepicker"
+      "@react-native-community/datetimepicker",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/notification-icon.png",
+          "color": "#004c97"
+        }
+      ]
     ],
     "extra": {
       "eas": {

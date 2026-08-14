@@ -13,6 +13,8 @@ import {
 } from '@expo-google-fonts/inter';
 import { Lexend_600SemiBold, Lexend_700Bold, Lexend_800ExtraBold } from '@expo-google-fonts/lexend';
 import { AuthProvider } from './src/auth/AuthContext';
+import { navigationRef } from './src/notifications/notificationNavigation';
+import { useNotificationResponseHandler } from './src/notifications/useNotificationResponseHandler';
 import { RootNavigator } from './src/navigation/RootNavigator';
 
 // Keeps the native splash (EDVANCE logo) on screen through font loading
@@ -35,12 +37,14 @@ export default function App() {
     if (fontsLoaded) void SplashScreen.hideAsync();
   }, [fontsLoaded]);
 
+  useNotificationResponseHandler();
+
   if (!fontsLoaded) return null;
 
   return (
     <SafeAreaProvider>
       <AuthProvider>
-        <NavigationContainer>
+        <NavigationContainer ref={navigationRef}>
           <RootNavigator />
           <StatusBar style="dark" />
         </NavigationContainer>
