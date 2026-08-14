@@ -1,6 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { AudienceRole, Prisma } from '@prisma/client';
-import { Expo, ExpoPushMessage } from 'expo-server-sdk';
 import { STUDENT_ROLE, TEACHER_ROLE } from '../auth/roles.constants';
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -10,10 +9,35 @@ export interface PushNotificationPayload {
   data?: Record<string, unknown>;
 }
 
+interface ExpoPushMessage {
+  to: string;
+  title: string;
+  body: string;
+  data?: Record<string, unknown>;
+  sound: 'default';
+}
+
+const EXPO_PUSH_API_URL = 'https://exp.host/--/api/v2/push/send';
+const EXPO_PUSH_CHUNK_SIZE = 100;
+
+function isExpoPushToken(token: string): boolean {
+  return token.startsWith('ExponentPushToken[') || token.startsWith('ExpoPushToken[');
+}
+
+function chunk<T>(items: T[], size: number): T[][] {
+  const chunks: T[][] = [];
+  for (let i = 0; i < items.length; i += size) chunks.push(items.slice(i, i + size));
+  return chunks;
+}
+
+/** Talks to Expo's push API directly over plain HTTPS rather than via the
+ * `expo-server-sdk` package — that package ships ESM-only, which breaks a
+ * CommonJS-compiled Nest app at boot (crashes every route, not just push
+ * ones) the moment anything imports it. The wire protocol itself is simple
+ * enough that the SDK isn't worth that risk. */
 @Injectable()
 export class PushNotificationService {
   private readonly logger = new Logger(PushNotificationService.name);
-  private readonly expo = new Expo();
 
   constructor(private readonly prisma: PrismaService) {}
 
@@ -50,7 +74,7 @@ export class PushNotificationService {
   }
 
   private async sendToTokens(tokens: string[], payload: PushNotificationPayload): Promise<void> {
-    const validTokens = [...new Set(tokens)].filter((token) => Expo.isExpoPushToken(token));
+    const validTokens = [...new Set(tokens)].filter(isExpoPushToken);
     if (validTokens.length === 0) return;
 
     const messages: ExpoPushMessage[] = validTokens.map((to) => ({
@@ -61,11 +85,22 @@ export class PushNotificationService {
       sound: 'default',
     }));
 
-    for (const chunk of this.expo.chunkPushNotifications(messages)) {
+    for (const batch of chunk(messages, EXPO_PUSH_CHUNK_SIZE)) {
       try {
-        await this.expo.sendPushNotificationsAsync(chunk);
+        const res = await fetch(EXPO_PUSH_API_URL, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Accept: 'application/json',
+            'Accept-Encoding': 'gzip, deflate',
+          },
+          body: JSON.stringify(batch),
+        });
+        if (!res.ok) {
+          this.logger.error(`Expo push API responded with ${res.status}: ${await res.text()}`);
+        }
       } catch (error) {
-        this.logger.error('Failed to send a push notification chunk', error instanceof Error ? error.stack : error);
+        this.logger.error('Failed to send a push notification batch', error instanceof Error ? error.stack : error);
       }
     }
   }

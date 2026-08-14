@@ -142,9 +142,19 @@ function randomStatus(presentWeight: number): AttendanceStatus {
 }
 
 async function main() {
-  const year = await prisma.academicYear.findFirst({ where: { isCurrent: true } });
+  let year = await prisma.academicYear.findFirst({ where: { isCurrent: true } });
   if (!year) {
-    throw new Error('No academic year is marked current — set one first (Academic Setup) before seeding demo data.');
+    // Indian school year: April–March. `now` in Jan–Mar belongs to the year
+    // that started the previous April.
+    const now = new Date();
+    const startYear = now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1;
+    const name = `${startYear}-${String((startYear + 1) % 100).padStart(2, '0')}`;
+    year = await prisma.academicYear.upsert({
+      where: { name },
+      update: { isCurrent: true },
+      create: { name, isCurrent: true },
+    });
+    console.log(`No academic year was marked current — created and set "${name}" as current.`);
   }
   console.log(`Using current academic year: ${year.name}`);
 
