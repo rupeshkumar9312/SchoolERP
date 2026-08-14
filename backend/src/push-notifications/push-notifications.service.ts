@@ -80,6 +80,23 @@ export class PushNotificationService {
     await this.sendToTokens(tokens, payload);
   }
 
+  /** Narrower than notifyAudiences: only the students of one specific
+   * class+section (e.g. new homework), not every student in the school. Only
+   * students with their own portal login (userId set) have push tokens at all. */
+  async notifyClassSectionStudents(
+    classId: number,
+    sectionId: number,
+    payload: PushNotificationPayload,
+  ): Promise<void> {
+    const students = await this.prisma.student.findMany({
+      where: { classId, sectionId, isActive: true, userId: { not: null } },
+      select: { user: { select: { pushTokens: { select: { token: true } } } } },
+    });
+    const tokens = students.flatMap((s) => s.user?.pushTokens.map((t) => t.token) ?? []);
+
+    await this.sendToTokens(tokens, payload);
+  }
+
   private async sendToTokens(tokens: string[], payload: PushNotificationPayload): Promise<void> {
     const validTokens = [...new Set(tokens)].filter(isExpoPushToken);
     if (validTokens.length === 0) return;

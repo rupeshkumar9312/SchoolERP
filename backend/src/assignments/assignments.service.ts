@@ -5,6 +5,7 @@ import {
   BadRequestException,
   ForbiddenException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { Prisma, Teacher } from '@prisma/client';
@@ -12,6 +13,7 @@ import { AuditLogService } from '../audit/audit-log.service';
 import { AuthenticatedUser } from '../auth/auth.types';
 import { STUDENT_ROLE, TEACHER_ROLE } from '../auth/roles.constants';
 import { PrismaService } from '../prisma/prisma.service';
+import { PushNotificationService } from '../push-notifications/push-notifications.service';
 import { CreateAssignmentDto } from './dto/create-assignment.dto';
 import { ListAssignmentsQueryDto } from './dto/list-assignments.query.dto';
 import { SetSubmissionDto } from './dto/set-submission.dto';
@@ -89,9 +91,12 @@ const MAX_WEEKLY_OCCURRENCES = 52;
 
 @Injectable()
 export class AssignmentsService {
+  private readonly logger = new Logger(AssignmentsService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditLogService,
+    private readonly pushNotifications: PushNotificationService,
   ) {}
 
   /** Admin-tier roles see everything (optionally filtered); a TEACHER only ever
@@ -205,6 +210,20 @@ export class AssignmentsService {
           }),
         ),
       );
+
+      const first = rows[0];
+      try {
+        await this.pushNotifications.notifyClassSectionStudents(first.classId, first.sectionId, {
+          title: `New assignment: ${first.subject.name}`,
+          body:
+            rows.length > 1
+              ? `${first.teacher.user.name} posted "${first.title}" (repeats weekly)`
+              : `${first.teacher.user.name} posted "${first.title}"`,
+          data: { type: 'assignment', assignmentId: first.id },
+        });
+      } catch (error) {
+        this.logger.error('Failed to send assignment push notification', error instanceof Error ? error.stack : error);
+      }
 
       return this.toView(rows[0]);
     } catch (error) {
