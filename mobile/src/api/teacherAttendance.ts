@@ -15,7 +15,13 @@ export function listMyTeacherAttendance(): Promise<TeacherAttendanceRecord[]> {
   return apiGet<TeacherAttendanceRecord[]>('/attendance/teachers');
 }
 
+/** ADMIN-tier only (attendance.teacher.view) — every teacher's attendance for a date. */
+export function listTeacherAttendanceForDate(date: string): Promise<TeacherAttendanceRecord[]> {
+  return apiGet<TeacherAttendanceRecord[]>(`/attendance/teachers?date=${date}`);
+}
+
 export function markTeacherAttendance(payload: {
+  teacherId?: number;
   date: string;
   status: AttendanceStatus;
 }): Promise<TeacherAttendanceRecord> {

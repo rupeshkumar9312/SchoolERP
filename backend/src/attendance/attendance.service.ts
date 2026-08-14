@@ -9,6 +9,7 @@ import { AuditLogService } from '../audit/audit-log.service';
 import { AuthenticatedUser } from '../auth/auth.types';
 import { TEACHER_ROLE } from '../auth/roles.constants';
 import { PrismaService } from '../prisma/prisma.service';
+import { HistoryQueryDto } from './dto/history-query.dto';
 import { ListAttendanceQueryDto } from './dto/list-attendance.query.dto';
 import { MarkAttendanceDto } from './dto/mark-attendance.dto';
 import { UpdateAttendanceDto } from './dto/update-attendance.dto';
@@ -123,7 +124,11 @@ export class AttendanceService {
    * mirrors what StudentsService.findForTeacher already exposes via
    * /students/my-classes.
    */
-  async findHistoryForStudent(studentId: number, actor: AuthenticatedUser): Promise<AttendanceView[]> {
+  async findHistoryForStudent(
+    studentId: number,
+    actor: AuthenticatedUser,
+    range: HistoryQueryDto = {},
+  ): Promise<AttendanceView[]> {
     const student = await this.prisma.student.findUnique({ where: { id: studentId } });
     if (!student) throw new NotFoundException('Student not found');
 
@@ -131,8 +136,16 @@ export class AttendanceService {
       await this.assertCanViewStudent(actor.id, student.classId, student.sectionId);
     }
 
+    if (range.from && range.to && range.from > range.to) {
+      throw new BadRequestException('"from" must be on or before "to"');
+    }
+
+    const date: Prisma.DateTimeFilter = {};
+    if (range.from) date.gte = new Date(range.from);
+    if (range.to) date.lte = new Date(range.to);
+
     const rows = await this.prisma.studentAttendance.findMany({
-      where: { studentId },
+      where: { studentId, ...(range.from || range.to ? { date } : {}) },
       include: ATTENDANCE_INCLUDE,
       orderBy: { date: 'desc' },
     });
@@ -166,10 +179,21 @@ export class AttendanceService {
       await this.assertIsClassTeacher(actor.id, query.classId, query.sectionId);
     }
 
+    if (!query.date && query.from && query.to && query.from > query.to) {
+      throw new BadRequestException('"from" must be on or before "to"');
+    }
+
+    // `date` (exact-day) takes priority when present — the mark-attendance
+    // flows always pass it and never from/to. Otherwise fall back to an
+    // optionally-bounded range, same shape as the per-student history query.
+    const date: Prisma.DateTimeFilter | Date = query.date
+      ? new Date(query.date)
+      : { ...(query.from ? { gte: new Date(query.from) } : {}), ...(query.to ? { lte: new Date(query.to) } : {}) };
+
     const rows = await this.prisma.studentAttendance.findMany({
-      where: { classId: query.classId, sectionId: query.sectionId, date: new Date(query.date) },
+      where: { classId: query.classId, sectionId: query.sectionId, date },
       include: ATTENDANCE_INCLUDE,
-      orderBy: { student: { name: 'asc' } },
+      orderBy: [{ date: 'desc' }, { student: { name: 'asc' } }],
     });
     return rows.map((r) => this.toView(r));
   }

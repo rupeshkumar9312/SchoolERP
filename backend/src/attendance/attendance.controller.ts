@@ -15,6 +15,7 @@ import { RequirePermission } from '../auth/decorators/require-permission.decorat
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { PermissionGuard } from '../auth/guards/permission.guard';
 import { AttendanceService } from './attendance.service';
+import { HistoryQueryDto } from './dto/history-query.dto';
 import { ListAttendanceQueryDto } from './dto/list-attendance.query.dto';
 import { MarkAttendanceDto } from './dto/mark-attendance.dto';
 import { UpdateAttendanceDto } from './dto/update-attendance.dto';
@@ -41,9 +42,10 @@ export class AttendanceController {
   @RequirePermission('attendance.student.view')
   findHistoryForStudent(
     @Param('studentId', ParseIntPipe) studentId: number,
+    @Query() query: HistoryQueryDto,
     @CurrentUser() actor: AuthenticatedUser,
   ) {
-    return this.attendance.findHistoryForStudent(studentId, actor);
+    return this.attendance.findHistoryForStudent(studentId, actor, query);
   }
 
   @Post()

@@ -1,9 +1,10 @@
-import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { AudienceRole, Prisma } from '@prisma/client';
 import { AuditLogService } from '../audit/audit-log.service';
 import { AuthenticatedUser } from '../auth/auth.types';
 import { STUDENT_ROLE, TEACHER_ROLE } from '../auth/roles.constants';
 import { PrismaService } from '../prisma/prisma.service';
+import { PushNotificationService } from '../push-notifications/push-notifications.service';
 import { CreateAnnouncementDto } from './dto/create-announcement.dto';
 import { UpdateAnnouncementDto } from './dto/update-announcement.dto';
 
@@ -25,9 +26,12 @@ const ANNOUNCEMENT_INCLUDE = { createdBy: true, audiences: true } as const;
 
 @Injectable()
 export class AnnouncementsService {
+  private readonly logger = new Logger(AnnouncementsService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditLogService,
+    private readonly pushNotifications: PushNotificationService,
   ) {}
 
   /** Admin-tier roles see every announcement (they're the ones managing them,
@@ -65,6 +69,21 @@ export class AnnouncementsService {
       userId: actor.id,
       newValues: row,
     });
+
+    // Awaited (not fire-and-forget) — the production API runs on Vercel's
+    // serverless functions, which freeze immediately once the response is
+    // sent, so anything not awaited here risks never actually completing.
+    // A push failure must never fail the announcement itself, though.
+    try {
+      await this.pushNotifications.notifyAudiences(dto.audiences, {
+        title: row.title,
+        body: row.body,
+        data: { type: 'announcement', announcementId: row.id },
+      });
+    } catch (error) {
+      this.logger.error('Failed to send announcement push notifications', error instanceof Error ? error.stack : error);
+    }
+
     return this.toView(row);
   }
 

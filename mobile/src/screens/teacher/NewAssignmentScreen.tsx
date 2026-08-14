@@ -8,6 +8,7 @@ import { ApiError, PickedFile } from '../../api/client';
 import { listMyAssignments, TeacherAssignment } from '../../api/teachers';
 import { Button } from '../../components/Button';
 import { Card } from '../../components/Card';
+import { DateField } from '../../components/DateField';
 import { ErrorView } from '../../components/ErrorView';
 import { LoadingView } from '../../components/LoadingView';
 import { Screen } from '../../components/Screen';
@@ -127,27 +128,14 @@ export function NewAssignmentScreen({ navigation }: Props): React.JSX.Element {
           <TextInput style={styles.input} value={title} onChangeText={setTitle} placeholderTextColor={colors.textMuted} />
         </View>
 
-        <View>
-          <Text style={styles.label}>Due date (YYYY-MM-DD)</Text>
-          <TextInput
-            style={styles.input}
-            value={dueDate}
-            onChangeText={setDueDate}
-            placeholder="2026-08-20"
-            placeholderTextColor={colors.textMuted}
-          />
-        </View>
+        <DateField label="Due date" value={dueDate} onChange={setDueDate} />
 
-        <View>
-          <Text style={styles.label}>Repeat weekly until (optional, YYYY-MM-DD)</Text>
-          <TextInput
-            style={styles.input}
-            value={repeatWeeklyUntil}
-            onChangeText={setRepeatWeeklyUntil}
-            placeholder="2026-09-24"
-            placeholderTextColor={colors.textMuted}
-          />
-        </View>
+        <DateField
+          label="Repeat weekly until (optional)"
+          value={repeatWeeklyUntil}
+          onChange={setRepeatWeeklyUntil}
+          minimumDate={dueDate ? new Date(`${dueDate}T00:00:00`) : undefined}
+        />
 
         <View>
           <Text style={styles.label}>Description (optional)</Text>

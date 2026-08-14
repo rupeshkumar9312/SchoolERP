@@ -81,6 +81,15 @@ export function ClassesListScreen({ navigation }: Props): React.JSX.Element {
                 <Button label="Roster" variant="secondary" onPress={() => navigation.navigate('Roster', toSectionRef(a))} />
               </View>
             </View>
+            {a.isClassTeacher && (
+              <View style={styles.actionFull}>
+                <Button
+                  label="Attendance history"
+                  variant="secondary"
+                  onPress={() => navigation.navigate('ClassAttendanceHistory', toSectionRef(a))}
+                />
+              </View>
+            )}
           </Card>
         ))
       )}
@@ -97,4 +106,5 @@ const styles = StyleSheet.create({
   recordCard: { gap: 0, padding: spacing.md, borderRadius: radius.md, backgroundColor: colors.bg },
   actions: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.sm },
   actionHalf: { flex: 1 },
+  actionFull: { marginTop: spacing.sm },
 });

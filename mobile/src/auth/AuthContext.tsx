@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import * as authApi from '../api/auth';
 import { ApiError, setSessionExpiredHandler } from '../api/client';
+import { registerForPushNotifications, unregisterCurrentPushToken } from '../notifications/pushRegistration';
 import { clearTokens, loadStoredTokens, persistTokens } from './tokenStore';
 
 export type AuthStatus = 'loading' | 'authenticated' | 'unauthenticated';
@@ -13,6 +14,7 @@ interface AuthContextValue {
   logout: () => Promise<void>;
   changePassword: (payload: authApi.ChangePasswordPayload) => Promise<void>;
   clearError: () => void;
+  hasPermission: (permission: string) => boolean;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -43,6 +45,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }): React
         const me = await authApi.me();
         setUser(me);
         setStatus('authenticated');
+        void registerForPushNotifications();
       } catch {
         await clearTokens();
         setStatus('unauthenticated');
@@ -57,6 +60,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }): React
       await persistTokens({ accessToken, refreshToken });
       setUser(loggedInUser);
       setStatus('authenticated');
+      void registerForPushNotifications();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Login failed');
       throw err;
@@ -64,6 +68,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }): React
   };
 
   const logout = async () => {
+    // Must run before clearTokens() — unregistering needs a still-valid
+    // access token to authenticate the request.
+    await unregisterCurrentPushToken();
     try {
       await authApi.logout();
     } catch {
@@ -85,8 +92,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }): React
     }
   };
 
+  const hasPermission = (permission: string) => !!user?.permissions.includes(permission);
+
   const value = useMemo(
-    () => ({ status, user, error, login, logout, changePassword, clearError: () => setError(null) }),
+    () => ({ status, user, error, login, logout, changePassword, clearError: () => setError(null), hasPermission }),
     [status, user, error],
   );
 

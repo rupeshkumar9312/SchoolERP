@@ -1,6 +1,27 @@
 import type { AttendanceStatus } from './attendance';
 import { apiGet } from './client';
 
+interface AttendanceBreakdown {
+  present: number;
+  absent: number;
+  late: number;
+  leave: number;
+  totalMarked: number;
+  presentPercent: number | null;
+}
+
+export interface AdminSummary {
+  academicYear: { id: number; name: string } | null;
+  totals: { students: number; teachers: number; classes: number; sections: number };
+  studentAttendanceToday: AttendanceBreakdown & {
+    date: string;
+    totalStudents: number;
+    sectionsMarked: number;
+    totalSections: number;
+  };
+  teacherAttendanceToday: AttendanceBreakdown & { date: string; totalTeachers: number };
+}
+
 export interface TeacherClass {
   class: { id: number; name: string };
   section: { id: number; name: string };
@@ -35,6 +56,10 @@ export interface StudentSummary {
     subject: { id: number; name: string };
     dueDate: string;
   }>;
+}
+
+export function getAdminSummary(): Promise<AdminSummary> {
+  return apiGet<AdminSummary>('/dashboard/admin-summary');
 }
 
 export function getTeacherSummary(): Promise<TeacherSummary> {
