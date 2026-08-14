@@ -131,20 +131,23 @@ export class AssignmentsController {
 
   // No @RequirePermission — same reasoning as GET ':id' above; getAttachmentForDownload()
   // re-runs assertMayView() so a STUDENT can only download their own class's attachments.
+  // The file itself is proxied through, not redirected to — a Cloudinary
+  // signed URL in a 302 would leak into the client's network log/history,
+  // reintroducing the exact bypass-auth risk a static mount would have had.
   @Get(':id/attachment')
   async downloadAttachment(
     @Param('id', ParseIntPipe) id: number,
     @CurrentUser() user: AuthenticatedUser,
     @Res() res: Response,
   ) {
-    const {
-      path: filePath,
-      fileName,
-      mimeType,
-    } = await this.assignments.getAttachmentForDownload(id, user);
+    const { url, fileName, mimeType } = await this.assignments.getAttachmentForDownload(id, user);
+    const upstream = await fetch(url);
+    if (!upstream.ok || !upstream.body) {
+      throw new BadRequestException('Could not retrieve the attachment');
+    }
     res.setHeader('Content-Type', mimeType);
     res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(fileName)}"`);
-    res.sendFile(filePath);
+    res.send(Buffer.from(await upstream.arrayBuffer()));
   }
 
   @Get(':id/submissions')

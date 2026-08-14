@@ -208,8 +208,9 @@ model Assignment {
   /// creation time (no scheduler in this app) — this just links siblings so
   /// the UI can show "part of a weekly series" without a separate table.
   seriesId           String?
-  /// File on local disk under backend/uploads/assignments/ — path is never
-  /// exposed to the client, only attachmentFileName + a proxied download route.
+  /// Cloudinary public_id (folder schoolerp/assignments/, uploaded as
+  /// type: 'authenticated' — no public URL of its own). Never exposed to the
+  /// client; only attachmentFileName + a proxied, auth-gated download route.
   attachmentPath     String?
   attachmentFileName String?
   attachmentMimeType String?

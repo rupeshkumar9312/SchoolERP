@@ -1,6 +1,4 @@
 import { randomUUID } from 'crypto';
-import { promises as fs } from 'fs';
-import * as path from 'path';
 import {
   BadRequestException,
   ForbiddenException,
@@ -12,6 +10,7 @@ import { Prisma, Teacher } from '@prisma/client';
 import { AuditLogService } from '../audit/audit-log.service';
 import { AuthenticatedUser } from '../auth/auth.types';
 import { STUDENT_ROLE, TEACHER_ROLE } from '../auth/roles.constants';
+import { CloudinaryService } from '../cloudinary/cloudinary.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { PushNotificationService } from '../push-notifications/push-notifications.service';
 import { CreateAssignmentDto } from './dto/create-assignment.dto';
@@ -45,7 +44,7 @@ export interface SubmissionView {
 }
 
 export interface AttachmentForDownload {
-  path: string;
+  url: string;
   fileName: string;
   mimeType: string;
 }
@@ -75,7 +74,7 @@ const ASSIGNMENT_INCLUDE = {
   teacher: { include: { user: true } },
 } as const;
 
-const UPLOAD_ROOT = path.join(process.cwd(), 'uploads', 'assignments');
+const ATTACHMENT_FOLDER = 'schoolerp/assignments';
 const ALLOWED_ATTACHMENT_MIME_TYPES = new Set([
   'application/pdf',
   'application/msword',
@@ -97,6 +96,7 @@ export class AssignmentsService {
     private readonly prisma: PrismaService,
     private readonly audit: AuditLogService,
     private readonly pushNotifications: PushNotificationService,
+    private readonly cloudinary: CloudinaryService,
   ) {}
 
   /** Admin-tier roles see everything (optionally filtered); a TEACHER only ever
@@ -265,8 +265,8 @@ export class AssignmentsService {
     const existing = await this.findRowOrThrow(id);
     await this.assertMayModify(existing, actor);
 
-    if (existing.attachmentPath) {
-      await fs.unlink(existing.attachmentPath).catch(() => undefined);
+    if (existing.attachmentPath && existing.attachmentMimeType) {
+      await this.destroyAttachment(existing.attachmentPath, existing.attachmentMimeType);
     }
 
     await this.prisma.assignment.delete({ where: { id } });
@@ -295,21 +295,23 @@ export class AssignmentsService {
       );
     }
 
-    await fs.mkdir(UPLOAD_ROOT, { recursive: true });
-    const safeName = file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_');
-    const fullPath = path.join(UPLOAD_ROOT, `${randomUUID()}-${safeName}`);
-    await fs.writeFile(fullPath, file.buffer);
+    const resourceType = this.cloudinary.resourceTypeForMime(file.mimetype);
+    const uploaded = await this.cloudinary.uploadBuffer(file.buffer, {
+      folder: ATTACHMENT_FOLDER,
+      resourceType,
+      filename: file.originalname,
+    });
 
-    // Replacing an existing attachment — remove the old file from disk once
-    // the new one is safely written.
-    if (existing.attachmentPath) {
-      await fs.unlink(existing.attachmentPath).catch(() => undefined);
+    // Replacing an existing attachment — remove the old asset from Cloudinary
+    // once the new one is safely uploaded.
+    if (existing.attachmentPath && existing.attachmentMimeType) {
+      await this.destroyAttachment(existing.attachmentPath, existing.attachmentMimeType);
     }
 
     const row = await this.prisma.assignment.update({
       where: { id },
       data: {
-        attachmentPath: fullPath,
+        attachmentPath: uploaded.public_id,
         attachmentFileName: file.originalname,
         attachmentMimeType: file.mimetype,
         attachmentSize: file.size,
@@ -330,9 +332,11 @@ export class AssignmentsService {
   async removeAttachment(id: number, actor: AuthenticatedUser): Promise<AssignmentView> {
     const existing = await this.findRowOrThrow(id);
     await this.assertMayModify(existing, actor);
-    if (!existing.attachmentPath) throw new NotFoundException('This assignment has no attachment');
+    if (!existing.attachmentPath || !existing.attachmentMimeType) {
+      throw new NotFoundException('This assignment has no attachment');
+    }
 
-    await fs.unlink(existing.attachmentPath).catch(() => undefined);
+    await this.destroyAttachment(existing.attachmentPath, existing.attachmentMimeType);
 
     const row = await this.prisma.assignment.update({
       where: { id },
@@ -364,11 +368,22 @@ export class AssignmentsService {
     if (!existing.attachmentPath || !existing.attachmentFileName || !existing.attachmentMimeType) {
       throw new NotFoundException('This assignment has no attachment');
     }
+    const resourceType = this.cloudinary.resourceTypeForMime(existing.attachmentMimeType);
     return {
-      path: existing.attachmentPath,
+      url: this.cloudinary.getSignedUrl(existing.attachmentPath, resourceType),
       fileName: existing.attachmentFileName,
       mimeType: existing.attachmentMimeType,
     };
+  }
+
+  /** Best-effort delete — an orphaned Cloudinary asset from a failed cleanup
+   * is a non-issue (no client ever sees `attachmentPath`), so this never
+   * blocks the DB update/delete it accompanies. */
+  private async destroyAttachment(publicId: string, mimeType: string): Promise<void> {
+    const resourceType = this.cloudinary.resourceTypeForMime(mimeType);
+    await this.cloudinary.destroy(publicId, resourceType).catch((error) => {
+      this.logger.error(`Failed to delete Cloudinary asset ${publicId}`, error instanceof Error ? error.stack : error);
+    });
   }
 
   // ---- Submission tracking ----

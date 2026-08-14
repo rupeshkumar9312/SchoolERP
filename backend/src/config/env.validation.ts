@@ -58,6 +58,20 @@ export class EnvVars {
   @IsString()
   @IsOptional()
   CORS_ORIGIN: string = 'http://localhost:5173';
+
+  // Assignment attachments (backend/src/cloudinary) — local disk doesn't
+  // survive a serverless deploy, so these are required, not optional.
+  @IsString()
+  @MinLength(1)
+  CLOUDINARY_CLOUD_NAME!: string;
+
+  @IsString()
+  @MinLength(1)
+  CLOUDINARY_API_KEY!: string;
+
+  @IsString()
+  @MinLength(1)
+  CLOUDINARY_API_SECRET!: string;
 }
 
 export function validateEnv(raw: Record<string, unknown>): EnvVars {
