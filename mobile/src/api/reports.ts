@@ -10,7 +10,7 @@ export interface AttendanceCounts {
 }
 
 export interface StudentAttendanceRow extends AttendanceCounts {
-  student: { id: number; admissionNo: string; name: string };
+  student: { id: number; admissionNo: string | null; name: string };
   class: { id: number; name: string };
   section: { id: number; name: string };
 }

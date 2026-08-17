@@ -221,7 +221,7 @@ export function AttendanceHistoryPage() {
                   {records.map((record) => (
                     <tr key={record.id}>
                       <td data-label="Admission No.">
-                        {record.student.admissionNo}
+                        {record.student.admissionNo ?? '—'}
                       </td>
                       <td data-label="Name">{record.student.name}</td>
                       <td data-label="Status">

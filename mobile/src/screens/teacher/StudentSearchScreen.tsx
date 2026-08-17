@@ -65,7 +65,7 @@ export function StudentSearchScreen({ navigation }: Props): React.JSX.Element {
       const lower = q.toLowerCase();
       setResults(
         (myStudents ?? []).filter(
-          (s) => s.name.toLowerCase().includes(lower) || s.admissionNo.toLowerCase().includes(lower),
+          (s) => s.name.toLowerCase().includes(lower) || (s.admissionNo?.toLowerCase().includes(lower) ?? false),
         ),
       );
       return;
@@ -128,7 +128,7 @@ export function StudentSearchScreen({ navigation }: Props): React.JSX.Element {
         >
           <Card style={styles.recordCard}>
             <DataRowText label="Name" value={s.name} />
-            <DataRowText label="Admission No." value={s.admissionNo} />
+            <DataRowText label="Admission No." value={s.admissionNo ?? '—'} />
             <DataRowText label="Class" value={`${s.class.name} - ${s.section.name}`} />
           </Card>
         </Touchable>

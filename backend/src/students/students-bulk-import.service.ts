@@ -58,7 +58,7 @@ const COLUMNS = [
 
 type ColumnKey = (typeof COLUMNS)[number]['key'];
 
-const REQUIRED_KEYS: ColumnKey[] = ['admissionNo', 'name', 'class', 'section'];
+const REQUIRED_KEYS: ColumnKey[] = ['name', 'class', 'section'];
 
 function normalizeHeader(header: string): string {
   return header.toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -230,7 +230,11 @@ export class StudentsBulkImportService {
       }
 
       const dto = plainToInstance(CreateStudentDto, {
-        admissionNo,
+        // Blank cell -> undefined, not '' — an empty string would be a real
+        // value under the column's unique index (unlike NULL, which MySQL
+        // allows to repeat), so two blank-admission-number rows would
+        // otherwise collide as duplicates.
+        admissionNo: admissionNo || undefined,
         name,
         dateOfBirth: cellToDateString(cellValues.get('dateOfBirth')),
         gender: cellToString(cellValues.get('gender')),

@@ -19,7 +19,7 @@ interface Counts {
 }
 
 export interface StudentAttendanceRow extends Counts {
-  student: { id: number; admissionNo: string; name: string };
+  student: { id: number; admissionNo: string | null; name: string };
   class: { id: number; name: string };
   section: { id: number; name: string };
 }
@@ -91,7 +91,7 @@ export class ReportsService {
     const perStudent = new Map<
       number,
       Counts & {
-        student: { id: number; admissionNo: string; name: string };
+        student: { id: number; admissionNo: string | null; name: string };
         class: { id: number; name: string };
         section: { id: number; name: string };
       }

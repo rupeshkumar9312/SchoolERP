@@ -63,7 +63,9 @@ export function StudentAttendanceHistoryScreen({ route }: Props): React.JSX.Elem
     <Screen refreshing={loading} onRefresh={load}>
       <View>
         <Text style={styles.heading}>{studentName}</Text>
-        <Text style={styles.subtitle}>{admissionNo} · {className} - {sectionName}</Text>
+        <Text style={styles.subtitle}>
+          {admissionNo && `${admissionNo} · `}{className} - {sectionName}
+        </Text>
       </View>
 
       <Card style={styles.filters}>

@@ -57,7 +57,8 @@ export function StudentDashboard() {
   return (
     <>
       <p className="subtitle" style={{ marginTop: '-1rem' }}>
-        {student.class.name} - {student.section.name} · Admission No. {student.admissionNo}
+        {student.class.name} - {student.section.name}
+        {student.admissionNo && ` · Admission No. ${student.admissionNo}`}
       </p>
 
       <section className="card">

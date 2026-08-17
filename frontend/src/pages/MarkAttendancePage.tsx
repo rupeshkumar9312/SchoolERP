@@ -200,7 +200,7 @@ export function MarkAttendancePage() {
               <li key={student.id} className="roster-row">
                 <div className="roster-name">
                   <strong>{student.name}</strong>
-                  <span className="muted"> · {student.admissionNo}</span>
+                  {student.admissionNo && <span className="muted"> · {student.admissionNo}</span>}
                 </div>
                 <AttendanceStatusToggle
                   value={statuses[student.id] ?? 'PRESENT'}

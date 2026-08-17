@@ -2,9 +2,10 @@ import { Type } from 'class-transformer';
 import { IsDateString, IsEmail, IsInt, IsOptional, IsString, MinLength } from 'class-validator';
 
 export class CreateStudentDto {
+  @IsOptional()
   @IsString()
   @MinLength(1)
-  admissionNo!: string;
+  admissionNo?: string;
 
   @IsString()
   @MinLength(1)

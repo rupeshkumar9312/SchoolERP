@@ -2,7 +2,7 @@ import { apiDelete, apiGet, apiGetBlob, apiPatch, apiPost, apiUpload } from './c
 
 export interface Student {
   id: number;
-  admissionNo: string;
+  admissionNo: string | null;
   name: string;
   dateOfBirth: string | null;
   gender: string | null;
@@ -33,7 +33,7 @@ export interface StudentFilters {
 }
 
 export interface CreateStudentPayload {
-  admissionNo: string;
+  admissionNo?: string;
   name: string;
   dateOfBirth?: string;
   gender?: string;

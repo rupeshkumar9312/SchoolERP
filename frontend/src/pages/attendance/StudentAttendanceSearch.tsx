@@ -47,7 +47,7 @@ export function StudentAttendanceSearch({ fetchHistory }: StudentAttendanceSearc
       const lower = q.toLowerCase();
       setResults(
         (myStudents ?? []).filter(
-          (s) => s.name.toLowerCase().includes(lower) || s.admissionNo.toLowerCase().includes(lower),
+          (s) => s.name.toLowerCase().includes(lower) || (s.admissionNo?.toLowerCase().includes(lower) ?? false),
         ),
       );
       return;
@@ -117,7 +117,7 @@ export function StudentAttendanceSearch({ fetchHistory }: StudentAttendanceSearc
                     <strong>{s.name}</strong>
                     <span className="muted">
                       {' '}
-                      · {s.admissionNo} · {s.class.name} - {s.section.name}
+                      {s.admissionNo && `· ${s.admissionNo} `}· {s.class.name} - {s.section.name}
                     </span>
                   </div>
                   <button type="button" className="secondary" onClick={() => void selectStudent(s)}>
@@ -146,7 +146,8 @@ export function StudentAttendanceSearch({ fetchHistory }: StudentAttendanceSearc
             </button>
           </div>
           <p className="subtitle">
-            {selected.admissionNo} · {selected.class.name} - {selected.section.name}
+            {selected.admissionNo && `${selected.admissionNo} · `}
+            {selected.class.name} - {selected.section.name}
           </p>
 
           {historyError && (

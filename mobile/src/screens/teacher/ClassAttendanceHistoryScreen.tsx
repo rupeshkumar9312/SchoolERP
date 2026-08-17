@@ -100,7 +100,7 @@ export function ClassAttendanceHistoryScreen({ route }: Props): React.JSX.Elemen
                   <View key={r.id} style={styles.studentRow}>
                     <View>
                       <Text style={styles.studentName}>{r.student.name}</Text>
-                      <Text style={styles.muted}>{r.student.admissionNo}</Text>
+                      <Text style={styles.muted}>{r.student.admissionNo ?? '—'}</Text>
                     </View>
                     <Badge label={meta.label} tone={meta.tone} />
                   </View>

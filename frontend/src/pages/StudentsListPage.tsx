@@ -200,7 +200,7 @@ export function StudentsListPage() {
             <tbody>
               {students.map((student) => (
                 <tr key={student.id}>
-                  <td data-label="Admission No.">{student.admissionNo}</td>
+                  <td data-label="Admission No.">{student.admissionNo ?? '—'}</td>
                   <td data-label="Name">{student.name}</td>
                   <td data-label="Class">{student.class.name}</td>
                   <td data-label="Section">{student.section.name}</td>

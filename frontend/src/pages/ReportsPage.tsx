@@ -93,7 +93,7 @@ export function ReportsPage() {
       `attendance-summary-${summary.range.from}-to-${summary.range.to}.csv`,
       ['Admission No.', 'Name', 'Class', 'Section', 'Present', 'Absent', 'Late', 'Leave', 'Total Marked', 'Percent'],
       summary.students.map((s) => [
-        s.student.admissionNo,
+        s.student.admissionNo ?? '',
         s.student.name,
         s.class.name,
         s.section.name,
@@ -113,7 +113,7 @@ export function ReportsPage() {
       `defaulters-below-${defaulters.threshold}pct-${defaulters.range.from}-to-${defaulters.range.to}.csv`,
       ['Admission No.', 'Name', 'Class', 'Section', 'Present', 'Total Marked', 'Percent'],
       defaulters.defaulters.map((s) => [
-        s.student.admissionNo,
+        s.student.admissionNo ?? '',
         s.student.name,
         s.class.name,
         s.section.name,
@@ -287,7 +287,7 @@ export function ReportsPage() {
                 <tbody>
                   {summary.students.map((s) => (
                     <tr key={s.student.id}>
-                      <td data-label="Admission No.">{s.student.admissionNo}</td>
+                      <td data-label="Admission No.">{s.student.admissionNo ?? '—'}</td>
                       <td data-label="Name">{s.student.name}</td>
                       <td data-label="Class">{s.class.name}</td>
                       <td data-label="Section">{s.section.name}</td>
@@ -337,7 +337,7 @@ export function ReportsPage() {
               <tbody>
                 {defaulters.defaulters.map((s) => (
                   <tr key={s.student.id}>
-                    <td data-label="Admission No.">{s.student.admissionNo}</td>
+                    <td data-label="Admission No.">{s.student.admissionNo ?? '—'}</td>
                     <td data-label="Name">{s.student.name}</td>
                     <td data-label="Class">{s.class.name}</td>
                     <td data-label="Section">{s.section.name}</td>

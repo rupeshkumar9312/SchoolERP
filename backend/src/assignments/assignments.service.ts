@@ -37,7 +37,7 @@ export interface AssignmentView {
 }
 
 export interface SubmissionView {
-  student: { id: number; name: string; admissionNo: string };
+  student: { id: number; name: string; admissionNo: string | null };
   submitted: boolean;
   submittedAt: Date | null;
   remarks: string | null;

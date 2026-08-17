@@ -196,7 +196,7 @@ export function TeacherAssignmentDetailScreen({ route, navigation }: Props): Rea
           <View key={s.student.id} style={styles.submissionRow}>
             <View>
               <Text style={styles.name}>{s.student.name}</Text>
-              <Text style={styles.muted}>{s.student.admissionNo}</Text>
+              <Text style={styles.muted}>{s.student.admissionNo ?? '—'}</Text>
             </View>
             <Touchable
               onPress={() => handleToggle(s.student, s.submitted)}

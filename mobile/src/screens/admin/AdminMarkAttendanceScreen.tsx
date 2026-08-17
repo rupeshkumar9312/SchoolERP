@@ -149,7 +149,7 @@ export function AdminMarkAttendanceScreen(): React.JSX.Element {
             <Card key={s.id} style={styles.studentCard}>
               <View style={styles.studentInfo}>
                 <Text style={styles.name}>{s.name}</Text>
-                <Text style={styles.muted}>{s.admissionNo}</Text>
+                <Text style={styles.muted}>{s.admissionNo ?? '—'}</Text>
               </View>
               <View style={styles.statusRow}>
                 {STATUSES.map((status) => {

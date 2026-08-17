@@ -264,7 +264,7 @@ model AssignmentSubmission {
 
 model Student {
   id                    Int                    @id @default(autoincrement())
-  admissionNo           String                 @unique
+  admissionNo           String?                @unique
   name                  String
   dateOfBirth           DateTime?
   gender                String?

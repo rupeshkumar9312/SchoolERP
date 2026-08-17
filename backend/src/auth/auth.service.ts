@@ -31,7 +31,7 @@ export interface AuthenticatedUserView {
    * to show "Class 6 - A" without a second round trip on every page load. */
   student?: {
     id: number;
-    admissionNo: string;
+    admissionNo: string | null;
     class: { id: number; name: string };
     section: { id: number; name: string };
   };

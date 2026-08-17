@@ -96,14 +96,14 @@ export function StudentFormScreen({ route, navigation }: Props): React.JSX.Eleme
 
   const handleSubmit = async () => {
     setError(null);
-    if (!admissionNo.trim() || !name.trim() || classId === null || sectionId === null) {
-      setError('Admission number, name, class, and section are required.');
+    if (!name.trim() || classId === null || sectionId === null) {
+      setError('Name, class, and section are required.');
       return;
     }
     setSubmitting(true);
     try {
       const payload = {
-        admissionNo: admissionNo.trim(),
+        admissionNo: admissionNo.trim() || undefined,
         name: name.trim(),
         dateOfBirth: dateOfBirth.trim() || undefined,
         gender: gender || undefined,

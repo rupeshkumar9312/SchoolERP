@@ -4,7 +4,7 @@ export type AttendanceStatus = 'PRESENT' | 'ABSENT' | 'LATE' | 'LEAVE';
 
 export interface AttendanceRecord {
   id: number;
-  student: { id: number; name: string; admissionNo: string };
+  student: { id: number; name: string; admissionNo: string | null };
   class: { id: number; name: string };
   section: { id: number; name: string };
   date: string;

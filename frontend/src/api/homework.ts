@@ -38,7 +38,7 @@ export interface StudentHomeworkAssignment {
 }
 
 export interface HomeworkSubmission {
-  student: { id: number; name: string; admissionNo: string };
+  student: { id: number; name: string; admissionNo: string | null };
   submitted: boolean;
   submittedAt: string | null;
   remarks: string | null;

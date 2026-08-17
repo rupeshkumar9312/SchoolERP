@@ -166,7 +166,7 @@ export function StudentsListScreen({ navigation }: Props): React.JSX.Element {
             <Text style={styles.name}>{s.name}</Text>
             <Badge label={s.isActive ? 'Active' : 'Inactive'} tone={s.isActive ? 'success' : 'muted'} />
           </View>
-          <DataRowText label="Admission No." value={s.admissionNo} />
+          <DataRowText label="Admission No." value={s.admissionNo ?? '—'} />
           <DataRowText label="Class" value={`${s.class.name}-${s.section.name}`} />
           <DataRowText label="Guardian" value={s.guardianName ?? '—'} />
 

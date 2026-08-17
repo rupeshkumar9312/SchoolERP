@@ -45,7 +45,7 @@ export interface StudentSummaryView {
   student: {
     id: number;
     name: string;
-    admissionNo: string;
+    admissionNo: string | null;
     class: { id: number; name: string };
     section: { id: number; name: string };
   };

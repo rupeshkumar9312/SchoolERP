@@ -37,7 +37,7 @@ export interface ClassSectionRef {
 export interface StudentRef {
   studentId: number;
   studentName: string;
-  admissionNo: string;
+  admissionNo: string | null;
   className: string;
   sectionName: string;
 }

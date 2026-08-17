@@ -12,7 +12,7 @@ export interface AuthUser {
   /** Only present when role.name === 'STUDENT'. */
   student?: {
     id: number;
-    admissionNo: string;
+    admissionNo: string | null;
     class: { id: number; name: string };
     section: { id: number; name: string };
   };

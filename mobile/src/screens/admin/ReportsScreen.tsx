@@ -100,7 +100,7 @@ export function ReportsScreen(): React.JSX.Element {
       const csv = buildCsv(
         ['Admission No.', 'Name', 'Class', 'Section', 'Present', 'Absent', 'Late', 'Leave', 'Total Marked', 'Percent'],
         summary.students.map((s) => [
-          s.student.admissionNo,
+          s.student.admissionNo ?? '',
           s.student.name,
           s.class.name,
           s.section.name,
@@ -127,7 +127,7 @@ export function ReportsScreen(): React.JSX.Element {
       const csv = buildCsv(
         ['Admission No.', 'Name', 'Class', 'Section', 'Present', 'Total Marked', 'Percent'],
         defaulters.defaulters.map((s) => [
-          s.student.admissionNo,
+          s.student.admissionNo ?? '',
           s.student.name,
           s.class.name,
           s.section.name,
@@ -270,7 +270,7 @@ export function ReportsScreen(): React.JSX.Element {
                         <Text style={styles.rowCardTitle}>{s.student.name}</Text>
                         <Badge label={percentLabel(s.percent)} tone="primary" />
                       </View>
-                      <DataRowText label="Admission No." value={s.student.admissionNo} />
+                      <DataRowText label="Admission No." value={s.student.admissionNo ?? '—'} />
                       <DataRowText label="Class" value={`${s.class.name}-${s.section.name}`} />
                       <DataRowText label="Present / Absent / Late / Leave" value={`${s.present} / ${s.absent} / ${s.late} / ${s.leave}`} />
                     </Card>
@@ -299,7 +299,7 @@ export function ReportsScreen(): React.JSX.Element {
                       <Text style={styles.rowCardTitle}>{s.student.name}</Text>
                       <Badge label={percentLabel(s.percent)} tone="danger" />
                     </View>
-                    <DataRowText label="Admission No." value={s.student.admissionNo} />
+                    <DataRowText label="Admission No." value={s.student.admissionNo ?? '—'} />
                     <DataRowText label="Class" value={`${s.class.name}-${s.section.name}`} />
                     <DataRowText label="Present / Marked" value={`${s.present} / ${s.totalMarked}`} />
                   </Card>

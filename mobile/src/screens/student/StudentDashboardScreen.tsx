@@ -56,7 +56,8 @@ export function StudentDashboardScreen({ navigation }: Props): React.JSX.Element
         <Text style={styles.greeting}>{greeting()}, {user?.name}</Text>
         <Text style={styles.date}>{formatLongDate()}</Text>
         <Text style={styles.subtext}>
-          {summary.student.class.name} - {summary.student.section.name} · Admission No. {summary.student.admissionNo}
+          {summary.student.class.name} - {summary.student.section.name}
+          {summary.student.admissionNo && ` · Admission No. ${summary.student.admissionNo}`}
         </Text>
       </View>
 

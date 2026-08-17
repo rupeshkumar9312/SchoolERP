@@ -23,7 +23,7 @@ const STUDENT_LOGIN_EMAIL_DOMAIN = 'student.edvance.edu';
 
 export interface StudentView {
   id: number;
-  admissionNo: string;
+  admissionNo: string | null;
   name: string;
   dateOfBirth: Date | null;
   gender: string | null;

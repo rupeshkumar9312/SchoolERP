@@ -660,7 +660,7 @@ export function AssignmentsPage() {
                                 const key = `${a.id}-${s.student.id}`;
                                 return (
                                   <tr key={s.student.id}>
-                                    <td data-label="Admission No.">{s.student.admissionNo}</td>
+                                    <td data-label="Admission No.">{s.student.admissionNo ?? '—'}</td>
                                     <td data-label="Student">{s.student.name}</td>
                                     <td data-label="Submitted">
                                       {isTeacher ? (

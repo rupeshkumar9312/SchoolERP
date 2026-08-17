@@ -61,7 +61,7 @@ export function StudentFormPage() {
     setLoading(true);
     getStudent(Number(id))
       .then(async (student) => {
-        setAdmissionNo(student.admissionNo);
+        setAdmissionNo(student.admissionNo ?? '');
         setName(student.name);
         setDateOfBirth(student.dateOfBirth?.slice(0, 10) ?? '');
         setGender(student.gender ?? '');
@@ -94,7 +94,7 @@ export function StudentFormPage() {
     setSubmitting(true);
     try {
       const payload = {
-        admissionNo,
+        admissionNo: admissionNo.trim() || undefined,
         name,
         dateOfBirth: dateOfBirth || undefined,
         gender: gender || undefined,
@@ -177,7 +177,7 @@ export function StudentFormPage() {
       <form className="card" onSubmit={onSubmit}>
         <label className="field">
           <span>Admission number</span>
-          <input value={admissionNo} onChange={(e) => setAdmissionNo(e.target.value)} required />
+          <input value={admissionNo} onChange={(e) => setAdmissionNo(e.target.value)} />
         </label>
 
         <label className="field">

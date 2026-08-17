@@ -84,7 +84,7 @@ export function RosterScreen({ route, navigation }: Props): React.JSX.Element {
           }
         >
           <Card style={styles.recordCard}>
-            <DataRowText label="Admission No." value={s.admissionNo} />
+            <DataRowText label="Admission No." value={s.admissionNo ?? '—'} />
             <DataRowText label="Name" value={s.name} />
             <DataRowText label="Class" value={s.class.name} />
             <DataRowText label="Section" value={s.section.name} />

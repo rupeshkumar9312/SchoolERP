@@ -127,7 +127,7 @@ export function ClassAttendanceScreen(): React.JSX.Element {
           <Card key={r.id} style={styles.recordCard}>
             <View style={styles.studentInfo}>
               <Text style={styles.name}>{r.student.name}</Text>
-              <Text style={styles.muted}>{r.student.admissionNo}</Text>
+              <Text style={styles.muted}>{r.student.admissionNo ?? '—'}</Text>
             </View>
             <View style={styles.statusRow}>
               {STATUSES.map((status) => {
