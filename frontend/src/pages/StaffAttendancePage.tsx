@@ -23,7 +23,7 @@ export function StaffAttendancePage() {
     setError(null);
     try {
       const [allTeachers, attendance] = await Promise.all([
-        listTeachers(),
+        listTeachers({ isActive: true }),
         listTeacherAttendance({ date }),
       ]);
       setTeachers(allTeachers);
@@ -95,7 +95,7 @@ export function StaffAttendancePage() {
                     <td data-label="Name">{teacher.name}</td>
                     <td data-label="Status">
                       <AttendanceStatusToggle
-                        value={record?.status ?? 'PRESENT'}
+                        value={record?.status ?? null}
                         onChange={(status) => void onMark(teacher.id, status)}
                         disabled={savingId === teacher.id}
                       />

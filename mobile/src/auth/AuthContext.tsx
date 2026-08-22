@@ -10,10 +10,15 @@ interface AuthContextValue {
   status: AuthStatus;
   user: authApi.AuthUser | null;
   error: string | null;
+  /** Set instead of `error` when login fails because the account is
+   * disabled (HTTP 403) — LoginScreen shows this in a modal, distinct from
+   * the inline "wrong password" banner `error` drives. */
+  inactiveAccountError: string | null;
   login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   changePassword: (payload: authApi.ChangePasswordPayload) => Promise<void>;
   clearError: () => void;
+  clearInactiveAccountError: () => void;
   hasPermission: (permission: string) => boolean;
 }
 
@@ -23,6 +28,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }): React
   const [status, setStatus] = useState<AuthStatus>('loading');
   const [user, setUser] = useState<authApi.AuthUser | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [inactiveAccountError, setInactiveAccountError] = useState<string | null>(null);
 
   useEffect(() => {
     setSessionExpiredHandler(() => {
@@ -55,6 +61,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }): React
 
   const login = async (email: string, password: string) => {
     setError(null);
+    setInactiveAccountError(null);
     try {
       const { accessToken, refreshToken, user: loggedInUser } = await authApi.login(email, password);
       await persistTokens({ accessToken, refreshToken });
@@ -62,7 +69,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }): React
       setStatus('authenticated');
       void registerForPushNotifications();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Login failed');
+      // A disabled account gets its own 403, routed to a separate state field
+      // so LoginScreen can show it in a modal instead of the inline banner.
+      if (err instanceof ApiError && err.status === 403) {
+        setInactiveAccountError(err.message);
+      } else {
+        setError(err instanceof ApiError ? err.message : 'Login failed');
+      }
       throw err;
     }
   };
@@ -95,8 +108,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }): React
   const hasPermission = (permission: string) => !!user?.permissions.includes(permission);
 
   const value = useMemo(
-    () => ({ status, user, error, login, logout, changePassword, clearError: () => setError(null), hasPermission }),
-    [status, user, error],
+    () => ({
+      status,
+      user,
+      error,
+      inactiveAccountError,
+      login,
+      logout,
+      changePassword,
+      clearError: () => setError(null),
+      clearInactiveAccountError: () => setInactiveAccountError(null),
+      hasPermission,
+    }),
+    [status, user, error, inactiveAccountError],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

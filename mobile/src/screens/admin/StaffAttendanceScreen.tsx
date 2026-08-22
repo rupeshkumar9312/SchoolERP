@@ -31,7 +31,10 @@ export function StaffAttendanceScreen(): React.JSX.Element {
     setLoading(true);
     setError(null);
     try {
-      const [allTeachers, attendance] = await Promise.all([listTeachers(), listTeacherAttendanceForDate(date)]);
+      const [allTeachers, attendance] = await Promise.all([
+        listTeachers({ isActive: true }),
+        listTeacherAttendanceForDate(date),
+      ]);
       setTeachers(allTeachers);
       setRecords(attendance);
     } catch (err) {
@@ -90,7 +93,7 @@ export function StaffAttendanceScreen(): React.JSX.Element {
                 {STATUSES.map((status) => {
                   const meta = ATTENDANCE_STATUS_META[status];
                   const tone = TONE_COLORS[meta.tone];
-                  const active = (record?.status ?? 'PRESENT') === status;
+                  const active = record?.status === status;
                   return (
                     <Pressable
                       key={status}

@@ -14,7 +14,9 @@ export function MarkAttendancePage() {
   const [date, setDate] = useState(todayUtcDate());
 
   const [roster, setRoster] = useState<Student[]>([]);
-  const [statuses, setStatuses] = useState<Record<number, AttendanceStatus>>({});
+  // Partial — a student only gets an entry once marked, either from an
+  // already-saved record or an explicit tap. No default-to-PRESENT.
+  const [statuses, setStatuses] = useState<Partial<Record<number, AttendanceStatus>>>({});
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -38,11 +40,8 @@ export function MarkAttendancePage() {
         listAttendance({ classId: Number(classId), sectionId: Number(sectionId), date }),
       ]);
       setRoster(students);
-      const byStudent = new Map(existing.map((r) => [r.student.id, r.status]));
-      const next: Record<number, AttendanceStatus> = {};
-      for (const s of students) {
-        next[s.id] = byStudent.get(s.id) ?? 'PRESENT';
-      }
+      const next: Partial<Record<number, AttendanceStatus>> = {};
+      for (const record of existing) next[record.student.id] = record.status;
       setStatuses(next);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Failed to load roster');
@@ -55,6 +54,8 @@ export function MarkAttendancePage() {
     void loadRoster();
   }, [loadRoster]);
 
+  const markedCount = roster.filter((s) => statuses[s.id]).length;
+
   const onSave = async () => {
     setSaving(true);
     setError(null);
@@ -63,7 +64,9 @@ export function MarkAttendancePage() {
         classId: Number(classId),
         sectionId: Number(sectionId),
         date,
-        records: roster.map((s) => ({ studentId: s.id, status: statuses[s.id] })),
+        records: roster
+          .filter((s) => statuses[s.id])
+          .map((s) => ({ studentId: s.id, status: statuses[s.id]! })),
       });
       setSavedAt(new Date().toLocaleTimeString());
     } catch (err) {
@@ -203,7 +206,7 @@ export function MarkAttendancePage() {
                   {student.admissionNo && <span className="muted"> · {student.admissionNo}</span>}
                 </div>
                 <AttendanceStatusToggle
-                  value={statuses[student.id] ?? 'PRESENT'}
+                  value={statuses[student.id] ?? null}
                   onChange={(status) => setStatuses((prev) => ({ ...prev, [student.id]: status }))}
                 />
               </li>
@@ -211,9 +214,10 @@ export function MarkAttendancePage() {
           </ul>
 
           <div className="form-actions">
-            <button onClick={() => void onSave()} disabled={saving}>
+            <button onClick={() => void onSave()} disabled={saving || markedCount === 0}>
               {saving ? 'Saving…' : 'Save attendance'}
             </button>
+            <span className="muted">{markedCount} of {roster.length} marked</span>
           </div>
         </section>
       )}

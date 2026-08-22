@@ -32,7 +32,7 @@ export function MyAttendancePage() {
   }, [load]);
 
   const todayRecord = history.find((r) => r.date === today);
-  const status: AttendanceStatus = todayRecord?.status ?? 'PRESENT';
+  const status: AttendanceStatus | null = todayRecord?.status ?? null;
 
   const onMark = async (next: AttendanceStatus) => {
     setSaving(true);

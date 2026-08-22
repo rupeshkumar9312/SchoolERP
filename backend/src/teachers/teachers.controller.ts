@@ -8,6 +8,7 @@ import {
   ParseIntPipe,
   Patch,
   Post,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import type { AuthenticatedUser } from '../auth/auth.types';
@@ -17,6 +18,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { PermissionGuard } from '../auth/guards/permission.guard';
 import { CreateAssignmentDto } from './dto/create-assignment.dto';
 import { CreateTeacherDto } from './dto/create-teacher.dto';
+import { ListTeachersQueryDto } from './dto/list-teachers.query.dto';
 import { SetClassTeacherDto } from './dto/set-class-teacher.dto';
 import { UpdateTeacherDto } from './dto/update-teacher.dto';
 import { TeachersService } from './teachers.service';
@@ -28,8 +30,8 @@ export class TeachersController {
 
   @Get()
   @RequirePermission('teacher.view')
-  findAll() {
-    return this.teachers.findAll();
+  findAll(@Query() query: ListTeachersQueryDto) {
+    return this.teachers.findAll(query);
   }
 
   // Registered before ':id/assignments' — otherwise Express would match

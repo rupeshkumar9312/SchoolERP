@@ -10,7 +10,9 @@ const LABELS: Record<AttendanceStatus, string> = {
 };
 
 interface AttendanceStatusToggleProps {
-  value: AttendanceStatus;
+  /** Null when nothing has been marked yet — no button shows active until the
+   * user taps one, so an unmarked roster row never looks already-recorded. */
+  value: AttendanceStatus | null;
   onChange: (status: AttendanceStatus) => void;
   disabled?: boolean;
 }

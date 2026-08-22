@@ -115,8 +115,16 @@ export class TeacherAttendanceService {
       throw new BadRequestException('teacherId is required');
     }
     if (requestedTeacherId !== undefined) {
-      const exists = await this.prisma.teacher.findUnique({ where: { id: requestedTeacherId } });
-      if (!exists) throw new NotFoundException('Teacher not found');
+      const target = await this.prisma.teacher.findUnique({
+        where: { id: requestedTeacherId },
+        include: { user: true },
+      });
+      if (!target) throw new NotFoundException('Teacher not found');
+      // Only blocks marking (writing) a new/corrected record — browsing past
+      // attendance for a since-deactivated teacher stays allowed.
+      if (isMark && !target.user.isActive) {
+        throw new BadRequestException('Cannot mark attendance for an inactive teacher');
+      }
     }
     return requestedTeacherId;
   }

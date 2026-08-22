@@ -20,7 +20,7 @@ import { colors, radius, spacing } from '../theme';
 const logo = require('../../assets/edvance-logo.png');
 
 export function LoginScreen(): React.JSX.Element {
-  const { login, error, clearError } = useAuth();
+  const { login, error, clearError, inactiveAccountError, clearInactiveAccountError } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -32,7 +32,7 @@ export function LoginScreen(): React.JSX.Element {
     try {
       await login(email.trim(), password);
     } catch {
-      // error is already set on context; nothing else to do here.
+      // error/inactiveAccountError is already set on context; nothing else to do here.
     } finally {
       setSubmitting(false);
     }
@@ -79,6 +79,21 @@ export function LoginScreen(): React.JSX.Element {
               Please contact your school administrator — only they can reset your password.
             </Text>
             <Button label="Got it" variant="secondary" onPress={() => setShowForgotModal(false)} />
+          </Card>
+        </View>
+      </Modal>
+
+      <Modal
+        visible={!!inactiveAccountError}
+        transparent
+        animationType="fade"
+        onRequestClose={clearInactiveAccountError}
+      >
+        <View style={styles.modalBackdrop}>
+          <Card style={styles.modalCard}>
+            <Text style={styles.heading}>Account not authorized</Text>
+            <Text style={styles.modalBody}>{inactiveAccountError}</Text>
+            <Button label="OK" variant="secondary" onPress={clearInactiveAccountError} />
           </Card>
         </View>
       </Modal>

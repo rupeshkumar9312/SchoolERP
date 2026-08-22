@@ -34,9 +34,14 @@ export interface UpdateTeacherPayload {
   isActive?: boolean;
 }
 
-/** ADMIN-tier only (teacher.view) — every teacher in the school. */
-export function listTeachers(): Promise<Teacher[]> {
-  return apiGet<Teacher[]>('/teachers');
+/** ADMIN-tier only (teacher.view) — every teacher in the school, or only
+ * active ones when a roster shouldn't offer a deactivated teacher (e.g. the
+ * staff attendance screen). */
+export function listTeachers(filters: { isActive?: boolean } = {}): Promise<Teacher[]> {
+  const params = new URLSearchParams();
+  if (filters.isActive !== undefined) params.set('isActive', String(filters.isActive));
+  const query = params.toString();
+  return apiGet<Teacher[]>(`/teachers${query ? `?${query}` : ''}`);
 }
 
 export function getTeacher(id: number): Promise<Teacher> {

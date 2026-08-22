@@ -65,7 +65,7 @@ export function MyAttendanceScreen(): React.JSX.Element {
   if (loading) return <LoadingView />;
   if (error || !history) return <Screen><ErrorView message={error ?? 'No data'} onRetry={load} /></Screen>;
 
-  const todayStatus = history.find((r) => r.date === today)?.status ?? 'PRESENT';
+  const todayStatus = history.find((r) => r.date === today)?.status ?? null;
 
   return (
     <Screen refreshing={loading} onRefresh={load}>

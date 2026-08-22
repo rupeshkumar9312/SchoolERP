@@ -81,7 +81,7 @@ export class DashboardService {
     const classWhere = currentYear ? { academicYearId: currentYear.id } : {};
     const [totalStudents, totalTeachers, totalClasses, totalSections] = await Promise.all([
       this.prisma.student.count({ where: { isActive: true, class: classWhere } }),
-      this.prisma.teacher.count(),
+      this.prisma.teacher.count({ where: { user: { isActive: true } } }),
       this.prisma.class.count({ where: classWhere }),
       this.prisma.section.count({ where: { class: classWhere } }),
     ]);
@@ -99,7 +99,7 @@ export class DashboardService {
       }),
       this.prisma.teacherAttendance.groupBy({
         by: ['status'],
-        where: { date: new Date(today) },
+        where: { date: new Date(today), teacher: { user: { isActive: true } } },
         _count: { _all: true },
       }),
     ]);

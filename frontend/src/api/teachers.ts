@@ -48,8 +48,11 @@ export interface UpdateTeacherPayload {
   isActive?: boolean;
 }
 
-export function listTeachers(): Promise<Teacher[]> {
-  return apiGet<Teacher[]>('/teachers');
+export function listTeachers(filters: { isActive?: boolean } = {}): Promise<Teacher[]> {
+  const params = new URLSearchParams();
+  if (filters.isActive !== undefined) params.set('isActive', String(filters.isActive));
+  const query = params.toString();
+  return apiGet<Teacher[]>(`/teachers${query ? `?${query}` : ''}`);
 }
 
 export function getTeacher(id: number): Promise<Teacher> {

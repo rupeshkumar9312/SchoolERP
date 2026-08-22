@@ -13,6 +13,7 @@ import { generateTempPassword } from '../common/generate-temp-password';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateAssignmentDto } from './dto/create-assignment.dto';
 import { CreateTeacherDto } from './dto/create-teacher.dto';
+import { ListTeachersQueryDto } from './dto/list-teachers.query.dto';
 import { SetClassTeacherDto } from './dto/set-class-teacher.dto';
 import { UpdateTeacherDto } from './dto/update-teacher.dto';
 
@@ -66,8 +67,9 @@ export class TeachersService {
     private readonly audit: AuditLogService,
   ) {}
 
-  async findAll(): Promise<TeacherView[]> {
+  async findAll(query: ListTeachersQueryDto = {}): Promise<TeacherView[]> {
     const teachers = await this.prisma.teacher.findMany({
+      where: query.isActive !== undefined ? { user: { isActive: query.isActive } } : undefined,
       include: { user: true },
       orderBy: { user: { name: 'asc' } },
     });

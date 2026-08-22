@@ -15,6 +15,7 @@ export function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [showForgotPassword, setShowForgotPassword] = useState(false);
+  const [inactiveMessage, setInactiveMessage] = useState<string | null>(null);
 
   if (state.status === 'authenticated') {
     const from = (location.state as { from?: { pathname: string } } | null)?.from;
@@ -29,7 +30,13 @@ export function LoginPage() {
       await login(email, password);
       navigate('/', { replace: true });
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Login failed');
+      // A disabled account gets its own 403 + modal, distinct from the
+      // generic inline "wrong password" banner below.
+      if (err instanceof ApiError && err.status === 403) {
+        setInactiveMessage(err.message);
+      } else {
+        setError(err instanceof ApiError ? err.message : 'Login failed');
+      }
     } finally {
       setSubmitting(false);
     }
@@ -97,6 +104,20 @@ export function LoginPage() {
             </p>
             <div className="modal-actions">
               <button onClick={() => setShowForgotPassword(false)} autoFocus>
+                OK
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {inactiveMessage && (
+        <div className="modal-backdrop" onClick={() => setInactiveMessage(null)}>
+          <div className="modal-card" role="alertdialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
+            <h3>Account not authorized</h3>
+            <p className="muted">{inactiveMessage}</p>
+            <div className="modal-actions">
+              <button onClick={() => setInactiveMessage(null)} autoFocus>
                 OK
               </button>
             </div>

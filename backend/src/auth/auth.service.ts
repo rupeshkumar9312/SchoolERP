@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService, JwtSignOptions } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
@@ -64,8 +64,15 @@ export class AuthService {
   ): Promise<{ tokens: AuthTokens; user: AuthenticatedUserView }> {
     const user = await this.findUserByIdentifier(identifier);
 
-    if (!user || !user.isActive || !(await bcrypt.compare(password, user.passwordHash))) {
+    // Checked before isActive, deliberately: only someone who already knows
+    // the correct password learns that an account exists and is disabled —
+    // a wrong password alone still gets the same generic message either way,
+    // so this doesn't turn into an account-enumeration oracle.
+    if (!user || !(await bcrypt.compare(password, user.passwordHash))) {
       throw new UnauthorizedException('Invalid email or password');
+    }
+    if (!user.isActive) {
+      throw new ForbiddenException('Sorry, you are not authorized. Please contact your administrator.');
     }
 
     const tokens = await this.issueTokens(user);

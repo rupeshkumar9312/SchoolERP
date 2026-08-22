@@ -31,7 +31,9 @@ const TONE_COLORS = {
 export function MarkAttendanceScreen({ route }: Props): React.JSX.Element {
   const { classId, sectionId, className, sectionName } = route.params;
   const [students, setStudents] = useState<Student[] | null>(null);
-  const [statuses, setStatuses] = useState<Record<number, AttendanceStatus>>({});
+  // Partial — a student only gets an entry once marked, either from an
+  // already-saved record or an explicit tap. No default-to-PRESENT.
+  const [statuses, setStatuses] = useState<Partial<Record<number, AttendanceStatus>>>({});
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -47,8 +49,7 @@ export function MarkAttendanceScreen({ route }: Props): React.JSX.Element {
       ]);
       const roster = all.filter((s) => s.class.id === classId && s.section.id === sectionId);
       setStudents(roster);
-      const initial: Record<number, AttendanceStatus> = {};
-      for (const s of roster) initial[s.id] = 'PRESENT';
+      const initial: Partial<Record<number, AttendanceStatus>> = {};
       for (const record of existing) initial[record.student.id] = record.status;
       setStatuses(initial);
     } catch (err) {
@@ -71,6 +72,8 @@ export function MarkAttendanceScreen({ route }: Props): React.JSX.Element {
     setStatuses(next);
   };
 
+  const markedCount = students?.filter((s) => statuses[s.id]).length ?? 0;
+
   const handleSubmit = async () => {
     if (!students) return;
     setSaveError(null);
@@ -81,7 +84,9 @@ export function MarkAttendanceScreen({ route }: Props): React.JSX.Element {
         classId,
         sectionId,
         date: today,
-        records: students.map((s) => ({ studentId: s.id, status: statuses[s.id] ?? 'PRESENT' })),
+        records: students
+          .filter((s) => statuses[s.id])
+          .map((s) => ({ studentId: s.id, status: statuses[s.id]! })),
       });
       setSavedAt(new Date().toLocaleTimeString());
     } catch (err) {
@@ -142,7 +147,8 @@ export function MarkAttendanceScreen({ route }: Props): React.JSX.Element {
             </Card>
           ))}
 
-          <Button label="Save attendance" onPress={handleSubmit} loading={saving} />
+          <Text style={styles.muted}>{markedCount} of {students?.length ?? 0} marked</Text>
+          <Button label="Save attendance" onPress={handleSubmit} loading={saving} disabled={markedCount === 0} />
         </>
       )}
     </Screen>
