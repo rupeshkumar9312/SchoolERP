@@ -10,6 +10,7 @@ import { AuditLogService } from '../audit/audit-log.service';
 import { STUDENT_ROLE } from '../auth/roles.constants';
 import { edvanceLoginAlias, nextEdvanceId } from '../common/generate-edvance-id';
 import { generateTempPassword } from '../common/generate-temp-password';
+import { withTransactionRetry } from '../common/with-transaction-retry';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateStudentDto } from './dto/create-student.dto';
 import { ListStudentsQueryDto } from './dto/list-students.query.dto';
@@ -109,31 +110,39 @@ export class StudentsService {
       // connect }` for every field once one relation is nested, which would
       // mean rewriting classId/sectionId too. A transaction keeps the same
       // atomicity with the plain scalar-FK style used everywhere else here.
-      const { student, loginEmail } = await this.prisma.$transaction(async (tx) => {
-        const edvanceId = await nextEdvanceId(tx, 'STU');
-        const loginEmail = `${edvanceId.toLowerCase()}@${STUDENT_LOGIN_EMAIL_DOMAIN}`;
-        const user = await tx.user.create({
-          data: { name: dto.name, email: loginEmail, edvanceId, passwordHash, roleId: role.id },
-        });
-        const student = await tx.student.create({
-          data: {
-            admissionNo: dto.admissionNo,
-            name: dto.name,
-            dateOfBirth: dto.dateOfBirth ? new Date(dto.dateOfBirth) : undefined,
-            gender: dto.gender,
-            classId: dto.classId,
-            sectionId: dto.sectionId,
-            guardianName: dto.guardianName,
-            guardianPhone: dto.guardianPhone,
-            guardianEmail: dto.guardianEmail,
-            address: dto.address,
-            admissionDate: dto.admissionDate ? new Date(dto.admissionDate) : undefined,
-            userId: user.id,
+      const { student, loginEmail } = await withTransactionRetry(() =>
+        this.prisma.$transaction(
+          async (tx) => {
+            const edvanceId = await nextEdvanceId(tx, 'STU');
+            const loginEmail = `${edvanceId.toLowerCase()}@${STUDENT_LOGIN_EMAIL_DOMAIN}`;
+            const user = await tx.user.create({
+              data: { name: dto.name, email: loginEmail, edvanceId, passwordHash, roleId: role.id },
+            });
+            const student = await tx.student.create({
+              data: {
+                admissionNo: dto.admissionNo,
+                name: dto.name,
+                dateOfBirth: dto.dateOfBirth ? new Date(dto.dateOfBirth) : undefined,
+                gender: dto.gender,
+                classId: dto.classId,
+                sectionId: dto.sectionId,
+                guardianName: dto.guardianName,
+                guardianPhone: dto.guardianPhone,
+                guardianEmail: dto.guardianEmail,
+                address: dto.address,
+                admissionDate: dto.admissionDate ? new Date(dto.admissionDate) : undefined,
+                userId: user.id,
+              },
+              include: { class: true, section: true, user: true },
+            });
+            return { student, loginEmail };
           },
-          include: { class: true, section: true, user: true },
-        });
-        return { student, loginEmail };
-      });
+          // Generous margin over Prisma's 2s/5s defaults — this transaction
+          // is 3 sequential round-trips, and on a remote DB host with no
+          // pooler in front of it those add up fast under any latency.
+          { maxWait: 10000, timeout: 15000 },
+        ),
+      );
       await this.audit.record({
         entityType: 'Student',
         entityId: student.id,

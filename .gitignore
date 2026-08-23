@@ -6,6 +6,7 @@ dist-out/
 nest-out/
 nest-run/
 nest-dev-out/
+nest-dev-out-scratch/
 coverage/
 backend/uploads/
 

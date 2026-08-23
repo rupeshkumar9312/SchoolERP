@@ -10,6 +10,7 @@ import { AuditLogService } from '../audit/audit-log.service';
 import { TEACHER_ROLE } from '../auth/roles.constants';
 import { edvanceLoginAlias, nextEdvanceId } from '../common/generate-edvance-id';
 import { generateTempPassword } from '../common/generate-temp-password';
+import { withTransactionRetry } from '../common/with-transaction-retry';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateAssignmentDto } from './dto/create-assignment.dto';
 import { CreateTeacherDto } from './dto/create-teacher.dto';
@@ -92,27 +93,32 @@ export class TeachersService {
     const temporaryPassword = generateTempPassword();
     const passwordHash = await bcrypt.hash(temporaryPassword, PASSWORD_BCRYPT_ROUNDS);
     try {
-      const teacher = await this.prisma.$transaction(async (tx) => {
-        const edvanceId = await nextEdvanceId(tx, 'TCH');
-        const email = `${edvanceId.toLowerCase()}@${TEACHER_LOGIN_EMAIL_DOMAIN}`;
-        return tx.teacher.create({
-          data: {
-            qualification: dto.qualification,
-            joiningDate: new Date(dto.joiningDate),
-            user: {
-              create: {
-                name: dto.name,
-                email,
-                edvanceId,
-                phone: dto.phone,
-                passwordHash,
-                roleId: role.id,
+      const teacher = await withTransactionRetry(() =>
+        this.prisma.$transaction(
+          async (tx) => {
+            const edvanceId = await nextEdvanceId(tx, 'TCH');
+            const email = `${edvanceId.toLowerCase()}@${TEACHER_LOGIN_EMAIL_DOMAIN}`;
+            return tx.teacher.create({
+              data: {
+                qualification: dto.qualification,
+                joiningDate: new Date(dto.joiningDate),
+                user: {
+                  create: {
+                    name: dto.name,
+                    email,
+                    edvanceId,
+                    phone: dto.phone,
+                    passwordHash,
+                    roleId: role.id,
+                  },
+                },
               },
-            },
+              include: { user: true },
+            });
           },
-          include: { user: true },
-        });
-      });
+          { maxWait: 10000, timeout: 15000 },
+        ),
+      );
       await this.audit.record({
         entityType: 'Teacher',
         entityId: teacher.id,

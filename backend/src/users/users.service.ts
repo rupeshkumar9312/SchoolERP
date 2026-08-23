@@ -12,6 +12,7 @@ import { AuthenticatedUser } from '../auth/auth.types';
 import { SUPER_ADMIN_ROLE } from '../auth/roles.constants';
 import { edvanceLoginAlias, nextEdvanceId } from '../common/generate-edvance-id';
 import { generateTempPassword } from '../common/generate-temp-password';
+import { withTransactionRetry } from '../common/with-transaction-retry';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { ListUsersQueryDto } from './dto/list-users.query.dto';
@@ -74,21 +75,26 @@ export class UsersService {
     const temporaryPassword = generateTempPassword();
     const passwordHash = await bcrypt.hash(temporaryPassword, PASSWORD_BCRYPT_ROUNDS);
     try {
-      const user = await this.prisma.$transaction(async (tx) => {
-        const edvanceId = await nextEdvanceId(tx, 'ADM');
-        const email = `${edvanceId.toLowerCase()}@${ADMIN_LOGIN_EMAIL_DOMAIN}`;
-        return tx.user.create({
-          data: {
-            name: dto.name,
-            email,
-            edvanceId,
-            phone: dto.phone,
-            passwordHash,
-            roleId: dto.roleId,
+      const user = await withTransactionRetry(() =>
+        this.prisma.$transaction(
+          async (tx) => {
+            const edvanceId = await nextEdvanceId(tx, 'ADM');
+            const email = `${edvanceId.toLowerCase()}@${ADMIN_LOGIN_EMAIL_DOMAIN}`;
+            return tx.user.create({
+              data: {
+                name: dto.name,
+                email,
+                edvanceId,
+                phone: dto.phone,
+                passwordHash,
+                roleId: dto.roleId,
+              },
+              include: { role: true },
+            });
           },
-          include: { role: true },
-        });
-      });
+          { maxWait: 10000, timeout: 15000 },
+        ),
+      );
       await this.audit.record({
         entityType: 'User',
         entityId: user.id,
