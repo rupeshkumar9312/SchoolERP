@@ -17,10 +17,11 @@ interface SubjectRowDraft {
 
 const emptyRow = (): SubjectRowDraft => ({ subjectId: '', maxMarks: '', passMarks: '', examDate: '' });
 
-// Creates the Exam umbrella (name + type) together with its first class
-// schedule in one request, so a single-class exam stays a one-step flow.
-// Additional classes are added afterwards from the exam's detail page via
-// "+ Add class" — each one fully independent, with its own subject list.
+// Creates the Exam umbrella (name + type). Picking a class here is
+// optional — if one's picked, its dates and subjects are sent along in the
+// same request so single-class creation stays a one-step flow; if not,
+// classes (each fully independent, with their own dates and subjects) are
+// added afterwards from the exam's detail page via "+ Add class".
 export function ExamFormPage() {
   const navigate = useNavigate();
 
@@ -65,10 +66,32 @@ export function ExamFormPage() {
   const removeRow = (index: number) => setRows((prev) => prev.filter((_, i) => i !== index));
   const pickedSubjectIds = new Set(rows.map((r) => r.subjectId).filter(Boolean));
 
+  // Class is optional here — an exam can be created with just a name and
+  // type, and classes (each with their own dates and subjects) added
+  // afterwards from the exam's detail page via "+ Add class". If a class
+  // *is* picked on this form, though, its dates and at least one subject
+  // are still required — a half-filled schedule isn't useful.
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError(null);
-    if (!classId || !startDate || !endDate) return;
+
+    if (!classId) {
+      setSubmitting(true);
+      try {
+        const created = await createExam({ name: name.trim(), type });
+        navigate(`/exams/${created.id}`);
+      } catch (err) {
+        setError(err instanceof ApiError ? err.message : 'Failed to create exam');
+      } finally {
+        setSubmitting(false);
+      }
+      return;
+    }
+
+    if (!startDate || !endDate) {
+      setError('Add a start and end date for the selected class, or clear the class to skip it for now.');
+      return;
+    }
     const picked: ExamSubjectInput[] = [];
     for (const row of rows) {
       if (!row.subjectId || !row.maxMarks) continue;
@@ -80,7 +103,7 @@ export function ExamFormPage() {
       });
     }
     if (picked.length === 0) {
-      setError('Add at least one subject with a max marks value.');
+      setError('Add at least one subject with a max marks value, or clear the class to skip it for now.');
       return;
     }
 
@@ -126,8 +149,8 @@ export function ExamFormPage() {
         </label>
 
         <p className="muted">
-          Set up the first class below — you can add more classes to this exam afterwards, each with its own dates
-          and subjects.
+          Optionally set up a class below — you can add this and other classes to the exam afterwards, each with
+          its own dates and subjects, from the exam's page.
         </p>
 
         <label className="field">
@@ -139,11 +162,8 @@ export function ExamFormPage() {
               setClassId('');
               setRows([emptyRow()]);
             }}
-            required
           >
-            <option value="" disabled>
-              Select…
-            </option>
+            <option value="">Select…</option>
             {years.map((y) => (
               <option key={y.id} value={y.id}>
                 {y.name}
@@ -153,7 +173,7 @@ export function ExamFormPage() {
         </label>
 
         <label className="field">
-          <span>Class</span>
+          <span>Class (optional)</span>
           <select
             value={classId}
             onChange={(e) => {
@@ -161,11 +181,8 @@ export function ExamFormPage() {
               setRows([emptyRow()]);
             }}
             disabled={!yearId}
-            required
           >
-            <option value="" disabled>
-              Select…
-            </option>
+            <option value="">Select…</option>
             {classes.map((c) => (
               <option key={c.id} value={c.id}>
                 {c.name}
@@ -176,18 +193,29 @@ export function ExamFormPage() {
 
         <label className="field">
           <span>Start date</span>
-          <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} required />
+          <input
+            type="date"
+            value={startDate}
+            onChange={(e) => setStartDate(e.target.value)}
+            disabled={!classId}
+          />
         </label>
 
         <label className="field">
           <span>End date</span>
-          <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} min={startDate || undefined} required />
+          <input
+            type="date"
+            value={endDate}
+            onChange={(e) => setEndDate(e.target.value)}
+            min={startDate || undefined}
+            disabled={!classId}
+          />
         </label>
 
         <div className="field">
           <span>Subjects</span>
           {!classId ? (
-            <p className="muted">Select a class first.</p>
+            <p className="muted">Select a class above to add its subjects now, or skip this and add it later.</p>
           ) : (
             <>
               {rows.map((row, i) => (
