@@ -7,9 +7,11 @@ export class UpdateAnnouncementDto {
   @MinLength(1)
   title?: string;
 
+  // No MinLength here (unlike create) — an empty string is a valid PATCH
+  // value meaning "clear the body," reachable when an image remains
+  // attached so the announcement still has content.
   @IsOptional()
   @IsString()
-  @MinLength(1)
   body?: string;
 
   @IsOptional()

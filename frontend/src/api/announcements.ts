@@ -11,9 +11,13 @@ export const AUDIENCE_LABELS: Record<AudienceRole, string> = {
 export interface Announcement {
   id: number;
   title: string;
-  body: string;
+  /** Null for an image-only announcement (mobile app allows posting with
+   * just an image, no body). */
+  body: string | null;
   audiences: AudienceRole[];
   createdBy: { id: number; name: string } | null;
+  /** Null when no image was attached. A direct, public URL. */
+  imageUrl: string | null;
   createdAt: string;
   updatedAt: string;
 }

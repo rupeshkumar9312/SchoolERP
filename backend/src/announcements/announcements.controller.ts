@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -9,7 +10,10 @@ import {
   Patch,
   Post,
   UseGuards,
+  UseInterceptors,
+  UploadedFile,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import type { AuthenticatedUser } from '../auth/auth.types';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { RequirePermission } from '../auth/decorators/require-permission.decorator';
@@ -18,6 +22,8 @@ import { PermissionGuard } from '../auth/guards/permission.guard';
 import { AnnouncementsService } from './announcements.service';
 import { CreateAnnouncementDto } from './dto/create-announcement.dto';
 import { UpdateAnnouncementDto } from './dto/update-announcement.dto';
+
+const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 
 @UseGuards(JwtAuthGuard, PermissionGuard)
 @Controller('announcements')
@@ -60,5 +66,23 @@ export class AnnouncementsController {
   @HttpCode(204)
   remove(@Param('id', ParseIntPipe) id: number, @CurrentUser() user: AuthenticatedUser) {
     return this.announcements.remove(id, user);
+  }
+
+  @Post(':id/image')
+  @RequirePermission('announcement.edit')
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: MAX_IMAGE_BYTES } }))
+  attachImage(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser() user: AuthenticatedUser,
+    @UploadedFile() file?: Express.Multer.File,
+  ) {
+    if (!file) throw new BadRequestException('No file was uploaded.');
+    return this.announcements.attachImage(id, user, file);
+  }
+
+  @Delete(':id/image')
+  @RequirePermission('announcement.edit')
+  removeImage(@Param('id', ParseIntPipe) id: number, @CurrentUser() user: AuthenticatedUser) {
+    return this.announcements.removeImage(id, user);
   }
 }

@@ -25,7 +25,7 @@ export function AnnouncementFormPage() {
     getAnnouncement(Number(id))
       .then((a) => {
         setTitle(a.title);
-        setBody(a.body);
+        setBody(a.body ?? '');
         setAudiences(a.audiences);
       })
       .catch((err) => setError(err instanceof ApiError ? err.message : 'Failed to load announcement'))

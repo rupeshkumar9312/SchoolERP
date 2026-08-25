@@ -395,10 +395,24 @@ enum AudienceRole {
 model Announcement {
   id          Int                    @id @default(autoincrement())
   title       String
-  body        String                 @db.Text
+  /// Optional when an image is attached — a viewer needs at least one of
+  /// body or image, enforced client-side (mobile form), not here, since the
+  /// image is uploaded as a second request after the announcement exists.
+  body        String?                @db.Text
   createdById Int?
   createdBy   User?                  @relation("AnnouncementAuthor", fields: [createdById], references: [id], onDelete: SetNull)
   audiences   AnnouncementAudience[]
+  /// Cloudinary public_id, uploaded as type: 'upload' (public delivery) —
+  /// unlike Assignment/LeaveApplication attachments, an announcement image is
+  /// meant to render inline for every viewer in its audience with no
+  /// auth-gated download step, so it has no signed-URL indirection. Null for
+  /// every announcement posted before this field existed, and for any
+  /// announcement posted without an image since.
+  imagePath   String?
+  /// The direct https delivery URL Cloudinary returned at upload time —
+  /// stored rather than regenerated per-request since a public asset's URL
+  /// is stable. Clients render this directly (e.g. <Image source={{ uri }}>).
+  imageUrl    String?
   createdAt   DateTime               @default(now())
   updatedAt   DateTime               @updatedAt
 

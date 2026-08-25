@@ -10,8 +10,14 @@ import { useConfirm } from '../components/useConfirm';
 import { useToast } from '../components/useToast';
 
 export function AnnouncementsListPage() {
-  const { hasPermission } = useAuth();
+  const { state, hasPermission } = useAuth();
+  const currentUser = state.status === 'authenticated' ? state.user : null;
   const canManage = hasPermission('announcement.create') || hasPermission('announcement.edit') || hasPermission('announcement.delete');
+  // Holding the permission is necessary but not sufficient — only the
+  // creator or a super admin may act on a *specific* announcement (matches
+  // the server-side check in AnnouncementsService.assertMayModify).
+  const canModify = (a: Announcement) =>
+    !!currentUser && (currentUser.role.name === 'SUPER_ADMIN' || currentUser.id === a.createdBy?.id);
   const confirm = useConfirm();
   const toast = useToast();
   const [announcements, setAnnouncements] = useState<Announcement[] | null>(null);
@@ -87,12 +93,19 @@ export function AnnouncementsListPage() {
                     ))}
                   </div>
                 </div>
-                <p>{a.body}</p>
+                {a.body && <p>{a.body}</p>}
+                {a.imageUrl && (
+                  <img
+                    src={a.imageUrl}
+                    alt=""
+                    style={{ width: '100%', maxHeight: 320, objectFit: 'cover', borderRadius: 8 }}
+                  />
+                )}
                 <p className="muted">
                   {a.createdBy ? `Posted by ${a.createdBy.name}` : 'Posted'} on{' '}
                   {new Date(a.createdAt).toLocaleDateString()}
                 </p>
-                {canManage && (
+                {canManage && canModify(a) && (
                   <div className="row-actions">
                     {hasPermission('announcement.edit') && (
                       <Link to={`/announcements/${a.id}/edit`}>
