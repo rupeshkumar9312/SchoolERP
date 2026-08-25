@@ -8,7 +8,9 @@ import {
   addExamSubject,
   getExam,
   getExamProgress,
+  publishExamSchedule,
   removeExamSubject,
+  unpublishExamSchedule,
   updateExamSchedule,
   updateExamSubject,
 } from '../api/exams';
@@ -29,8 +31,11 @@ export function ExamSchedulePage() {
   const scheduleIdNum = Number(scheduleId);
   const { hasPermission } = useAuth();
   const canEdit = hasPermission('exam.edit');
+  const canPublish = hasPermission('exam.marks.publish');
   const confirm = useConfirm();
   const toast = useToast();
+
+  const [togglingPublish, setTogglingPublish] = useState(false);
 
   const [exam, setExam] = useState<Exam | null>(null);
   const [schedule, setSchedule] = useState<ExamSchedule | null>(null);
@@ -106,6 +111,32 @@ export function ExamSchedulePage() {
   const applyUpdatedExam = (updated: Exam) => {
     setExam(updated);
     setSchedule(updated.schedules.find((s) => s.id === scheduleIdNum) ?? null);
+  };
+
+  const onTogglePublish = async () => {
+    if (!schedule) return;
+    const publishing = schedule.status !== 'PUBLISHED';
+    if (publishing) {
+      const ok = await confirm({
+        title: 'Publish this class\'s marks?',
+        message: 'Students in this class will immediately be able to see every subject\'s marks entered so far.',
+        confirmLabel: 'Publish',
+      });
+      if (!ok) return;
+    }
+    setTogglingPublish(true);
+    setError(null);
+    try {
+      const updated = publishing
+        ? await publishExamSchedule(examId, scheduleIdNum)
+        : await unpublishExamSchedule(examId, scheduleIdNum);
+      applyUpdatedExam(updated);
+      toast(publishing ? 'Published — students can now see these marks.' : 'Unpublished.');
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Failed to update publish status');
+    } finally {
+      setTogglingPublish(false);
+    }
   };
 
   const onAddSubject = async (e: FormEvent) => {
@@ -186,9 +217,25 @@ export function ExamSchedulePage() {
         <h1>
           {exam.name} · {schedule.class.name}
         </h1>
-        <span className={`badge ${schedule.status === 'PUBLISHED' ? 'status-badge-present' : ''}`}>
-          {schedule.status === 'PUBLISHED' ? 'Published' : 'Draft'}
-        </span>
+        <div className="row-actions">
+          <span className={`badge ${schedule.status === 'PUBLISHED' ? 'status-badge-present' : ''}`}>
+            {schedule.status === 'PUBLISHED' ? 'Published' : 'Draft'}
+          </span>
+          {canPublish && (
+            <button
+              type="button"
+              className={schedule.status === 'PUBLISHED' ? 'secondary' : ''}
+              onClick={() => void onTogglePublish()}
+              disabled={togglingPublish}
+            >
+              {togglingPublish
+                ? 'Saving…'
+                : schedule.status === 'PUBLISHED'
+                  ? 'Unpublish'
+                  : 'Publish'}
+            </button>
+          )}
+        </div>
       </div>
       <p className="subtitle">
         {schedule.academicYear.name}

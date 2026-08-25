@@ -28,6 +28,7 @@ export const navItems: NavItem[] = [
   { label: 'My Exams', path: '/my-exams', roles: ['TEACHER'] },
   { label: 'My Attendance', path: '/student/attendance', roles: ['STUDENT'] },
   { label: 'My Assignments', path: '/student/assignments', roles: ['STUDENT'] },
+  { label: 'My Results', path: '/student/results', roles: ['STUDENT'] },
   { label: 'Announcements', path: '/announcements' },
   { label: 'Audit Log', path: '/audit-logs', roles: ['SUPER_ADMIN'] },
   { label: 'Settings', path: '/settings' },

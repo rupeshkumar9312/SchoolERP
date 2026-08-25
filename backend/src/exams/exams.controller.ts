@@ -51,6 +51,15 @@ export class ExamsController {
     return this.exams.findForTeacher(user);
   }
 
+  // No @RequirePermission — same "me" shape as above, but for a STUDENT:
+  // scoped to their own class and filtered to PUBLISHED schedules only
+  // inside the service, not by a permission check (a STUDENT holds no
+  // exam.* permission at all).
+  @Get('me/results')
+  findResultsForStudent(@CurrentUser() user: AuthenticatedUser) {
+    return this.exams.findResultsForStudent(user);
+  }
+
   @Get(':id')
   @RequirePermission('exam.view')
   findOne(@Param('id', ParseIntPipe) id: number) {
@@ -111,6 +120,26 @@ export class ExamsController {
     @CurrentUser() user: AuthenticatedUser,
   ) {
     return this.exams.removeSchedule(id, scheduleId, user);
+  }
+
+  @Post(':id/schedules/:scheduleId/publish')
+  @RequirePermission('exam.marks.publish')
+  publishSchedule(
+    @Param('id', ParseIntPipe) id: number,
+    @Param('scheduleId', ParseIntPipe) scheduleId: number,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.exams.publishSchedule(id, scheduleId, user);
+  }
+
+  @Post(':id/schedules/:scheduleId/unpublish')
+  @RequirePermission('exam.marks.publish')
+  unpublishSchedule(
+    @Param('id', ParseIntPipe) id: number,
+    @Param('scheduleId', ParseIntPipe) scheduleId: number,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.exams.unpublishSchedule(id, scheduleId, user);
   }
 
   @Get(':id/schedules/:scheduleId/progress')

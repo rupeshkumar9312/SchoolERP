@@ -9,11 +9,17 @@ import { StudentAssignmentDetailScreen } from '../screens/student/StudentAssignm
 import { StudentAssignmentsListScreen } from '../screens/student/StudentAssignmentsListScreen';
 import { StudentAttendanceScreen } from '../screens/student/StudentAttendanceScreen';
 import { StudentDashboardScreen } from '../screens/student/StudentDashboardScreen';
+import { StudentResultsListScreen } from '../screens/student/StudentResultsListScreen';
 import { colors } from '../theme';
-import type { StudentAssignmentsStackParamList, StudentTabsParamList } from './types';
+import type {
+  StudentAssignmentsStackParamList,
+  StudentResultsStackParamList,
+  StudentTabsParamList,
+} from './types';
 
 const Tab = createBottomTabNavigator<StudentTabsParamList>();
 const AssignmentsStack = createNativeStackNavigator<StudentAssignmentsStackParamList>();
+const ResultsStack = createNativeStackNavigator<StudentResultsStackParamList>();
 
 function AssignmentsStackNavigator(): React.JSX.Element {
   return (
@@ -24,10 +30,19 @@ function AssignmentsStackNavigator(): React.JSX.Element {
   );
 }
 
+function ResultsStackNavigator(): React.JSX.Element {
+  return (
+    <ResultsStack.Navigator screenOptions={brandedHeaderOptions}>
+      <ResultsStack.Screen name="ResultsList" component={StudentResultsListScreen} options={{ title: 'My Results' }} />
+    </ResultsStack.Navigator>
+  );
+}
+
 const ICONS: Record<keyof StudentTabsParamList, keyof typeof Ionicons.glyphMap> = {
   Dashboard: 'home',
   Attendance: 'calendar',
   Assignments: 'document-text',
+  Results: 'ribbon',
   Announcements: 'megaphone',
   Settings: 'settings',
 };
@@ -50,6 +65,11 @@ export function StudentTabs(): React.JSX.Element {
         name="Assignments"
         component={AssignmentsStackNavigator}
         options={{ title: 'Assignments', headerShown: false }}
+      />
+      <Tab.Screen
+        name="Results"
+        component={ResultsStackNavigator}
+        options={{ title: 'Results', headerShown: false }}
       />
       <Tab.Screen
         name="Announcements"

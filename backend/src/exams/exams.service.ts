@@ -5,7 +5,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { ExamScheduleStatus, ExamType, Prisma, Teacher } from '@prisma/client';
+import { ExamScheduleStatus, ExamType, Prisma, Student, Teacher } from '@prisma/client';
 import { AuditLogService } from '../audit/audit-log.service';
 import { AuthenticatedUser } from '../auth/auth.types';
 import { TEACHER_ROLE } from '../auth/roles.constants';
@@ -87,6 +87,27 @@ export interface ExamSubjectProgress {
   subject: { id: number; name: string };
   enteredCount: number;
   totalStudents: number;
+}
+
+export interface StudentExamResultSubject {
+  subject: { id: number; name: string };
+  maxMarks: number;
+  passMarks: number | null;
+  marksObtained: number | null;
+  isAbsent: boolean;
+  /** Rounded to one decimal place; null while ungraded. */
+  percentage: number | null;
+  /** null when ungraded or when the subject has no passMarks set. */
+  passed: boolean | null;
+}
+
+/** One class's PUBLISHED sitting of an Exam, from a student's own point of
+ * view — every subject on that schedule, not just the ones already graded,
+ * so an ungraded subject still shows (with null marks) rather than vanishing. */
+export interface StudentExamResult {
+  exam: { id: number; name: string; type: ExamType };
+  schedule: { id: number; startDate: Date; endDate: Date };
+  subjects: StudentExamResultSubject[];
 }
 
 type ExamWithRefs = Prisma.ExamGetPayload<{ include: typeof EXAM_INCLUDE }>;
@@ -204,6 +225,50 @@ export class ExamsService {
       }
     }
     return entries;
+  }
+
+  /** Identity-pinned "me" route for a STUDENT — every PUBLISHED schedule for
+   * their own class, with their own marks per subject. DRAFT schedules for
+   * their class are filtered out entirely at the query level, not
+   * shown-but-locked, matching how unpublished Announcements/Assignments
+   * stay invisible to students outside their audience. */
+  async findResultsForStudent(actor: AuthenticatedUser): Promise<StudentExamResult[]> {
+    const student = await this.getOwnStudent(actor.id);
+    const schedules = await this.prisma.examSchedule.findMany({
+      where: { classId: student.classId, status: 'PUBLISHED' },
+      include: {
+        exam: true,
+        subjects: { include: { subject: true }, orderBy: { id: 'asc' } },
+      },
+      orderBy: { startDate: 'desc' },
+    });
+    if (schedules.length === 0) return [];
+
+    const examSubjectIds = schedules.flatMap((s) => s.subjects.map((su) => su.id));
+    const marks = await this.prisma.examMark.findMany({
+      where: { examSubjectId: { in: examSubjectIds }, studentId: student.id },
+    });
+    const markByExamSubjectId = new Map(marks.map((m) => [m.examSubjectId, m]));
+
+    return schedules.map((schedule) => ({
+      exam: { id: schedule.exam.id, name: schedule.exam.name, type: schedule.exam.type },
+      schedule: { id: schedule.id, startDate: schedule.startDate, endDate: schedule.endDate },
+      subjects: schedule.subjects.map((su) => {
+        const mark = markByExamSubjectId.get(su.id);
+        const marksObtained = mark?.marksObtained ?? null;
+        const isAbsent = mark?.isAbsent ?? false;
+        return {
+          subject: { id: su.subject.id, name: su.subject.name },
+          maxMarks: su.maxMarks,
+          passMarks: su.passMarks,
+          marksObtained,
+          isAbsent,
+          percentage: marksObtained !== null ? Math.round((marksObtained / su.maxMarks) * 1000) / 10 : null,
+          passed:
+            marksObtained !== null && su.passMarks !== null ? marksObtained >= su.passMarks : null,
+        };
+      }),
+    }));
   }
 
   /** Per-subject "entered X / Y" progress for one class's schedule, for the
@@ -531,6 +596,44 @@ export class ExamsService {
     return this.toView(await this.findRowOrThrow(examId));
   }
 
+  /** Flips one class's schedule to PUBLISHED — the gate that makes its
+   * marks visible to students (see findResultsForStudent). Deliberately
+   * per-schedule, not umbrella-wide: one class's marks being ready doesn't
+   * mean every other class scheduled under the same Exam name is. */
+  async publishSchedule(examId: number, scheduleId: number, actor: AuthenticatedUser): Promise<ExamView> {
+    const existing = await this.findScheduleRowOrThrow(examId, scheduleId);
+    const row = await this.prisma.examSchedule.update({
+      where: { id: scheduleId },
+      data: { status: 'PUBLISHED' },
+    });
+    await this.audit.record({
+      entityType: 'ExamSchedule',
+      entityId: row.id,
+      action: 'UPDATE',
+      userId: actor.id,
+      oldValues: existing,
+      newValues: row,
+    });
+    return this.toView(await this.findRowOrThrow(examId));
+  }
+
+  async unpublishSchedule(examId: number, scheduleId: number, actor: AuthenticatedUser): Promise<ExamView> {
+    const existing = await this.findScheduleRowOrThrow(examId, scheduleId);
+    const row = await this.prisma.examSchedule.update({
+      where: { id: scheduleId },
+      data: { status: 'DRAFT' },
+    });
+    await this.audit.record({
+      entityType: 'ExamSchedule',
+      entityId: row.id,
+      action: 'UPDATE',
+      userId: actor.id,
+      oldValues: existing,
+      newValues: row,
+    });
+    return this.toView(await this.findRowOrThrow(examId));
+  }
+
   // ---- Subjects (nested under one schedule) ----
 
   async addSubject(
@@ -661,6 +764,12 @@ export class ExamsService {
     const teacher = await this.prisma.teacher.findUnique({ where: { userId } });
     if (!teacher) throw new ForbiddenException('No teacher profile for this account');
     return teacher;
+  }
+
+  private async getOwnStudent(userId: number): Promise<Student> {
+    const student = await this.prisma.student.findUnique({ where: { userId } });
+    if (!student) throw new ForbiddenException('No student profile for this account');
+    return student;
   }
 
   /** A teacher may only enter marks for a class+section+subject they're

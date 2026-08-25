@@ -11,6 +11,10 @@ export type StudentAssignmentsStackParamList = {
   AssignmentDetail: { assignment: StudentHomeworkAssignment };
 };
 
+export type StudentResultsStackParamList = {
+  ResultsList: undefined;
+};
+
 // Shared by Student/Teacher/Admin tabs — only ADMIN-tier roles ever navigate
 // to AnnouncementForm (the screen itself hides the "+ New"/Edit affordances
 // behind hasPermission checks), but every role gets the same tiny stack so
@@ -24,6 +28,7 @@ export type StudentTabsParamList = {
   Dashboard: undefined;
   Attendance: undefined;
   Assignments: NavigatorScreenParams<StudentAssignmentsStackParamList>;
+  Results: NavigatorScreenParams<StudentResultsStackParamList>;
   Announcements: NavigatorScreenParams<AnnouncementsStackParamList>;
   Settings: undefined;
 };

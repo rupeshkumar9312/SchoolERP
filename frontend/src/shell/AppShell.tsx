@@ -43,6 +43,7 @@ const NAV_ICONS: Record<
   "/assignments": IconNotebookPen,
   "/exams": IconRibbon,
   "/my-exams": IconRibbon,
+  "/student/results": IconRibbon,
   "/announcements": IconMegaphone,
   "/audit-logs": IconShieldCheck,
   "/settings": IconSettings,

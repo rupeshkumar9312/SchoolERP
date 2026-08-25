@@ -1,8 +1,9 @@
 import { apiGet, apiPost } from './client';
 
-// Mobile only covers the teacher-facing marks-entry flow (Phase 2) — exam
-// definition and class-schedule creation stay a web-only, admin-tier task
-// (Phase 1 decision: low frequency, form-heavy, not worth building twice).
+// Mobile covers the teacher-facing marks-entry flow (Phase 2) and the
+// student-facing results flow (Phase 3). Exam definition, class-schedule
+// creation and publish/unpublish stay a web-only, admin-tier task (Phase 1
+// decision: low frequency, form-heavy, not worth building twice).
 
 export type ExamType = 'CLASS_TEST' | 'UNIT_TEST' | 'MID_TERM' | 'TERM_EXAM' | 'FINAL_EXAM' | 'OTHER';
 export type ExamScheduleStatus = 'DRAFT' | 'PUBLISHED';
@@ -76,4 +77,29 @@ export function saveExamMarks(
   payload: SaveExamMarksPayload,
 ): Promise<ExamMarkRosterRow[]> {
   return apiPost<ExamMarkRosterRow[]>(`/exams/${examId}/schedules/${scheduleId}/marks`, payload);
+}
+
+// ---- Results (student-facing) ----
+
+export interface StudentExamResultSubject {
+  subject: { id: number; name: string };
+  maxMarks: number;
+  passMarks: number | null;
+  marksObtained: number | null;
+  isAbsent: boolean;
+  percentage: number | null;
+  passed: boolean | null;
+}
+
+/** One class's PUBLISHED sitting of an exam, from the signed-in student's
+ * own point of view. Unpublished schedules for their class never appear
+ * here at all. */
+export interface StudentExamResult {
+  exam: { id: number; name: string; type: ExamType };
+  schedule: { id: number; startDate: string; endDate: string };
+  subjects: StudentExamResultSubject[];
+}
+
+export function getMyExamResults(): Promise<StudentExamResult[]> {
+  return apiGet<StudentExamResult[]>('/exams/me/results');
 }

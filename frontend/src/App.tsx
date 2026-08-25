@@ -30,6 +30,7 @@ import { StaffAttendancePage } from './pages/StaffAttendancePage';
 import { StudentAssignmentsPage } from './pages/StudentAssignmentsPage';
 import { StudentAttendancePage } from './pages/StudentAttendancePage';
 import { StudentFormPage } from './pages/StudentFormPage';
+import { StudentResultsPage } from './pages/StudentResultsPage';
 import { StudentsBulkImportPage } from './pages/StudentsBulkImportPage';
 import { StudentsListPage } from './pages/StudentsListPage';
 import { TeacherAssignmentsPage } from './pages/TeacherAssignmentsPage';
@@ -147,6 +148,7 @@ function App() {
               <Route element={<ProtectedRoute roles={['STUDENT']} />}>
                 <Route path="/student/attendance" element={<StudentAttendancePage />} />
                 <Route path="/student/assignments" element={<StudentAssignmentsPage />} />
+                <Route path="/student/results" element={<StudentResultsPage />} />
               </Route>
             </Route>
           </Route>

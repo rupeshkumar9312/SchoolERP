@@ -140,6 +140,17 @@ export function deleteExamSchedule(examId: number, scheduleId: number): Promise<
   return apiDelete<Exam>(`/exams/${examId}/schedules/${scheduleId}`);
 }
 
+/** Makes this class's marks visible to its students (see getMyExamResults
+ * below). Per-schedule, not umbrella-wide — publishing one class's sitting
+ * of an exam has no effect on any other class scheduled under it. */
+export function publishExamSchedule(examId: number, scheduleId: number): Promise<Exam> {
+  return apiPost<Exam>(`/exams/${examId}/schedules/${scheduleId}/publish`);
+}
+
+export function unpublishExamSchedule(examId: number, scheduleId: number): Promise<Exam> {
+  return apiPost<Exam>(`/exams/${examId}/schedules/${scheduleId}/unpublish`);
+}
+
 export function addExamSubject(
   examId: number,
   scheduleId: number,
@@ -234,4 +245,29 @@ export function saveExamMarks(
   payload: SaveExamMarksPayload,
 ): Promise<ExamMarkRosterRow[]> {
   return apiPost<ExamMarkRosterRow[]>(`/exams/${examId}/schedules/${scheduleId}/marks`, payload);
+}
+
+// ---- Results (student-facing) ----
+
+export interface StudentExamResultSubject {
+  subject: { id: number; name: string };
+  maxMarks: number;
+  passMarks: number | null;
+  marksObtained: number | null;
+  isAbsent: boolean;
+  percentage: number | null;
+  passed: boolean | null;
+}
+
+/** One class's PUBLISHED sitting of an exam, from the signed-in student's
+ * own point of view. Unpublished schedules for their class never appear
+ * here at all. */
+export interface StudentExamResult {
+  exam: { id: number; name: string; type: ExamType };
+  schedule: { id: number; startDate: string; endDate: string };
+  subjects: StudentExamResultSubject[];
+}
+
+export function getMyExamResults(): Promise<StudentExamResult[]> {
+  return apiGet<StudentExamResult[]>('/exams/me/results');
 }
