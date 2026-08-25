@@ -1,8 +1,9 @@
 import { ExamType } from '@prisma/client';
-import { IsEnum, IsOptional, IsString, MinLength } from 'class-validator';
+import { IsDateString, IsEnum, IsOptional, IsString, MinLength } from 'class-validator';
 
-// Umbrella-level fields only — name/type. Dates/class/status all live on
-// ExamSchedule now; see UpdateExamScheduleDto.
+// Umbrella-level fields — name/type and the overall date window. Class,
+// per-class dates and status all live on ExamSchedule; see
+// UpdateExamScheduleDto.
 export class UpdateExamDto {
   @IsOptional()
   @IsString()
@@ -12,4 +13,12 @@ export class UpdateExamDto {
   @IsOptional()
   @IsEnum(ExamType)
   type?: ExamType;
+
+  @IsOptional()
+  @IsDateString()
+  startDate?: string;
+
+  @IsOptional()
+  @IsDateString()
+  endDate?: string;
 }

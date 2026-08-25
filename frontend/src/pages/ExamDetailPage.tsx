@@ -46,6 +46,8 @@ export function ExamDetailPage() {
   const [editingHeader, setEditingHeader] = useState(false);
   const [name, setName] = useState('');
   const [type, setType] = useState<ExamType>('UNIT_TEST');
+  const [headerStartDate, setHeaderStartDate] = useState('');
+  const [headerEndDate, setHeaderEndDate] = useState('');
   const [savingHeader, setSavingHeader] = useState(false);
 
   const [addingClass, setAddingClass] = useState(false);
@@ -69,6 +71,8 @@ export function ExamDetailPage() {
       setExam(row);
       setName(row.name);
       setType(row.type);
+      setHeaderStartDate(row.startDate ? toDateInputValue(row.startDate) : '');
+      setHeaderEndDate(row.endDate ? toDateInputValue(row.endDate) : '');
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Failed to load exam');
     } finally {
@@ -105,7 +109,12 @@ export function ExamDetailPage() {
     setSavingHeader(true);
     setError(null);
     try {
-      const updated = await updateExam(examId, { name: name.trim(), type });
+      const updated = await updateExam(examId, {
+        name: name.trim(),
+        type,
+        startDate: headerStartDate || undefined,
+        endDate: headerEndDate || undefined,
+      });
       setExam(updated);
       setEditingHeader(false);
       toast('Exam updated.');
@@ -202,6 +211,9 @@ export function ExamDetailPage() {
       </div>
       <p className="subtitle">
         {EXAM_TYPE_LABELS[exam.type]}
+        {exam.startDate && exam.endDate
+          ? ` · ${toDateInputValue(exam.startDate)} – ${toDateInputValue(exam.endDate)}`
+          : ''}
         {exam.createdBy ? ` · Created by ${exam.createdBy.name}` : ''}
       </p>
 
@@ -238,6 +250,19 @@ export function ExamDetailPage() {
                 ))}
               </select>
             </label>
+            <label className="field">
+              <span>Start date</span>
+              <input type="date" value={headerStartDate} onChange={(e) => setHeaderStartDate(e.target.value)} />
+            </label>
+            <label className="field">
+              <span>End date</span>
+              <input
+                type="date"
+                value={headerEndDate}
+                onChange={(e) => setHeaderEndDate(e.target.value)}
+                min={headerStartDate || undefined}
+              />
+            </label>
             <div className="form-actions">
               <button type="submit" disabled={savingHeader}>
                 {savingHeader ? 'Saving…' : 'Save'}
@@ -248,9 +273,17 @@ export function ExamDetailPage() {
             </div>
           </form>
         ) : (
-          <p>
-            <strong>Type:</strong> {EXAM_TYPE_LABELS[exam.type]}
-          </p>
+          <>
+            <p>
+              <strong>Type:</strong> {EXAM_TYPE_LABELS[exam.type]}
+            </p>
+            <p>
+              <strong>Dates:</strong>{' '}
+              {exam.startDate && exam.endDate
+                ? `${toDateInputValue(exam.startDate)} – ${toDateInputValue(exam.endDate)}`
+                : '—'}
+            </p>
+          </>
         )}
       </section>
 

@@ -37,12 +37,15 @@ export interface ExamSchedule {
   updatedAt: string;
 }
 
-/** The exam's identity only — name + type. Every class it's been scheduled
- * for is a separate, independent entry in `schedules`. */
+/** The exam's identity — name + type — plus an optional overall date
+ * window. Every class it's been scheduled for is a separate, independent
+ * entry in `schedules`, with its own dates that may differ from this one. */
 export interface Exam {
   id: number;
   name: string;
   type: ExamType;
+  startDate: string | null;
+  endDate: string | null;
   createdBy: { id: number; name: string } | null;
   schedules: ExamSchedule[];
   createdAt: string;
@@ -66,6 +69,8 @@ export interface CreateExamScheduleInput {
 export interface CreateExamPayload {
   name: string;
   type: ExamType;
+  startDate?: string;
+  endDate?: string;
   /** Optional first class sitting, created together with the umbrella in
    * one request — keeps single-class creation a one-step flow. Additional
    * classes are added afterwards via addExamSchedule(). */
@@ -75,6 +80,8 @@ export interface CreateExamPayload {
 export interface UpdateExamPayload {
   name?: string;
   type?: ExamType;
+  startDate?: string;
+  endDate?: string;
 }
 
 export interface UpdateExamSchedulePayload {

@@ -46,6 +46,8 @@ export interface ExamView {
   id: number;
   name: string;
   type: ExamType;
+  startDate: Date | null;
+  endDate: Date | null;
   createdBy: { id: number; name: string } | null;
   schedules: ExamScheduleView[];
   createdAt: Date;
@@ -345,6 +347,9 @@ export class ExamsService {
   // ---- Exam (umbrella) ----
 
   async create(dto: CreateExamDto, actor: AuthenticatedUser): Promise<ExamView> {
+    if (dto.startDate && dto.endDate) {
+      this.assertDateRangeValid(dto.startDate, dto.endDate);
+    }
     if (dto.schedule) {
       this.assertDateRangeValid(dto.schedule.startDate, dto.schedule.endDate);
       await this.assertSubjectsBelongToClass(dto.schedule.classId, dto.schedule.subjects);
@@ -355,6 +360,8 @@ export class ExamsService {
         data: {
           name: dto.name,
           type: dto.type,
+          startDate: dto.startDate ? new Date(dto.startDate) : undefined,
+          endDate: dto.endDate ? new Date(dto.endDate) : undefined,
           createdById: actor.id,
           schedules: dto.schedule
             ? {
@@ -395,11 +402,19 @@ export class ExamsService {
   async update(id: number, dto: UpdateExamDto, actor: AuthenticatedUser): Promise<ExamView> {
     const existing = await this.findRowOrThrow(id);
 
+    const effectiveStart = dto.startDate ?? existing.startDate?.toISOString();
+    const effectiveEnd = dto.endDate ?? existing.endDate?.toISOString();
+    if (effectiveStart && effectiveEnd) {
+      this.assertDateRangeValid(effectiveStart, effectiveEnd);
+    }
+
     const row = await this.prisma.exam.update({
       where: { id },
       data: {
         name: dto.name,
         type: dto.type,
+        startDate: dto.startDate ? new Date(dto.startDate) : undefined,
+        endDate: dto.endDate ? new Date(dto.endDate) : undefined,
       },
       include: EXAM_INCLUDE,
     });
@@ -707,6 +722,8 @@ export class ExamsService {
       id: row.id,
       name: row.name,
       type: row.type,
+      startDate: row.startDate,
+      endDate: row.endDate,
       createdBy: row.createdBy ? { id: row.createdBy.id, name: row.createdBy.name } : null,
       schedules: row.schedules.map((sch) => ({
         id: sch.id,

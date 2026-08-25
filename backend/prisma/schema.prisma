@@ -452,15 +452,18 @@ enum ExamScheduleStatus {
   PUBLISHED
 }
 
-/// The exam's identity only — "Unit Test 1", "Term 1 Exam". No classId, no
-/// dates, no subjects of its own: those all belong to its ExamSchedule
-/// children, one per class the exam has been scheduled for. Renaming here
-/// updates every class's sitting of it at once, since the name is stored
-/// exactly once.
+/// The exam's identity — "Unit Test 1", "Term 1 Exam" — plus an optional
+/// overall date window shown at creation time. No classId, no subjects of
+/// its own: those belong to its ExamSchedule children, one per class the
+/// exam has been scheduled for, each with its own independent dates that
+/// may differ from this overall window. Renaming here updates every class's
+/// sitting of it at once, since the name is stored exactly once.
 model Exam {
   id          Int            @id @default(autoincrement())
   name        String
   type        ExamType
+  startDate   DateTime?      @db.Date
+  endDate     DateTime?      @db.Date
   createdById Int?
   createdBy   User?          @relation("ExamCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
   schedules   ExamSchedule[]
@@ -473,7 +476,8 @@ model Exam {
 /// One class's sitting of an Exam — "Unit Test 1, for Class 8": its own date
 /// window, its own subject list, its own publish status (no publish routes
 /// exist yet — Phase 3). Fully independent of every other class's schedule
-/// under the same Exam — no shared subject template, no name-matching. No
+/// under the same Exam — no shared subject template, no name-matching, and
+/// its dates are independent of the parent Exam's own startDate/endDate. No
 /// separate academicYearId column: a Class's academicYearId never changes
 /// post-creation, so filtering by year goes through `class.academicYearId`.
 model ExamSchedule {

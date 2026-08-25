@@ -68,6 +68,16 @@ export class CreateExamDto {
   @IsEnum(ExamType)
   type!: ExamType;
 
+  // An overall date window for the exam — independent of, and not required
+  // to match, any individual class's ExamSchedule dates added later.
+  @IsOptional()
+  @IsDateString()
+  startDate?: string;
+
+  @IsOptional()
+  @IsDateString()
+  endDate?: string;
+
   @IsOptional()
   @ValidateNested()
   @Type(() => CreateExamScheduleInputDto)
