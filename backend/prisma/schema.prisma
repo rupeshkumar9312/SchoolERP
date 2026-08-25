@@ -75,6 +75,8 @@ model User {
   auditLogs               AuditLog[]          @relation("AuditLogActor")
   announcements           Announcement[]      @relation("AnnouncementAuthor")
   pushTokens              PushToken[]
+  createdExams            Exam[]              @relation("ExamCreatedBy")
+  enteredExamMarks        ExamMark[]          @relation("ExamMarkEnteredBy")
 
   @@map("users")
 }
@@ -128,6 +130,7 @@ model Class {
   students            Student[]
   attendance          StudentAttendance[]
   homeworkAssignments Assignment[]
+  exams               Exam[]
   createdAt           DateTime              @default(now())
 
   @@unique([academicYearId, name])
@@ -149,6 +152,7 @@ model Section {
   classTeacherId      Int?
   classTeacher        Teacher?              @relation("ClassTeacherOf", fields: [classTeacherId], references: [id], onDelete: SetNull)
   homeworkAssignments Assignment[]
+  examMarks           ExamMark[]
   createdAt           DateTime              @default(now())
 
   @@unique([classId, name])
@@ -162,6 +166,7 @@ model Subject {
   class               Class                 @relation(fields: [classId], references: [id], onDelete: Restrict)
   assignments         TeacherClassSubject[]
   homeworkAssignments Assignment[]
+  examSubjects        ExamSubject[]
   createdAt           DateTime              @default(now())
 
   @@unique([classId, name])
@@ -290,6 +295,7 @@ model Student {
   user                  User?                  @relation(fields: [userId], references: [id], onDelete: Cascade)
   attendance            StudentAttendance[]
   assignmentSubmissions AssignmentSubmission[]
+  examMarks             ExamMark[]
 
   @@map("students")
 }
@@ -429,4 +435,89 @@ model AnnouncementAudience {
 
   @@id([announcementId, audience])
   @@map("announcement_audiences")
+}
+
+enum ExamType {
+  CLASS_TEST
+  UNIT_TEST
+  MID_TERM
+  TERM_EXAM
+  FINAL_EXAM
+  OTHER
+}
+
+enum ExamStatus {
+  DRAFT
+  PUBLISHED
+}
+
+/// One exam event for one class — spans every section of that class, since
+/// Subject (like Class) is not section-scoped. "Unit Test 1", "Term 1 Exam",
+/// etc. Marks stay invisible to students until status flips to PUBLISHED (no
+/// routes for that exist yet — Phase 3). No separate academicYearId column:
+/// a Class's academicYearId never changes post-creation, so filtering by
+/// year goes through `class.academicYearId` instead of a second column that
+/// could only ever agree with it.
+model Exam {
+  id          Int          @id @default(autoincrement())
+  name        String
+  type        ExamType
+  classId     Int
+  class       Class        @relation(fields: [classId], references: [id], onDelete: Restrict)
+  startDate   DateTime     @db.Date
+  endDate     DateTime     @db.Date
+  status      ExamStatus   @default(DRAFT)
+  createdById Int?
+  createdBy   User?        @relation("ExamCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  subjects    ExamSubject[]
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  @@index([classId])
+  @@map("exams")
+}
+
+/// One subject's paper within an Exam — its own max/pass marks and date,
+/// since different subjects in the same exam are graded out of different
+/// totals and held on different days.
+model ExamSubject {
+  id        Int        @id @default(autoincrement())
+  examId    Int
+  exam      Exam       @relation(fields: [examId], references: [id], onDelete: Cascade)
+  subjectId Int
+  subject   Subject    @relation(fields: [subjectId], references: [id], onDelete: Restrict)
+  maxMarks  Int
+  passMarks Int?
+  examDate  DateTime?  @db.Date
+  marks     ExamMark[]
+  createdAt DateTime   @default(now())
+
+  @@unique([examId, subjectId])
+  @@map("exam_subjects")
+}
+
+/// One student's result for one subject's paper. sectionId is a snapshot
+/// (same reasoning as StudentAttendance.classId/sectionId) so a later
+/// section change never rewrites history or breaks a teacher's marks-entry
+/// scope check for what they already graded. No marks-entry routes exist
+/// yet (Phase 2) — this table ships now so Phase 2 needs no further schema
+/// migration.
+model ExamMark {
+  id            Int         @id @default(autoincrement())
+  examSubjectId Int
+  examSubject   ExamSubject @relation(fields: [examSubjectId], references: [id], onDelete: Cascade)
+  studentId     Int
+  student       Student     @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  sectionId     Int
+  section       Section     @relation(fields: [sectionId], references: [id], onDelete: Restrict)
+  marksObtained Int?
+  isAbsent      Boolean     @default(false)
+  remarks       String?
+  enteredById   Int?
+  enteredBy     User?       @relation("ExamMarkEnteredBy", fields: [enteredById], references: [id], onDelete: SetNull)
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  @@unique([examSubjectId, studentId])
+  @@map("exam_marks")
 }

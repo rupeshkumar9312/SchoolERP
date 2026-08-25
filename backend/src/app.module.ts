@@ -8,6 +8,7 @@ import { AuditModule } from './audit/audit.module';
 import { AuthModule } from './auth/auth.module';
 import { validateEnv } from './config/env.validation';
 import { DashboardModule } from './dashboard/dashboard.module';
+import { ExamsModule } from './exams/exams.module';
 import { HealthModule } from './health/health.module';
 import { HolidaysModule } from './holidays/holidays.module';
 import { PrismaModule } from './prisma/prisma.module';
@@ -40,6 +41,7 @@ import { UsersModule } from './users/users.module';
     AssignmentsModule,
     AnnouncementsModule,
     PushNotificationsModule,
+    ExamsModule,
   ],
 })
 export class AppModule {}

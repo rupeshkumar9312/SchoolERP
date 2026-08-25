@@ -13,10 +13,15 @@ import { ConfirmDialogProvider } from './components/ConfirmDialogProvider';
 import { ToastProvider } from './components/ToastProvider';
 import { ChangePasswordPage } from './pages/ChangePasswordPage';
 import { DashboardHome } from './pages/DashboardHome';
+import { ExamDetailPage } from './pages/ExamDetailPage';
+import { ExamFormPage } from './pages/ExamFormPage';
+import { ExamMarksEntryPage } from './pages/ExamMarksEntryPage';
+import { ExamsListPage } from './pages/ExamsListPage';
 import { LoginPage } from './pages/LoginPage';
 import { MarkAttendancePage } from './pages/MarkAttendancePage';
 import { MyAttendancePage } from './pages/MyAttendancePage';
 import { MyClassesPage } from './pages/MyClassesPage';
+import { MyExamsPage } from './pages/MyExamsPage';
 import { MyStudentsPage } from './pages/MyStudentsPage';
 import { ReportsPage } from './pages/ReportsPage';
 import { SettingsPage } from './pages/SettingsPage';
@@ -111,6 +116,18 @@ function App() {
               </Route>
               <Route element={<ProtectedRoute permission="assignment.create" />}>
                 <Route path="/assignments/bulk-import" element={<AssignmentsBulkImportPage />} />
+              </Route>
+
+              <Route element={<ProtectedRoute permission="exam.view" />}>
+                <Route path="/exams" element={<ExamsListPage />} />
+                <Route path="/exams/:id" element={<ExamDetailPage />} />
+              </Route>
+              <Route element={<ProtectedRoute permission="exam.create" />}>
+                <Route path="/exams/new" element={<ExamFormPage />} />
+              </Route>
+              <Route element={<ProtectedRoute roles={['TEACHER']} />}>
+                <Route path="/my-exams" element={<MyExamsPage />} />
+                <Route path="/exams/:id/marks" element={<ExamMarksEntryPage />} />
               </Route>
 
               <Route path="/announcements" element={<AnnouncementsListPage />} />

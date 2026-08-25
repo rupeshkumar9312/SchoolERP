@@ -35,6 +35,12 @@ const PERMISSIONS: Array<{ key: string; description: string }> = [
   { key: 'announcement.create', description: 'Post an announcement/notice' },
   { key: 'announcement.edit', description: 'Edit an announcement/notice' },
   { key: 'announcement.delete', description: 'Delete an announcement/notice' },
+  { key: 'exam.view', description: 'View exams and their subject/marks structure' },
+  { key: 'exam.create', description: 'Create an exam and its subject list' },
+  { key: 'exam.edit', description: "Edit an exam's details and subject list" },
+  { key: 'exam.delete', description: 'Delete an exam' },
+  { key: 'exam.marks.enter', description: "Enter/edit a subject's marks for a class-section (own assignment for a teacher)" },
+  { key: 'exam.marks.publish', description: 'Publish or unpublish an exam, making marks visible to students' },
 ];
 
 // Director/Principal/Admin share one "Management" permission set per the
@@ -57,6 +63,7 @@ const TEACHER_PERMISSION_KEYS = [
   'assignment.create',
   'assignment.edit',
   'assignment.delete',
+  'exam.marks.enter',
 ];
 
 const SUPER_ADMIN_EMAIL = 'admin@schoolerp.dev';

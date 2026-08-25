@@ -156,3 +156,13 @@ export function IconChartBar(props: IconProps) {
     </svg>
   );
 }
+
+export function IconRibbon(props: IconProps) {
+  return (
+    <svg {...common} {...props}>
+      <circle cx="12" cy="8.5" r="5" />
+      <path d="M9 13.2 7 20.5l5-2.3 5 2.3-2-7.3" />
+      <path d="M9.7 8.5l1.6 1.6 3-3.2" />
+    </svg>
+  );
+}

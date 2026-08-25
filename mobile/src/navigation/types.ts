@@ -1,5 +1,6 @@
 import type { NavigatorScreenParams } from '@react-navigation/native';
 import type { Announcement } from '../api/announcements';
+import type { TeacherExamEntry } from '../api/exams';
 import type { StudentHomeworkAssignment, HomeworkAssignment } from '../api/homework';
 import type { Student } from '../api/students';
 import type { Teacher } from '../api/teachers';
@@ -57,6 +58,11 @@ export type TeacherAssignmentsStackParamList = {
   NewAssignment: undefined;
 };
 
+export type TeacherExamsStackParamList = {
+  ExamsList: undefined;
+  MarksEntry: { entry: TeacherExamEntry };
+};
+
 export type TeacherDashboardStackParamList = {
   DashboardHome: undefined;
   MyAttendance: undefined;
@@ -66,6 +72,7 @@ export type TeacherTabsParamList = {
   Dashboard: NavigatorScreenParams<TeacherDashboardStackParamList>;
   Classes: NavigatorScreenParams<TeacherClassesStackParamList>;
   Assignments: NavigatorScreenParams<TeacherAssignmentsStackParamList>;
+  Exams: NavigatorScreenParams<TeacherExamsStackParamList>;
   Announcements: NavigatorScreenParams<AnnouncementsStackParamList>;
   Settings: undefined;
 };

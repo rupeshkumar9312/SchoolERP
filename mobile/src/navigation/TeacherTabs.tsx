@@ -7,8 +7,10 @@ import { brandedHeaderOptions } from './brandedHeaderOptions';
 import { SettingsScreen } from '../screens/SettingsScreen';
 import { ClassAttendanceHistoryScreen } from '../screens/teacher/ClassAttendanceHistoryScreen';
 import { ClassesListScreen } from '../screens/teacher/ClassesListScreen';
+import { ExamMarksEntryScreen } from '../screens/teacher/ExamMarksEntryScreen';
 import { MarkAttendanceScreen } from '../screens/teacher/MarkAttendanceScreen';
 import { MyAttendanceScreen } from '../screens/teacher/MyAttendanceScreen';
+import { MyExamsListScreen } from '../screens/teacher/MyExamsListScreen';
 import { NewAssignmentScreen } from '../screens/teacher/NewAssignmentScreen';
 import { RosterScreen } from '../screens/teacher/RosterScreen';
 import { StudentAttendanceHistoryScreen } from '../screens/teacher/StudentAttendanceHistoryScreen';
@@ -21,6 +23,7 @@ import type {
   TeacherAssignmentsStackParamList,
   TeacherClassesStackParamList,
   TeacherDashboardStackParamList,
+  TeacherExamsStackParamList,
   TeacherTabsParamList,
 } from './types';
 
@@ -28,6 +31,7 @@ const Tab = createBottomTabNavigator<TeacherTabsParamList>();
 const DashboardStack = createNativeStackNavigator<TeacherDashboardStackParamList>();
 const ClassesStack = createNativeStackNavigator<TeacherClassesStackParamList>();
 const AssignmentsStack = createNativeStackNavigator<TeacherAssignmentsStackParamList>();
+const ExamsStack = createNativeStackNavigator<TeacherExamsStackParamList>();
 
 function DashboardStackNavigator(): React.JSX.Element {
   return (
@@ -61,10 +65,20 @@ function AssignmentsStackNavigator(): React.JSX.Element {
   );
 }
 
+function ExamsStackNavigator(): React.JSX.Element {
+  return (
+    <ExamsStack.Navigator screenOptions={brandedHeaderOptions}>
+      <ExamsStack.Screen name="ExamsList" component={MyExamsListScreen} options={{ title: 'My Exams' }} />
+      <ExamsStack.Screen name="MarksEntry" component={ExamMarksEntryScreen} options={{ title: 'Enter marks' }} />
+    </ExamsStack.Navigator>
+  );
+}
+
 const ICONS: Record<keyof TeacherTabsParamList, keyof typeof Ionicons.glyphMap> = {
   Dashboard: 'home',
   Classes: 'school',
   Assignments: 'document-text',
+  Exams: 'ribbon',
   Announcements: 'megaphone',
   Settings: 'settings',
 };
@@ -95,6 +109,11 @@ export function TeacherTabs(): React.JSX.Element {
         name="Assignments"
         component={AssignmentsStackNavigator}
         options={{ title: 'Assignments', headerShown: false }}
+      />
+      <Tab.Screen
+        name="Exams"
+        component={ExamsStackNavigator}
+        options={{ title: 'Exams', headerShown: false }}
       />
       <Tab.Screen
         name="Announcements"
