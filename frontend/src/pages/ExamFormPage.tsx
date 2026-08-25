@@ -17,6 +17,10 @@ interface SubjectRowDraft {
 
 const emptyRow = (): SubjectRowDraft => ({ subjectId: '', maxMarks: '', passMarks: '', examDate: '' });
 
+// Creates the Exam umbrella (name + type) together with its first class
+// schedule in one request, so a single-class exam stays a one-step flow.
+// Additional classes are added afterwards from the exam's detail page via
+// "+ Add class" — each one fully independent, with its own subject list.
 export function ExamFormPage() {
   const navigate = useNavigate();
 
@@ -26,14 +30,13 @@ export function ExamFormPage() {
   const [classId, setClassId] = useState('');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
-  const [rows, setRows] = useState<SubjectRowDraft[]>([emptyRow()]);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const [years, setYears] = useState<academic.AcademicYear[]>([]);
   const [classes, setClasses] = useState<academic.SchoolClass[]>([]);
   const [subjects, setSubjects] = useState<academic.Subject[]>([]);
-
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [rows, setRows] = useState<SubjectRowDraft[]>([emptyRow()]);
 
   useEffect(() => {
     void academic.listAcademicYears().then(setYears);
@@ -58,28 +61,25 @@ export function ExamFormPage() {
   const updateRow = (index: number, patch: Partial<SubjectRowDraft>) => {
     setRows((prev) => prev.map((r, i) => (i === index ? { ...r, ...patch } : r)));
   };
-
   const addRow = () => setRows((prev) => [...prev, emptyRow()]);
   const removeRow = (index: number) => setRows((prev) => prev.filter((_, i) => i !== index));
-
   const pickedSubjectIds = new Set(rows.map((r) => r.subjectId).filter(Boolean));
 
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError(null);
     if (!classId || !startDate || !endDate) return;
-
-    const subjects: ExamSubjectInput[] = [];
+    const picked: ExamSubjectInput[] = [];
     for (const row of rows) {
       if (!row.subjectId || !row.maxMarks) continue;
-      subjects.push({
+      picked.push({
         subjectId: Number(row.subjectId),
         maxMarks: Number(row.maxMarks),
         passMarks: row.passMarks ? Number(row.passMarks) : undefined,
         examDate: row.examDate || undefined,
       });
     }
-    if (subjects.length === 0) {
+    if (picked.length === 0) {
       setError('Add at least one subject with a max marks value.');
       return;
     }
@@ -89,10 +89,12 @@ export function ExamFormPage() {
       const created = await createExam({
         name: name.trim(),
         type,
-        classId: Number(classId),
-        startDate,
-        endDate,
-        subjects,
+        schedule: {
+          classId: Number(classId),
+          startDate,
+          endDate,
+          subjects: picked,
+        },
       });
       navigate(`/exams/${created.id}`);
     } catch (err) {
@@ -122,6 +124,11 @@ export function ExamFormPage() {
             ))}
           </select>
         </label>
+
+        <p className="muted">
+          Set up the first class below — you can add more classes to this exam afterwards, each with its own dates
+          and subjects.
+        </p>
 
         <label className="field">
           <span>Academic year</span>
@@ -185,10 +192,7 @@ export function ExamFormPage() {
             <>
               {rows.map((row, i) => (
                 <div key={i} className="row-actions" style={{ marginBottom: '0.5rem', flexWrap: 'wrap' }}>
-                  <select
-                    value={row.subjectId}
-                    onChange={(e) => updateRow(i, { subjectId: e.target.value })}
-                  >
+                  <select value={row.subjectId} onChange={(e) => updateRow(i, { subjectId: e.target.value })}>
                     <option value="">Select subject…</option>
                     {subjects
                       .filter((s) => String(s.id) === row.subjectId || !pickedSubjectIds.has(String(s.id)))

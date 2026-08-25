@@ -16,7 +16,7 @@ import type { TeacherExamsStackParamList } from '../../navigation/types';
 type Props = NativeStackScreenProps<TeacherExamsStackParamList, 'ExamsList'>;
 
 function entryKey(e: TeacherExamEntry): string {
-  return `${e.exam.id}-${e.examSubject.id}-${e.section.id}`;
+  return `${e.schedule.id}-${e.examSubject.id}-${e.section.id}`;
 }
 
 export function MyExamsListScreen({ navigation }: Props): React.JSX.Element {
@@ -61,7 +61,7 @@ export function MyExamsListScreen({ navigation }: Props): React.JSX.Element {
           <Card style={styles.card}>
             <View style={styles.titleRow}>
               <Text style={styles.title}>{e.exam.name}</Text>
-              <Badge label={e.exam.status === 'PUBLISHED' ? 'Published' : 'Draft'} tone={e.exam.status === 'PUBLISHED' ? 'success' : 'muted'} />
+              <Badge label={e.schedule.status === 'PUBLISHED' ? 'Published' : 'Draft'} tone={e.schedule.status === 'PUBLISHED' ? 'success' : 'muted'} />
             </View>
             <Text style={styles.muted}>
               {EXAM_TYPE_LABELS[e.exam.type]} · {e.class.name} - {e.section.name} · {e.examSubject.subjectName}

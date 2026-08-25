@@ -5,16 +5,18 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { ExamStatus, ExamType, Prisma, Teacher } from '@prisma/client';
+import { ExamScheduleStatus, ExamType, Prisma, Teacher } from '@prisma/client';
 import { AuditLogService } from '../audit/audit-log.service';
 import { AuthenticatedUser } from '../auth/auth.types';
 import { TEACHER_ROLE } from '../auth/roles.constants';
 import { PrismaService } from '../prisma/prisma.service';
 import { BulkMarksDto } from './dto/bulk-marks.dto';
+import { CreateExamScheduleDto } from './dto/create-exam-schedule.dto';
 import { CreateExamSubjectDto } from './dto/create-exam-subject.dto';
 import { CreateExamDto } from './dto/create-exam.dto';
 import { ExamMarksRosterQueryDto } from './dto/exam-marks-roster.query.dto';
 import { ListExamsQueryDto } from './dto/list-exams.query.dto';
+import { UpdateExamScheduleDto } from './dto/update-exam-schedule.dto';
 import { UpdateExamSubjectDto } from './dto/update-exam-subject.dto';
 import { UpdateExamDto } from './dto/update-exam.dto';
 
@@ -26,17 +28,26 @@ export interface ExamSubjectView {
   examDate: Date | null;
 }
 
-export interface ExamView {
+export interface ExamScheduleView {
   id: number;
-  name: string;
-  type: ExamType;
+  examId: number;
   class: { id: number; name: string };
   academicYear: { id: number; name: string };
   startDate: Date;
   endDate: Date;
-  status: ExamStatus;
+  status: ExamScheduleStatus;
   createdBy: { id: number; name: string } | null;
   subjects: ExamSubjectView[];
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface ExamView {
+  id: number;
+  name: string;
+  type: ExamType;
+  createdBy: { id: number; name: string } | null;
+  schedules: ExamScheduleView[];
   createdAt: Date;
   updatedAt: Date;
 }
@@ -48,12 +59,13 @@ export interface ExamMarkRosterRow {
   remarks: string | null;
 }
 
-/** One row per (exam, subject a teacher teaches, section they teach it in) —
- * a teacher may teach the same exam's subject in several sections, or teach
- * several of an exam's subjects, so this is a flattened list of concrete
- * marks-entry targets, not one row per exam. */
+/** One row per (schedule, subject a teacher teaches, section they teach it
+ * in) — a teacher may teach the same schedule's subject in several sections,
+ * or teach several of a schedule's subjects, so this is a flattened list of
+ * concrete marks-entry targets, not one row per exam or per schedule. */
 export interface TeacherExamEntry {
-  exam: { id: number; name: string; type: ExamType; status: ExamStatus; startDate: Date; endDate: Date };
+  exam: { id: number; name: string; type: ExamType };
+  schedule: { id: number; status: ExamScheduleStatus; startDate: Date; endDate: Date };
   class: { id: number; name: string };
   section: { id: number; name: string };
   examSubject: {
@@ -76,13 +88,25 @@ export interface ExamSubjectProgress {
 }
 
 type ExamWithRefs = Prisma.ExamGetPayload<{ include: typeof EXAM_INCLUDE }>;
+type ScheduleWithRefs = Prisma.ExamScheduleGetPayload<{ include: typeof SCHEDULE_INCLUDE }>;
 type ExamSubjectWithRefs = Prisma.ExamSubjectGetPayload<{ include: { subject: true } }>;
 
 const EXAM_INCLUDE = {
-  class: { include: { academicYear: true } },
   createdBy: true,
-  subjects: { include: { subject: true }, orderBy: { id: 'asc' } },
+  schedules: {
+    include: {
+      class: { include: { academicYear: true } },
+      createdBy: true,
+      subjects: { include: { subject: true }, orderBy: { id: 'asc' } },
+    },
+    orderBy: { id: 'asc' },
+  },
 } satisfies Prisma.ExamInclude;
+
+const SCHEDULE_INCLUDE = {
+  class: true,
+  subjects: { include: { subject: true }, orderBy: { id: 'asc' } },
+} satisfies Prisma.ExamScheduleInclude;
 
 @Injectable()
 export class ExamsService {
@@ -92,15 +116,24 @@ export class ExamsService {
   ) {}
 
   async findAll(query: ListExamsQueryDto): Promise<ExamView[]> {
+    const hasScheduleFilter =
+      query.classId !== undefined || query.academicYearId !== undefined || query.status !== undefined;
+
     const rows = await this.prisma.exam.findMany({
       where: {
-        classId: query.classId,
         type: query.type,
-        status: query.status,
-        class: query.academicYearId ? { academicYearId: query.academicYearId } : undefined,
+        schedules: hasScheduleFilter
+          ? {
+              some: {
+                classId: query.classId,
+                status: query.status,
+                class: query.academicYearId ? { academicYearId: query.academicYearId } : undefined,
+              },
+            }
+          : undefined,
       },
       include: EXAM_INCLUDE,
-      orderBy: { startDate: 'desc' },
+      orderBy: { createdAt: 'desc' },
     });
     return rows.map((row) => this.toView(row));
   }
@@ -109,9 +142,10 @@ export class ExamsService {
     return this.toView(await this.findRowOrThrow(id));
   }
 
-  /** Identity-pinned "me" route for a TEACHER — every (exam, subject, section)
-   * combination they may enter marks for, flattened from their
-   * TeacherClassSubject rows intersected with each exam's subject list. */
+  /** Identity-pinned "me" route for a TEACHER — every (exam, schedule,
+   * subject, section) combination they may enter marks for, flattened from
+   * their TeacherClassSubject rows intersected with each schedule's subject
+   * list. */
   async findForTeacher(actor: AuthenticatedUser): Promise<TeacherExamEntry[]> {
     const teacher = await this.getOwnTeacher(actor.id);
     const assignments = await this.prisma.teacherClassSubject.findMany({ where: { teacherId: teacher.id } });
@@ -119,10 +153,14 @@ export class ExamsService {
 
     const classIds = [...new Set(assignments.map((a) => a.classId))];
     const sectionIds = [...new Set(assignments.map((a) => a.sectionId))];
-    const [exams, sections] = await Promise.all([
-      this.prisma.exam.findMany({
+    const [schedules, sections] = await Promise.all([
+      this.prisma.examSchedule.findMany({
         where: { classId: { in: classIds } },
-        include: EXAM_INCLUDE,
+        include: {
+          exam: true,
+          class: true,
+          subjects: { include: { subject: true }, orderBy: { id: 'asc' } },
+        },
         orderBy: { startDate: 'desc' },
       }),
       this.prisma.section.findMany({ where: { id: { in: sectionIds } } }),
@@ -130,26 +168,25 @@ export class ExamsService {
     const sectionById = new Map(sections.map((s) => [s.id, s]));
 
     const entries: TeacherExamEntry[] = [];
-    for (const exam of exams) {
-      for (const a of assignments.filter((x) => x.classId === exam.classId)) {
-        const examSubject = exam.subjects.find((s) => s.subject.id === a.subjectId);
+    for (const schedule of schedules) {
+      for (const a of assignments.filter((x) => x.classId === schedule.classId)) {
+        const examSubject = schedule.subjects.find((s) => s.subject.id === a.subjectId);
         const section = sectionById.get(a.sectionId);
         if (!examSubject || !section) continue;
 
         const [enteredCount, totalStudents] = await Promise.all([
           this.prisma.examMark.count({ where: { examSubjectId: examSubject.id, sectionId: a.sectionId } }),
-          this.prisma.student.count({ where: { classId: exam.classId, sectionId: a.sectionId, isActive: true } }),
+          this.prisma.student.count({ where: { classId: schedule.classId, sectionId: a.sectionId, isActive: true } }),
         ]);
         entries.push({
-          exam: {
-            id: exam.id,
-            name: exam.name,
-            type: exam.type,
-            status: exam.status,
-            startDate: exam.startDate,
-            endDate: exam.endDate,
+          exam: { id: schedule.exam.id, name: schedule.exam.name, type: schedule.exam.type },
+          schedule: {
+            id: schedule.id,
+            status: schedule.status,
+            startDate: schedule.startDate,
+            endDate: schedule.endDate,
           },
-          class: { id: exam.class.id, name: exam.class.name },
+          class: { id: schedule.class.id, name: schedule.class.name },
           section: { id: section.id, name: section.name },
           examSubject: {
             id: examSubject.id,
@@ -167,14 +204,14 @@ export class ExamsService {
     return entries;
   }
 
-  /** Per-subject "entered X / Y" progress across the whole exam class (every
-   * section), for the admin exam-detail page — not scoped to one teacher's
-   * section like the roster/bulk-save methods below. */
-  async getProgress(examId: number): Promise<ExamSubjectProgress[]> {
-    const exam = await this.findRowOrThrow(examId);
-    const examSubjectIds = exam.subjects.map((s) => s.id);
+  /** Per-subject "entered X / Y" progress for one class's schedule, for the
+   * admin exam-detail page — not scoped to one teacher's section like the
+   * roster/bulk-save methods below. */
+  async getProgress(examId: number, scheduleId: number): Promise<ExamSubjectProgress[]> {
+    const schedule = await this.findScheduleRowOrThrow(examId, scheduleId);
+    const examSubjectIds = schedule.subjects.map((s) => s.id);
     const [totalStudents, counts] = await Promise.all([
-      this.prisma.student.count({ where: { classId: exam.classId, isActive: true } }),
+      this.prisma.student.count({ where: { classId: schedule.classId, isActive: true } }),
       this.prisma.examMark.groupBy({
         by: ['examSubjectId'],
         where: { examSubjectId: { in: examSubjectIds } },
@@ -183,7 +220,7 @@ export class ExamsService {
     ]);
     const enteredByExamSubjectId = new Map(counts.map((c) => [c.examSubjectId, c._count._all]));
 
-    return exam.subjects.map((s) => ({
+    return schedule.subjects.map((s) => ({
       examSubjectId: s.id,
       subject: { id: s.subject.id, name: s.subject.name },
       enteredCount: enteredByExamSubjectId.get(s.id) ?? 0,
@@ -195,19 +232,20 @@ export class ExamsService {
 
   async getMarksRoster(
     examId: number,
+    scheduleId: number,
     query: ExamMarksRosterQueryDto,
     actor: AuthenticatedUser,
   ): Promise<ExamMarkRosterRow[]> {
-    const exam = await this.findRowOrThrow(examId);
-    const examSubject = this.findExamSubjectOrThrow(exam, query.subjectId);
+    const schedule = await this.findScheduleRowOrThrow(examId, scheduleId);
+    const examSubject = this.findExamSubjectOrThrow(schedule, query.subjectId);
     if (actor.roleName === TEACHER_ROLE) {
       const teacher = await this.getOwnTeacher(actor.id);
-      await this.assertAssignedToTeach(teacher.id, exam.classId, query.sectionId, query.subjectId);
+      await this.assertAssignedToTeach(teacher.id, schedule.classId, query.sectionId, query.subjectId);
     }
 
     const [students, marks] = await Promise.all([
       this.prisma.student.findMany({
-        where: { classId: exam.classId, sectionId: query.sectionId, isActive: true },
+        where: { classId: schedule.classId, sectionId: query.sectionId, isActive: true },
         orderBy: { name: 'asc' },
       }),
       this.prisma.examMark.findMany({ where: { examSubjectId: examSubject.id, sectionId: query.sectionId } }),
@@ -227,14 +265,15 @@ export class ExamsService {
 
   async saveMarksBulk(
     examId: number,
+    scheduleId: number,
     dto: BulkMarksDto,
     actor: AuthenticatedUser,
   ): Promise<ExamMarkRosterRow[]> {
-    const exam = await this.findRowOrThrow(examId);
-    const examSubject = this.findExamSubjectOrThrow(exam, dto.subjectId);
+    const schedule = await this.findScheduleRowOrThrow(examId, scheduleId);
+    const examSubject = this.findExamSubjectOrThrow(schedule, dto.subjectId);
     if (actor.roleName === TEACHER_ROLE) {
       const teacher = await this.getOwnTeacher(actor.id);
-      await this.assertAssignedToTeach(teacher.id, exam.classId, dto.sectionId, dto.subjectId);
+      await this.assertAssignedToTeach(teacher.id, schedule.classId, dto.sectionId, dto.subjectId);
     }
 
     const studentIds = dto.records.map((r) => r.studentId);
@@ -242,7 +281,7 @@ export class ExamsService {
       throw new BadRequestException('The same student was listed more than once');
     }
     const validStudents = await this.prisma.student.count({
-      where: { id: { in: studentIds }, classId: exam.classId, sectionId: dto.sectionId, isActive: true },
+      where: { id: { in: studentIds }, classId: schedule.classId, sectionId: dto.sectionId, isActive: true },
     });
     if (validStudents !== studentIds.length) {
       throw new BadRequestException('One or more students do not belong to this class and section');
@@ -300,30 +339,43 @@ export class ExamsService {
       }),
     );
 
-    return this.getMarksRoster(examId, { subjectId: dto.subjectId, sectionId: dto.sectionId }, actor);
+    return this.getMarksRoster(examId, scheduleId, { subjectId: dto.subjectId, sectionId: dto.sectionId }, actor);
   }
 
+  // ---- Exam (umbrella) ----
+
   async create(dto: CreateExamDto, actor: AuthenticatedUser): Promise<ExamView> {
-    this.assertDateRangeValid(dto.startDate, dto.endDate);
-    await this.assertSubjectsBelongToClass(dto.classId, dto.subjects);
+    if (dto.schedule) {
+      this.assertDateRangeValid(dto.schedule.startDate, dto.schedule.endDate);
+      await this.assertSubjectsBelongToClass(dto.schedule.classId, dto.schedule.subjects);
+    }
 
     try {
       const row = await this.prisma.exam.create({
         data: {
           name: dto.name,
           type: dto.type,
-          classId: dto.classId,
-          startDate: new Date(dto.startDate),
-          endDate: new Date(dto.endDate),
           createdById: actor.id,
-          subjects: {
-            create: dto.subjects.map((s) => ({
-              subjectId: s.subjectId,
-              maxMarks: s.maxMarks,
-              passMarks: s.passMarks,
-              examDate: s.examDate ? new Date(s.examDate) : undefined,
-            })),
-          },
+          schedules: dto.schedule
+            ? {
+                create: [
+                  {
+                    classId: dto.schedule.classId,
+                    startDate: new Date(dto.schedule.startDate),
+                    endDate: new Date(dto.schedule.endDate),
+                    createdById: actor.id,
+                    subjects: {
+                      create: dto.schedule.subjects.map((s) => ({
+                        subjectId: s.subjectId,
+                        maxMarks: s.maxMarks,
+                        passMarks: s.passMarks,
+                        examDate: s.examDate ? new Date(s.examDate) : undefined,
+                      })),
+                    },
+                  },
+                ],
+              }
+            : undefined,
         },
         include: EXAM_INCLUDE,
       });
@@ -342,18 +394,12 @@ export class ExamsService {
 
   async update(id: number, dto: UpdateExamDto, actor: AuthenticatedUser): Promise<ExamView> {
     const existing = await this.findRowOrThrow(id);
-    this.assertDateRangeValid(
-      dto.startDate ?? existing.startDate.toISOString(),
-      dto.endDate ?? existing.endDate.toISOString(),
-    );
 
     const row = await this.prisma.exam.update({
       where: { id },
       data: {
         name: dto.name,
         type: dto.type,
-        startDate: dto.startDate ? new Date(dto.startDate) : undefined,
-        endDate: dto.endDate ? new Date(dto.endDate) : undefined,
       },
       include: EXAM_INCLUDE,
     });
@@ -370,7 +416,7 @@ export class ExamsService {
 
   async remove(id: number, actor: AuthenticatedUser): Promise<void> {
     const existing = await this.findRowOrThrow(id);
-    // Cascades exam_subjects and, transitively, exam_marks.
+    // Cascades exam_schedules -> exam_subjects -> exam_marks.
     await this.prisma.exam.delete({ where: { id } });
     await this.audit.record({
       entityType: 'Exam',
@@ -381,21 +427,111 @@ export class ExamsService {
     });
   }
 
-  // ---- Subjects ----
+  // ---- Schedules (one per class added under an Exam) ----
+
+  /** Adds one more class to an existing Exam — fully independent of every
+   * other class already scheduled under it: its own dates, its own subject
+   * list picked from that class's real subjects, no name-matching, no
+   * shared template. */
+  async addSchedule(examId: number, dto: CreateExamScheduleDto, actor: AuthenticatedUser): Promise<ExamView> {
+    await this.findRowOrThrow(examId);
+    this.assertDateRangeValid(dto.startDate, dto.endDate);
+    await this.assertSubjectsBelongToClass(dto.classId, dto.subjects);
+
+    try {
+      const created = await this.prisma.examSchedule.create({
+        data: {
+          examId,
+          classId: dto.classId,
+          startDate: new Date(dto.startDate),
+          endDate: new Date(dto.endDate),
+          createdById: actor.id,
+          subjects: {
+            create: dto.subjects.map((s) => ({
+              subjectId: s.subjectId,
+              maxMarks: s.maxMarks,
+              passMarks: s.passMarks,
+              examDate: s.examDate ? new Date(s.examDate) : undefined,
+            })),
+          },
+        },
+      });
+      await this.audit.record({
+        entityType: 'ExamSchedule',
+        entityId: created.id,
+        action: 'CREATE',
+        userId: actor.id,
+        newValues: created,
+      });
+    } catch (error) {
+      throw this.mapError(error);
+    }
+
+    return this.toView(await this.findRowOrThrow(examId));
+  }
+
+  async updateSchedule(
+    examId: number,
+    scheduleId: number,
+    dto: UpdateExamScheduleDto,
+    actor: AuthenticatedUser,
+  ): Promise<ExamView> {
+    const existing = await this.findScheduleRowOrThrow(examId, scheduleId);
+    this.assertDateRangeValid(
+      dto.startDate ?? existing.startDate.toISOString(),
+      dto.endDate ?? existing.endDate.toISOString(),
+    );
+
+    const row = await this.prisma.examSchedule.update({
+      where: { id: scheduleId },
+      data: {
+        startDate: dto.startDate ? new Date(dto.startDate) : undefined,
+        endDate: dto.endDate ? new Date(dto.endDate) : undefined,
+      },
+    });
+    await this.audit.record({
+      entityType: 'ExamSchedule',
+      entityId: row.id,
+      action: 'UPDATE',
+      userId: actor.id,
+      oldValues: existing,
+      newValues: row,
+    });
+
+    return this.toView(await this.findRowOrThrow(examId));
+  }
+
+  async removeSchedule(examId: number, scheduleId: number, actor: AuthenticatedUser): Promise<ExamView> {
+    const existing = await this.findScheduleRowOrThrow(examId, scheduleId);
+    // Cascades exam_subjects -> exam_marks for this class only.
+    await this.prisma.examSchedule.delete({ where: { id: scheduleId } });
+    await this.audit.record({
+      entityType: 'ExamSchedule',
+      entityId: scheduleId,
+      action: 'DELETE',
+      userId: actor.id,
+      oldValues: existing,
+    });
+
+    return this.toView(await this.findRowOrThrow(examId));
+  }
+
+  // ---- Subjects (nested under one schedule) ----
 
   async addSubject(
     examId: number,
+    scheduleId: number,
     dto: CreateExamSubjectDto,
     actor: AuthenticatedUser,
   ): Promise<ExamView> {
-    const exam = await this.findRowOrThrow(examId);
-    await this.assertSubjectsBelongToClass(exam.classId, [dto]);
+    const schedule = await this.findScheduleRowOrThrow(examId, scheduleId);
+    await this.assertSubjectsBelongToClass(schedule.classId, [dto]);
     this.assertPassMarksValid(dto.maxMarks, dto.passMarks);
 
     try {
       const created = await this.prisma.examSubject.create({
         data: {
-          examId,
+          examScheduleId: scheduleId,
           subjectId: dto.subjectId,
           maxMarks: dto.maxMarks,
           passMarks: dto.passMarks,
@@ -418,11 +554,12 @@ export class ExamsService {
 
   async updateSubject(
     examId: number,
+    scheduleId: number,
     examSubjectId: number,
     dto: UpdateExamSubjectDto,
     actor: AuthenticatedUser,
   ): Promise<ExamView> {
-    const existing = await this.findSubjectRowOrThrow(examId, examSubjectId);
+    const existing = await this.findSubjectRowOrThrow(scheduleId, examSubjectId);
     this.assertPassMarksValid(dto.maxMarks ?? existing.maxMarks, dto.passMarks ?? existing.passMarks ?? undefined);
 
     const row = await this.prisma.examSubject.update({
@@ -445,8 +582,13 @@ export class ExamsService {
     return this.toView(await this.findRowOrThrow(examId));
   }
 
-  async removeSubject(examId: number, examSubjectId: number, actor: AuthenticatedUser): Promise<ExamView> {
-    const existing = await this.findSubjectRowOrThrow(examId, examSubjectId);
+  async removeSubject(
+    examId: number,
+    scheduleId: number,
+    examSubjectId: number,
+    actor: AuthenticatedUser,
+  ): Promise<ExamView> {
+    const existing = await this.findSubjectRowOrThrow(scheduleId, examSubjectId);
     const marksEntered = await this.prisma.examMark.count({ where: { examSubjectId } });
     if (marksEntered > 0) {
       throw new ConflictException('Marks have already been entered for this subject — remove them first');
@@ -472,26 +614,31 @@ export class ExamsService {
     return row;
   }
 
-  private async findSubjectRowOrThrow(
-    examId: number,
-    examSubjectId: number,
-  ): Promise<ExamSubjectWithRefs> {
-    const row = await this.prisma.examSubject.findUnique({
-      where: { id: examSubjectId },
-      include: { subject: true },
-    });
+  private async findScheduleRowOrThrow(examId: number, scheduleId: number): Promise<ScheduleWithRefs> {
+    const row = await this.prisma.examSchedule.findUnique({ where: { id: scheduleId }, include: SCHEDULE_INCLUDE });
     if (!row || row.examId !== examId) {
-      throw new NotFoundException('That subject is not part of this exam');
+      throw new NotFoundException('That class schedule is not part of this exam');
     }
     return row;
   }
 
-  /** Looks up an already-loaded exam's ExamSubject row by the underlying
+  private async findSubjectRowOrThrow(scheduleId: number, examSubjectId: number): Promise<ExamSubjectWithRefs> {
+    const row = await this.prisma.examSubject.findUnique({
+      where: { id: examSubjectId },
+      include: { subject: true },
+    });
+    if (!row || row.examScheduleId !== scheduleId) {
+      throw new NotFoundException('That subject is not part of this schedule');
+    }
+    return row;
+  }
+
+  /** Looks up an already-loaded schedule's ExamSubject row by the underlying
    * Subject's id (what marks-entry callers pass) — no extra query, unlike
    * findSubjectRowOrThrow above which takes the join row's own id. */
-  private findExamSubjectOrThrow(exam: ExamWithRefs, subjectId: number): ExamWithRefs['subjects'][number] {
-    const examSubject = exam.subjects.find((s) => s.subject.id === subjectId);
-    if (!examSubject) throw new NotFoundException('That subject is not part of this exam');
+  private findExamSubjectOrThrow(schedule: ScheduleWithRefs, subjectId: number): ScheduleWithRefs['subjects'][number] {
+    const examSubject = schedule.subjects.find((s) => s.subject.id === subjectId);
+    if (!examSubject) throw new NotFoundException('That subject is not part of this schedule');
     return examSubject;
   }
 
@@ -530,10 +677,10 @@ export class ExamsService {
     }
   }
 
-  /** Every subject in the payload must actually belong to the exam's class —
-   * a subjectId that exists but under a different class is still a valid FK
-   * target, so this has to be checked explicitly rather than relying on a
-   * P2003 failure. */
+  /** Every subject in the payload must actually belong to the schedule's
+   * class — a subjectId that exists but under a different class is still a
+   * valid FK target, so this has to be checked explicitly rather than
+   * relying on a P2003 failure. */
   private async assertSubjectsBelongToClass(
     classId: number,
     subjects: Array<{ subjectId: number; maxMarks: number; passMarks?: number }>,
@@ -560,18 +707,25 @@ export class ExamsService {
       id: row.id,
       name: row.name,
       type: row.type,
-      class: { id: row.class.id, name: row.class.name },
-      academicYear: { id: row.class.academicYear.id, name: row.class.academicYear.name },
-      startDate: row.startDate,
-      endDate: row.endDate,
-      status: row.status,
       createdBy: row.createdBy ? { id: row.createdBy.id, name: row.createdBy.name } : null,
-      subjects: row.subjects.map((s) => ({
-        id: s.id,
-        subject: { id: s.subject.id, name: s.subject.name },
-        maxMarks: s.maxMarks,
-        passMarks: s.passMarks,
-        examDate: s.examDate,
+      schedules: row.schedules.map((sch) => ({
+        id: sch.id,
+        examId: sch.examId,
+        class: { id: sch.class.id, name: sch.class.name },
+        academicYear: { id: sch.class.academicYear.id, name: sch.class.academicYear.name },
+        startDate: sch.startDate,
+        endDate: sch.endDate,
+        status: sch.status,
+        createdBy: sch.createdBy ? { id: sch.createdBy.id, name: sch.createdBy.name } : null,
+        subjects: sch.subjects.map((s) => ({
+          id: s.id,
+          subject: { id: s.subject.id, name: s.subject.name },
+          maxMarks: s.maxMarks,
+          passMarks: s.passMarks,
+          examDate: s.examDate,
+        })),
+        createdAt: sch.createdAt,
+        updatedAt: sch.updatedAt,
       })),
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,
@@ -581,7 +735,16 @@ export class ExamsService {
   private mapError(error: unknown): Error {
     if (error instanceof Prisma.PrismaClientKnownRequestError) {
       if (error.code === 'P2003') return new BadRequestException('Unknown classId or subjectId');
-      if (error.code === 'P2002') return new BadRequestException('That subject is already part of this exam');
+      if (error.code === 'P2002') {
+        // MySQL gives meta.target as the violated index's name (a string);
+        // other providers give an array of column names — normalize both.
+        const target = error.meta?.target;
+        const targetText = Array.isArray(target) ? target.join(',') : String(target ?? '');
+        if (targetText.includes('examId')) {
+          return new ConflictException('This class has already been scheduled for this exam');
+        }
+        return new BadRequestException('That subject is already part of this schedule');
+      }
     }
     return error as Error;
   }

@@ -1,7 +1,7 @@
 import { apiDelete, apiGet, apiPatch, apiPost } from './client';
 
 export type ExamType = 'CLASS_TEST' | 'UNIT_TEST' | 'MID_TERM' | 'TERM_EXAM' | 'FINAL_EXAM' | 'OTHER';
-export type ExamStatus = 'DRAFT' | 'PUBLISHED';
+export type ExamScheduleStatus = 'DRAFT' | 'PUBLISHED';
 
 export const EXAM_TYPE_LABELS: Record<ExamType, string> = {
   CLASS_TEST: 'Class test',
@@ -20,17 +20,31 @@ export interface ExamSubjectRow {
   examDate: string | null;
 }
 
-export interface Exam {
+/** One class's independent sitting of an Exam — its own dates, subjects and
+ * publish status. An Exam has one of these per class it's been scheduled
+ * for, with no constraint between them (no shared subject list). */
+export interface ExamSchedule {
   id: number;
-  name: string;
-  type: ExamType;
+  examId: number;
   class: { id: number; name: string };
   academicYear: { id: number; name: string };
   startDate: string;
   endDate: string;
-  status: ExamStatus;
+  status: ExamScheduleStatus;
   createdBy: { id: number; name: string } | null;
   subjects: ExamSubjectRow[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** The exam's identity only — name + type. Every class it's been scheduled
+ * for is a separate, independent entry in `schedules`. */
+export interface Exam {
+  id: number;
+  name: string;
+  type: ExamType;
+  createdBy: { id: number; name: string } | null;
+  schedules: ExamSchedule[];
   createdAt: string;
   updatedAt: string;
 }
@@ -42,18 +56,28 @@ export interface ExamSubjectInput {
   examDate?: string;
 }
 
-export interface CreateExamPayload {
-  name: string;
-  type: ExamType;
+export interface CreateExamScheduleInput {
   classId: number;
   startDate: string;
   endDate: string;
   subjects: ExamSubjectInput[];
 }
 
+export interface CreateExamPayload {
+  name: string;
+  type: ExamType;
+  /** Optional first class sitting, created together with the umbrella in
+   * one request — keeps single-class creation a one-step flow. Additional
+   * classes are added afterwards via addExamSchedule(). */
+  schedule?: CreateExamScheduleInput;
+}
+
 export interface UpdateExamPayload {
   name?: string;
   type?: ExamType;
+}
+
+export interface UpdateExamSchedulePayload {
   startDate?: string;
   endDate?: string;
 }
@@ -62,7 +86,7 @@ export interface ListExamsFilters {
   academicYearId?: number;
   classId?: number;
   type?: ExamType;
-  status?: ExamStatus;
+  status?: ExamScheduleStatus;
 }
 
 export function listExams(filters: ListExamsFilters = {}): Promise<Exam[]> {
@@ -91,20 +115,43 @@ export function deleteExam(id: number): Promise<void> {
   return apiDelete<void>(`/exams/${id}`);
 }
 
-export function addExamSubject(examId: number, payload: ExamSubjectInput): Promise<Exam> {
-  return apiPost<Exam>(`/exams/${examId}/subjects`, payload);
+/** Adds one more class to an existing exam — fully independent of every
+ * other class already scheduled under it (own dates, own subject list). */
+export function addExamSchedule(examId: number, payload: CreateExamScheduleInput): Promise<Exam> {
+  return apiPost<Exam>(`/exams/${examId}/schedules`, payload);
+}
+
+export function updateExamSchedule(
+  examId: number,
+  scheduleId: number,
+  payload: UpdateExamSchedulePayload,
+): Promise<Exam> {
+  return apiPatch<Exam>(`/exams/${examId}/schedules/${scheduleId}`, payload);
+}
+
+export function deleteExamSchedule(examId: number, scheduleId: number): Promise<Exam> {
+  return apiDelete<Exam>(`/exams/${examId}/schedules/${scheduleId}`);
+}
+
+export function addExamSubject(
+  examId: number,
+  scheduleId: number,
+  payload: ExamSubjectInput,
+): Promise<Exam> {
+  return apiPost<Exam>(`/exams/${examId}/schedules/${scheduleId}/subjects`, payload);
 }
 
 export function updateExamSubject(
   examId: number,
+  scheduleId: number,
   subjectRowId: number,
   payload: Partial<Omit<ExamSubjectInput, 'subjectId'>>,
 ): Promise<Exam> {
-  return apiPatch<Exam>(`/exams/${examId}/subjects/${subjectRowId}`, payload);
+  return apiPatch<Exam>(`/exams/${examId}/schedules/${scheduleId}/subjects/${subjectRowId}`, payload);
 }
 
-export function removeExamSubject(examId: number, subjectRowId: number): Promise<Exam> {
-  return apiDelete<Exam>(`/exams/${examId}/subjects/${subjectRowId}`);
+export function removeExamSubject(examId: number, scheduleId: number, subjectRowId: number): Promise<Exam> {
+  return apiDelete<Exam>(`/exams/${examId}/schedules/${scheduleId}/subjects/${subjectRowId}`);
 }
 
 export interface ExamSubjectProgress {
@@ -114,16 +161,18 @@ export interface ExamSubjectProgress {
   totalStudents: number;
 }
 
-export function getExamProgress(examId: number): Promise<ExamSubjectProgress[]> {
-  return apiGet<ExamSubjectProgress[]>(`/exams/${examId}/progress`);
+export function getExamProgress(examId: number, scheduleId: number): Promise<ExamSubjectProgress[]> {
+  return apiGet<ExamSubjectProgress[]>(`/exams/${examId}/schedules/${scheduleId}/progress`);
 }
 
 // ---- Marks entry (teacher-facing) ----
 
-/** One (exam, subject a teacher teaches, section they teach it in) combo —
- * a flattened list of concrete marks-entry targets, not one row per exam. */
+/** One (exam, schedule, subject a teacher teaches, section they teach it in)
+ * combo — a flattened list of concrete marks-entry targets, not one row per
+ * exam or per schedule. */
 export interface TeacherExamEntry {
-  exam: { id: number; name: string; type: ExamType; status: ExamStatus; startDate: string; endDate: string };
+  exam: { id: number; name: string; type: ExamType };
+  schedule: { id: number; status: ExamScheduleStatus; startDate: string; endDate: string };
   class: { id: number; name: string };
   section: { id: number; name: string };
   examSubject: {
@@ -151,10 +200,13 @@ export interface ExamMarkRosterRow {
 
 export function getExamMarksRoster(
   examId: number,
+  scheduleId: number,
   subjectId: number,
   sectionId: number,
 ): Promise<ExamMarkRosterRow[]> {
-  return apiGet<ExamMarkRosterRow[]>(`/exams/${examId}/marks?subjectId=${subjectId}&sectionId=${sectionId}`);
+  return apiGet<ExamMarkRosterRow[]>(
+    `/exams/${examId}/schedules/${scheduleId}/marks?subjectId=${subjectId}&sectionId=${sectionId}`,
+  );
 }
 
 export interface ExamMarkRecordInput {
@@ -169,6 +221,10 @@ export interface SaveExamMarksPayload {
   records: ExamMarkRecordInput[];
 }
 
-export function saveExamMarks(examId: number, payload: SaveExamMarksPayload): Promise<ExamMarkRosterRow[]> {
-  return apiPost<ExamMarkRosterRow[]>(`/exams/${examId}/marks`, payload);
+export function saveExamMarks(
+  examId: number,
+  scheduleId: number,
+  payload: SaveExamMarksPayload,
+): Promise<ExamMarkRosterRow[]> {
+  return apiPost<ExamMarkRosterRow[]>(`/exams/${examId}/schedules/${scheduleId}/marks`, payload);
 }

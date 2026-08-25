@@ -10,8 +10,9 @@ interface Draft {
 }
 
 export function ExamMarksEntryPage() {
-  const { id } = useParams();
+  const { id, scheduleId } = useParams();
   const examId = Number(id);
+  const scheduleIdNum = Number(scheduleId);
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const subjectId = Number(searchParams.get('subjectId'));
@@ -32,7 +33,7 @@ export function ExamMarksEntryPage() {
     setError(null);
     setSavedAt(null);
     try {
-      const rows = await getExamMarksRoster(examId, subjectId, sectionId);
+      const rows = await getExamMarksRoster(examId, scheduleIdNum, subjectId, sectionId);
       setRoster(rows);
       const next: Partial<Record<number, Draft>> = {};
       for (const row of rows) {
@@ -46,7 +47,7 @@ export function ExamMarksEntryPage() {
     } finally {
       setLoading(false);
     }
-  }, [examId, subjectId, sectionId]);
+  }, [examId, scheduleIdNum, subjectId, sectionId]);
 
   useEffect(() => {
     void load();
@@ -81,7 +82,7 @@ export function ExamMarksEntryPage() {
             marksObtained: d.absent ? undefined : Number(d.marks),
           };
         });
-      await saveExamMarks(examId, { subjectId, sectionId, records });
+      await saveExamMarks(examId, scheduleIdNum, { subjectId, sectionId, records });
       setSavedAt(new Date().toLocaleTimeString());
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Failed to save marks');

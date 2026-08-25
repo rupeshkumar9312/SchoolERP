@@ -76,6 +76,7 @@ model User {
   announcements           Announcement[]      @relation("AnnouncementAuthor")
   pushTokens              PushToken[]
   createdExams            Exam[]              @relation("ExamCreatedBy")
+  createdExamSchedules    ExamSchedule[]      @relation("ExamScheduleCreatedBy")
   enteredExamMarks        ExamMark[]          @relation("ExamMarkEnteredBy")
 
   @@map("users")
@@ -130,7 +131,7 @@ model Class {
   students            Student[]
   attendance          StudentAttendance[]
   homeworkAssignments Assignment[]
-  exams               Exam[]
+  examSchedules       ExamSchedule[]
   createdAt           DateTime              @default(now())
 
   @@unique([academicYearId, name])
@@ -446,62 +447,78 @@ enum ExamType {
   OTHER
 }
 
-enum ExamStatus {
+enum ExamScheduleStatus {
   DRAFT
   PUBLISHED
 }
 
-/// One exam event for one class — spans every section of that class, since
-/// Subject (like Class) is not section-scoped. "Unit Test 1", "Term 1 Exam",
-/// etc. Marks stay invisible to students until status flips to PUBLISHED (no
-/// routes for that exist yet — Phase 3). No separate academicYearId column:
-/// a Class's academicYearId never changes post-creation, so filtering by
-/// year goes through `class.academicYearId` instead of a second column that
-/// could only ever agree with it.
+/// The exam's identity only — "Unit Test 1", "Term 1 Exam". No classId, no
+/// dates, no subjects of its own: those all belong to its ExamSchedule
+/// children, one per class the exam has been scheduled for. Renaming here
+/// updates every class's sitting of it at once, since the name is stored
+/// exactly once.
 model Exam {
-  id          Int          @id @default(autoincrement())
+  id          Int            @id @default(autoincrement())
   name        String
   type        ExamType
-  classId     Int
-  class       Class        @relation(fields: [classId], references: [id], onDelete: Restrict)
-  startDate   DateTime     @db.Date
-  endDate     DateTime     @db.Date
-  status      ExamStatus   @default(DRAFT)
   createdById Int?
-  createdBy   User?        @relation("ExamCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
-  subjects    ExamSubject[]
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
+  createdBy   User?          @relation("ExamCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  schedules   ExamSchedule[]
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
 
-  @@index([classId])
   @@map("exams")
 }
 
-/// One subject's paper within an Exam — its own max/pass marks and date,
-/// since different subjects in the same exam are graded out of different
-/// totals and held on different days.
-model ExamSubject {
-  id        Int        @id @default(autoincrement())
-  examId    Int
-  exam      Exam       @relation(fields: [examId], references: [id], onDelete: Cascade)
-  subjectId Int
-  subject   Subject    @relation(fields: [subjectId], references: [id], onDelete: Restrict)
-  maxMarks  Int
-  passMarks Int?
-  examDate  DateTime?  @db.Date
-  marks     ExamMark[]
-  createdAt DateTime   @default(now())
+/// One class's sitting of an Exam — "Unit Test 1, for Class 8": its own date
+/// window, its own subject list, its own publish status (no publish routes
+/// exist yet — Phase 3). Fully independent of every other class's schedule
+/// under the same Exam — no shared subject template, no name-matching. No
+/// separate academicYearId column: a Class's academicYearId never changes
+/// post-creation, so filtering by year goes through `class.academicYearId`.
+model ExamSchedule {
+  id          Int                 @id @default(autoincrement())
+  examId      Int
+  exam        Exam                @relation(fields: [examId], references: [id], onDelete: Cascade)
+  classId     Int
+  class       Class               @relation(fields: [classId], references: [id], onDelete: Restrict)
+  startDate   DateTime            @db.Date
+  endDate     DateTime            @db.Date
+  status      ExamScheduleStatus  @default(DRAFT)
+  createdById Int?
+  createdBy   User?               @relation("ExamScheduleCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  subjects    ExamSubject[]
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
 
-  @@unique([examId, subjectId])
+  @@unique([examId, classId])
+  @@index([classId])
+  @@map("exam_schedules")
+}
+
+/// One subject's paper within an ExamSchedule — its own max/pass marks and
+/// date, since different subjects in the same schedule are graded out of
+/// different totals and held on different days.
+model ExamSubject {
+  id             Int          @id @default(autoincrement())
+  examScheduleId Int
+  examSchedule   ExamSchedule @relation(fields: [examScheduleId], references: [id], onDelete: Cascade)
+  subjectId      Int
+  subject        Subject      @relation(fields: [subjectId], references: [id], onDelete: Restrict)
+  maxMarks       Int
+  passMarks      Int?
+  examDate       DateTime?    @db.Date
+  marks          ExamMark[]
+  createdAt      DateTime     @default(now())
+
+  @@unique([examScheduleId, subjectId])
   @@map("exam_subjects")
 }
 
 /// One student's result for one subject's paper. sectionId is a snapshot
 /// (same reasoning as StudentAttendance.classId/sectionId) so a later
 /// section change never rewrites history or breaks a teacher's marks-entry
-/// scope check for what they already graded. No marks-entry routes exist
-/// yet (Phase 2) — this table ships now so Phase 2 needs no further schema
-/// migration.
+/// scope check for what they already graded.
 model ExamMark {
   id            Int         @id @default(autoincrement())
   examSubjectId Int

@@ -1,34 +1,41 @@
 import type { FormEvent } from 'react';
 import { useCallback, useEffect, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import * as academic from '../api/academic';
 import { ApiError } from '../api/client';
-import type { Exam, ExamSubjectProgress, ExamType } from '../api/exams';
-import {
-  EXAM_TYPE_LABELS,
-  addExamSubject,
-  getExam,
-  getExamProgress,
-  removeExamSubject,
-  updateExam,
-  updateExamSubject,
-} from '../api/exams';
+import type { Exam, ExamSubjectInput, ExamType } from '../api/exams';
+import { EXAM_TYPE_LABELS, addExamSchedule, deleteExamSchedule, getExam, updateExam } from '../api/exams';
 import { useAuth } from '../auth/useAuth';
 import { useConfirm } from '../components/useConfirm';
 import { useToast } from '../components/useToast';
 
 const EXAM_TYPES: ExamType[] = ['CLASS_TEST', 'UNIT_TEST', 'MID_TERM', 'TERM_EXAM', 'FINAL_EXAM', 'OTHER'];
 
+interface SubjectRowDraft {
+  subjectId: string;
+  maxMarks: string;
+  passMarks: string;
+  examDate: string;
+}
+
+const emptyRow = (): SubjectRowDraft => ({ subjectId: '', maxMarks: '', passMarks: '', examDate: '' });
+
 function toDateInputValue(iso: string): string {
   return iso.slice(0, 10);
 }
 
+// The exam umbrella page: name/type header + a "Class schedules" table, one
+// row per independent ExamSchedule ("+ Add class" schedules another class
+// with its own dates and subject list). Each row's "Manage" link opens
+// ExamSchedulePage for that one class's subject management.
 export function ExamDetailPage() {
   const { id } = useParams();
   const examId = Number(id);
   const navigate = useNavigate();
   const { hasPermission } = useAuth();
   const canEdit = hasPermission('exam.edit');
+  const canCreate = hasPermission('exam.create');
+  const canDelete = hasPermission('exam.delete');
   const confirm = useConfirm();
   const toast = useToast();
 
@@ -39,24 +46,20 @@ export function ExamDetailPage() {
   const [editingHeader, setEditingHeader] = useState(false);
   const [name, setName] = useState('');
   const [type, setType] = useState<ExamType>('UNIT_TEST');
-  const [startDate, setStartDate] = useState('');
-  const [endDate, setEndDate] = useState('');
   const [savingHeader, setSavingHeader] = useState(false);
 
+  const [addingClass, setAddingClass] = useState(false);
+  const [submittingClass, setSubmittingClass] = useState(false);
+  const [years, setYears] = useState<academic.AcademicYear[]>([]);
+  const [classes, setClasses] = useState<academic.SchoolClass[]>([]);
   const [subjects, setSubjects] = useState<academic.Subject[]>([]);
-  const [progress, setProgress] = useState<ExamSubjectProgress[]>([]);
-  const [newSubjectId, setNewSubjectId] = useState('');
-  const [newMaxMarks, setNewMaxMarks] = useState('');
-  const [newPassMarks, setNewPassMarks] = useState('');
-  const [newExamDate, setNewExamDate] = useState('');
-  const [addingSubject, setAddingSubject] = useState(false);
+  const [yearId, setYearId] = useState('');
+  const [classId, setClassId] = useState('');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+  const [rows, setRows] = useState<SubjectRowDraft[]>([emptyRow()]);
 
-  const [editingRowId, setEditingRowId] = useState<number | null>(null);
-  const [rowMaxMarks, setRowMaxMarks] = useState('');
-  const [rowPassMarks, setRowPassMarks] = useState('');
-  const [rowExamDate, setRowExamDate] = useState('');
-  const [savingRowId, setSavingRowId] = useState<number | null>(null);
-  const [removingRowId, setRemovingRowId] = useState<number | null>(null);
+  const [removingScheduleId, setRemovingScheduleId] = useState<number | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -66,10 +69,6 @@ export function ExamDetailPage() {
       setExam(row);
       setName(row.name);
       setType(row.type);
-      setStartDate(toDateInputValue(row.startDate));
-      setEndDate(toDateInputValue(row.endDate));
-      setSubjects(await academic.listSubjects(row.class.id));
-      setProgress(await getExamProgress(examId));
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Failed to load exam');
     } finally {
@@ -81,12 +80,32 @@ export function ExamDetailPage() {
     void load();
   }, [load]);
 
+  useEffect(() => {
+    void academic.listAcademicYears().then(setYears);
+  }, []);
+
+  useEffect(() => {
+    if (!yearId) {
+      setClasses([]);
+      return;
+    }
+    void academic.listClasses(Number(yearId)).then(setClasses);
+  }, [yearId]);
+
+  useEffect(() => {
+    if (!classId) {
+      setSubjects([]);
+      return;
+    }
+    void academic.listSubjects(Number(classId)).then(setSubjects);
+  }, [classId]);
+
   const onSaveHeader = async (e: FormEvent) => {
     e.preventDefault();
     setSavingHeader(true);
     setError(null);
     try {
-      const updated = await updateExam(examId, { name: name.trim(), type, startDate, endDate });
+      const updated = await updateExam(examId, { name: name.trim(), type });
       setExam(updated);
       setEditingHeader(false);
       toast('Exam updated.');
@@ -97,76 +116,79 @@ export function ExamDetailPage() {
     }
   };
 
-  const availableSubjects = exam
-    ? subjects.filter((s) => !exam.subjects.some((es) => es.subject.id === s.id))
-    : [];
+  const scheduledClassIds = new Set((exam?.schedules ?? []).map((s) => s.class.id));
+  const availableClasses = classes.filter((c) => !scheduledClassIds.has(c.id));
 
-  const onAddSubject = async (e: FormEvent) => {
+  const resetClassForm = () => {
+    setYearId('');
+    setClassId('');
+    setStartDate('');
+    setEndDate('');
+    setRows([emptyRow()]);
+  };
+
+  const updateRow = (index: number, patch: Partial<SubjectRowDraft>) => {
+    setRows((prev) => prev.map((r, i) => (i === index ? { ...r, ...patch } : r)));
+  };
+  const addRow = () => setRows((prev) => [...prev, emptyRow()]);
+  const removeRow = (index: number) => setRows((prev) => prev.filter((_, i) => i !== index));
+  const pickedSubjectIds = new Set(rows.map((r) => r.subjectId).filter(Boolean));
+
+  const onAddClass = async (e: FormEvent) => {
     e.preventDefault();
-    if (!newSubjectId || !newMaxMarks) return;
-    setAddingSubject(true);
+    if (!classId || !startDate || !endDate) return;
+    const picked: ExamSubjectInput[] = [];
+    for (const row of rows) {
+      if (!row.subjectId || !row.maxMarks) continue;
+      picked.push({
+        subjectId: Number(row.subjectId),
+        maxMarks: Number(row.maxMarks),
+        passMarks: row.passMarks ? Number(row.passMarks) : undefined,
+        examDate: row.examDate || undefined,
+      });
+    }
+    if (picked.length === 0) {
+      setError('Add at least one subject with a max marks value.');
+      return;
+    }
+
+    setSubmittingClass(true);
     setError(null);
     try {
-      const updated = await addExamSubject(examId, {
-        subjectId: Number(newSubjectId),
-        maxMarks: Number(newMaxMarks),
-        passMarks: newPassMarks ? Number(newPassMarks) : undefined,
-        examDate: newExamDate || undefined,
+      const updated = await addExamSchedule(examId, {
+        classId: Number(classId),
+        startDate,
+        endDate,
+        subjects: picked,
       });
       setExam(updated);
-      setProgress(await getExamProgress(examId));
-      setNewSubjectId('');
-      setNewMaxMarks('');
-      setNewPassMarks('');
-      setNewExamDate('');
-      toast('Subject added.');
+      setAddingClass(false);
+      resetClassForm();
+      toast('Class added to exam.');
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Failed to add subject');
+      setError(err instanceof ApiError ? err.message : 'Failed to add class');
     } finally {
-      setAddingSubject(false);
+      setSubmittingClass(false);
     }
   };
 
-  const startEditRow = (row: Exam['subjects'][number]) => {
-    setEditingRowId(row.id);
-    setRowMaxMarks(String(row.maxMarks));
-    setRowPassMarks(row.passMarks !== null ? String(row.passMarks) : '');
-    setRowExamDate(row.examDate ? toDateInputValue(row.examDate) : '');
-  };
-
-  const onSaveRow = async (rowId: number) => {
-    setSavingRowId(rowId);
-    setError(null);
-    try {
-      const updated = await updateExamSubject(examId, rowId, {
-        maxMarks: rowMaxMarks ? Number(rowMaxMarks) : undefined,
-        passMarks: rowPassMarks ? Number(rowPassMarks) : undefined,
-        examDate: rowExamDate || undefined,
-      });
-      setExam(updated);
-      setEditingRowId(null);
-      toast('Subject updated.');
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Failed to update subject');
-    } finally {
-      setSavingRowId(null);
-    }
-  };
-
-  const onRemoveRow = async (row: Exam['subjects'][number]) => {
-    const ok = await confirm({ title: `Remove ${row.subject.name}?`, confirmLabel: 'Remove' });
+  const onRemoveSchedule = async (schedule: Exam['schedules'][number]) => {
+    const ok = await confirm({
+      title: `Remove ${schedule.class.name} from this exam?`,
+      message: 'This deletes its dates, subjects and any marks entered for it.',
+      confirmLabel: 'Remove',
+    });
     if (!ok) return;
-    setRemovingRowId(row.id);
+    setRemovingScheduleId(schedule.id);
     setError(null);
     try {
-      const updated = await removeExamSubject(examId, row.id);
+      const updated = await deleteExamSchedule(examId, schedule.id);
       setExam(updated);
-      setProgress(await getExamProgress(examId));
-      toast('Subject removed.');
+      toast('Class removed from exam.');
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Failed to remove subject');
+      setError(err instanceof ApiError ? err.message : 'Failed to remove class');
     } finally {
-      setRemovingRowId(null);
+      setRemovingScheduleId(null);
     }
   };
 
@@ -177,12 +199,9 @@ export function ExamDetailPage() {
     <>
       <div className="card-head">
         <h1>{exam.name}</h1>
-        <span className={`badge ${exam.status === 'PUBLISHED' ? 'status-badge-present' : ''}`}>
-          {exam.status === 'PUBLISHED' ? 'Published' : 'Draft'}
-        </span>
       </div>
       <p className="subtitle">
-        {exam.class.name} · {exam.academicYear.name}
+        {EXAM_TYPE_LABELS[exam.type]}
         {exam.createdBy ? ` · Created by ${exam.createdBy.name}` : ''}
       </p>
 
@@ -219,14 +238,6 @@ export function ExamDetailPage() {
                 ))}
               </select>
             </label>
-            <label className="field">
-              <span>Start date</span>
-              <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} required />
-            </label>
-            <label className="field">
-              <span>End date</span>
-              <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} min={startDate} required />
-            </label>
             <div className="form-actions">
               <button type="submit" disabled={savingHeader}>
                 {savingHeader ? 'Saving…' : 'Save'}
@@ -237,143 +248,205 @@ export function ExamDetailPage() {
             </div>
           </form>
         ) : (
-          <>
-            <p>
-              <strong>Type:</strong> {EXAM_TYPE_LABELS[exam.type]}
-            </p>
-            <p>
-              <strong>Start date:</strong> {startDate}
-            </p>
-            <p>
-              <strong>End date:</strong> {endDate}
-            </p>
-          </>
+          <p>
+            <strong>Type:</strong> {EXAM_TYPE_LABELS[exam.type]}
+          </p>
         )}
       </section>
 
       <section className="card">
-        <h2>Subjects</h2>
-        {exam.subjects.length === 0 ? (
-          <p className="muted">No subjects yet.</p>
+        <div className="card-head">
+          <h2>Class schedules</h2>
+          {canCreate && !addingClass && (
+            <button type="button" onClick={() => setAddingClass(true)}>
+              + Add class
+            </button>
+          )}
+        </div>
+
+        {exam.schedules.length === 0 ? (
+          <p className="muted">No classes scheduled yet.</p>
         ) : (
           <table className="data-table">
             <thead>
               <tr>
-                <th>Subject</th>
-                <th>Max marks</th>
-                <th>Pass marks</th>
-                <th>Paper date</th>
-                <th>Marks entered</th>
-                {canEdit && <th>Actions</th>}
+                <th>Class</th>
+                <th>Academic year</th>
+                <th>Dates</th>
+                <th>Status</th>
+                <th>Subjects</th>
+                <th>Actions</th>
               </tr>
             </thead>
             <tbody>
-              {exam.subjects.map((row) => {
-                const p = progress.find((x) => x.examSubjectId === row.id);
-                return editingRowId === row.id ? (
-                  <tr key={row.id}>
-                    <td data-label="Subject">{row.subject.name}</td>
-                    <td data-label="Max marks">
-                      <input
-                        type="number"
-                        min={1}
-                        value={rowMaxMarks}
-                        onChange={(e) => setRowMaxMarks(e.target.value)}
-                        style={{ width: '6rem' }}
-                      />
-                    </td>
-                    <td data-label="Pass marks">
-                      <input
-                        type="number"
-                        min={0}
-                        value={rowPassMarks}
-                        onChange={(e) => setRowPassMarks(e.target.value)}
-                        style={{ width: '6rem' }}
-                      />
-                    </td>
-                    <td data-label="Paper date">
-                      <input type="date" value={rowExamDate} onChange={(e) => setRowExamDate(e.target.value)} />
-                    </td>
-                    <td data-label="Marks entered">{p ? `${p.enteredCount}/${p.totalStudents}` : '—'}</td>
-                    <td data-label="Actions">
-                      <div className="row-actions">
-                        <button onClick={() => void onSaveRow(row.id)} disabled={savingRowId === row.id}>
-                          {savingRowId === row.id ? 'Saving…' : 'Save'}
+              {exam.schedules.map((s) => (
+                <tr key={s.id}>
+                  <td data-label="Class">{s.class.name}</td>
+                  <td data-label="Academic year">{s.academicYear.name}</td>
+                  <td data-label="Dates">
+                    {toDateInputValue(s.startDate)} – {toDateInputValue(s.endDate)}
+                  </td>
+                  <td data-label="Status">
+                    <span className={`badge ${s.status === 'PUBLISHED' ? 'status-badge-present' : ''}`}>
+                      {s.status === 'PUBLISHED' ? 'Published' : 'Draft'}
+                    </span>
+                  </td>
+                  <td data-label="Subjects">{s.subjects.length}</td>
+                  <td data-label="Actions">
+                    <div className="row-actions">
+                      <Link to={`/exams/${examId}/schedules/${s.id}`}>
+                        <button type="button" className="secondary">
+                          Manage
                         </button>
-                        <button className="secondary" onClick={() => setEditingRowId(null)}>
-                          Cancel
+                      </Link>
+                      {canDelete && (
+                        <button
+                          className="danger"
+                          onClick={() => void onRemoveSchedule(s)}
+                          disabled={removingScheduleId === s.id}
+                        >
+                          {removingScheduleId === s.id ? 'Removing…' : 'Remove'}
                         </button>
-                      </div>
-                    </td>
-                  </tr>
-                ) : (
-                  <tr key={row.id}>
-                    <td data-label="Subject">{row.subject.name}</td>
-                    <td data-label="Max marks">{row.maxMarks}</td>
-                    <td data-label="Pass marks">{row.passMarks ?? '—'}</td>
-                    <td data-label="Paper date">{row.examDate ? toDateInputValue(row.examDate) : '—'}</td>
-                    <td data-label="Marks entered">{p ? `${p.enteredCount}/${p.totalStudents}` : '—'}</td>
-                    {canEdit && (
-                      <td data-label="Actions">
-                        <div className="row-actions">
-                          <button className="secondary" onClick={() => startEditRow(row)}>
-                            Edit
-                          </button>
-                          <button
-                            className="danger"
-                            onClick={() => void onRemoveRow(row)}
-                            disabled={removingRowId === row.id}
-                          >
-                            {removingRowId === row.id ? 'Removing…' : 'Remove'}
-                          </button>
-                        </div>
-                      </td>
-                    )}
-                  </tr>
-                );
-              })}
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              ))}
             </tbody>
           </table>
         )}
 
-        {canEdit && (
-          <form onSubmit={(e) => void onAddSubject(e)} className="row-actions" style={{ marginTop: '1rem', flexWrap: 'wrap' }}>
-            <select value={newSubjectId} onChange={(e) => setNewSubjectId(e.target.value)} required>
-              <option value="" disabled>
-                {availableSubjects.length === 0 ? 'No more subjects to add' : 'Select subject…'}
-              </option>
-              {availableSubjects.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name}
+        {addingClass && (
+          <form onSubmit={(e) => void onAddClass(e)} style={{ marginTop: '1rem' }}>
+            <label className="field">
+              <span>Academic year</span>
+              <select
+                value={yearId}
+                onChange={(e) => {
+                  setYearId(e.target.value);
+                  setClassId('');
+                  setRows([emptyRow()]);
+                }}
+                required
+              >
+                <option value="" disabled>
+                  Select…
                 </option>
-              ))}
-            </select>
-            <input
-              type="number"
-              min={1}
-              placeholder="Max marks"
-              value={newMaxMarks}
-              onChange={(e) => setNewMaxMarks(e.target.value)}
-              style={{ width: '7rem' }}
-              required
-            />
-            <input
-              type="number"
-              min={0}
-              placeholder="Pass marks (optional)"
-              value={newPassMarks}
-              onChange={(e) => setNewPassMarks(e.target.value)}
-              style={{ width: '10rem' }}
-            />
-            <input
-              type="date"
-              value={newExamDate}
-              onChange={(e) => setNewExamDate(e.target.value)}
-              title="Paper date (optional)"
-            />
-            <button type="submit" disabled={addingSubject || availableSubjects.length === 0}>
-              {addingSubject ? 'Adding…' : '+ Add subject'}
-            </button>
+                {years.map((y) => (
+                  <option key={y.id} value={y.id}>
+                    {y.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="field">
+              <span>Class</span>
+              <select
+                value={classId}
+                onChange={(e) => {
+                  setClassId(e.target.value);
+                  setRows([emptyRow()]);
+                }}
+                disabled={!yearId}
+                required
+              >
+                <option value="" disabled>
+                  {yearId && availableClasses.length === 0 ? 'Every class already scheduled' : 'Select…'}
+                </option>
+                {availableClasses.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="field">
+              <span>Start date</span>
+              <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} required />
+            </label>
+
+            <label className="field">
+              <span>End date</span>
+              <input
+                type="date"
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+                min={startDate || undefined}
+                required
+              />
+            </label>
+
+            <div className="field">
+              <span>Subjects</span>
+              {!classId ? (
+                <p className="muted">Select a class first.</p>
+              ) : (
+                <>
+                  {rows.map((row, i) => (
+                    <div key={i} className="row-actions" style={{ marginBottom: '0.5rem', flexWrap: 'wrap' }}>
+                      <select value={row.subjectId} onChange={(e) => updateRow(i, { subjectId: e.target.value })}>
+                        <option value="">Select subject…</option>
+                        {subjects
+                          .filter((s) => String(s.id) === row.subjectId || !pickedSubjectIds.has(String(s.id)))
+                          .map((s) => (
+                            <option key={s.id} value={s.id}>
+                              {s.name}
+                            </option>
+                          ))}
+                      </select>
+                      <input
+                        type="number"
+                        min={1}
+                        placeholder="Max marks"
+                        value={row.maxMarks}
+                        onChange={(e) => updateRow(i, { maxMarks: e.target.value })}
+                        style={{ width: '7rem' }}
+                      />
+                      <input
+                        type="number"
+                        min={0}
+                        placeholder="Pass marks (optional)"
+                        value={row.passMarks}
+                        onChange={(e) => updateRow(i, { passMarks: e.target.value })}
+                        style={{ width: '10rem' }}
+                      />
+                      <input
+                        type="date"
+                        value={row.examDate}
+                        onChange={(e) => updateRow(i, { examDate: e.target.value })}
+                        title="Paper date (optional)"
+                      />
+                      {rows.length > 1 && (
+                        <button type="button" className="danger" onClick={() => removeRow(i)}>
+                          Remove
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                  <button type="button" className="secondary" onClick={addRow}>
+                    + Add subject
+                  </button>
+                </>
+              )}
+            </div>
+
+            <div className="form-actions">
+              <button type="submit" disabled={submittingClass}>
+                {submittingClass ? 'Adding…' : 'Add class'}
+              </button>
+              <button
+                type="button"
+                className="secondary"
+                onClick={() => {
+                  setAddingClass(false);
+                  resetClassForm();
+                }}
+              >
+                Cancel
+              </button>
+            </div>
           </form>
         )}
       </section>

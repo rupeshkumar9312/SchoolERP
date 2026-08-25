@@ -22,7 +22,7 @@ interface Draft {
 
 export function ExamMarksEntryScreen({ route }: Props): React.JSX.Element {
   const { entry } = route.params;
-  const { exam, class: klass, section, examSubject } = entry;
+  const { exam, schedule, class: klass, section, examSubject } = entry;
 
   const [roster, setRoster] = useState<ExamMarkRosterRow[] | null>(null);
   // Partial — a student only gets a draft entry once touched, either from an
@@ -37,7 +37,7 @@ export function ExamMarksEntryScreen({ route }: Props): React.JSX.Element {
   const load = useCallback(async () => {
     setError(null);
     try {
-      const rows = await getExamMarksRoster(exam.id, examSubject.subjectId, section.id);
+      const rows = await getExamMarksRoster(exam.id, schedule.id, examSubject.subjectId, section.id);
       setRoster(rows);
       const initial: Partial<Record<number, Draft>> = {};
       for (const row of rows) {
@@ -54,7 +54,7 @@ export function ExamMarksEntryScreen({ route }: Props): React.JSX.Element {
     } finally {
       setLoading(false);
     }
-  }, [exam.id, examSubject.subjectId, section.id]);
+  }, [exam.id, schedule.id, examSubject.subjectId, section.id]);
 
   useFocusEffect(
     useCallback(() => {
@@ -93,7 +93,7 @@ export function ExamMarksEntryScreen({ route }: Props): React.JSX.Element {
             marksObtained: d.absent ? undefined : Number(d.marks),
           };
         });
-      await saveExamMarks(exam.id, { subjectId: examSubject.subjectId, sectionId: section.id, records });
+      await saveExamMarks(exam.id, schedule.id, { subjectId: examSubject.subjectId, sectionId: section.id, records });
       setSavedAt(new Date().toLocaleTimeString());
     } catch (err) {
       setSaveError(err instanceof ApiError ? err.message : 'Could not save marks');

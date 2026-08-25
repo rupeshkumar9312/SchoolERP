@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import * as academic from '../api/academic';
 import { ApiError } from '../api/client';
-import type { Exam, ExamStatus, ExamType } from '../api/exams';
+import type { Exam, ExamScheduleStatus, ExamType } from '../api/exams';
 import { EXAM_TYPE_LABELS, deleteExam, listExams } from '../api/exams';
 import { useAuth } from '../auth/useAuth';
 import { EmptyState } from '../components/EmptyState';
@@ -11,10 +11,6 @@ import { useConfirm } from '../components/useConfirm';
 import { useToast } from '../components/useToast';
 
 const EXAM_TYPES: ExamType[] = ['CLASS_TEST', 'UNIT_TEST', 'MID_TERM', 'TERM_EXAM', 'FINAL_EXAM', 'OTHER'];
-
-function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
-}
 
 export function ExamsListPage() {
   const { hasPermission } = useAuth();
@@ -54,7 +50,7 @@ export function ExamsListPage() {
           academicYearId: yearId ? Number(yearId) : undefined,
           classId: classId ? Number(classId) : undefined,
           type: (type || undefined) as ExamType | undefined,
-          status: (status || undefined) as ExamStatus | undefined,
+          status: (status || undefined) as ExamScheduleStatus | undefined,
         }),
       );
     } catch (err) {
@@ -160,7 +156,7 @@ export function ExamsListPage() {
       )}
 
       {loading ? (
-        <TableSkeleton columns={7} />
+        <TableSkeleton columns={4} />
       ) : exams.length === 0 ? (
         <EmptyState title="No exams found" message="Try clearing your filters, or create the first one." />
       ) : (
@@ -170,11 +166,7 @@ export function ExamsListPage() {
               <tr>
                 <th>Name</th>
                 <th>Type</th>
-                <th>Class</th>
-                <th>Academic year</th>
-                <th>Dates</th>
-                <th>Status</th>
-                <th>Subjects</th>
+                <th>Classes</th>
                 <th>Actions</th>
               </tr>
             </thead>
@@ -185,17 +177,17 @@ export function ExamsListPage() {
                     <Link to={`/exams/${e.id}`}>{e.name}</Link>
                   </td>
                   <td data-label="Type">{EXAM_TYPE_LABELS[e.type]}</td>
-                  <td data-label="Class">{e.class.name}</td>
-                  <td data-label="Academic year">{e.academicYear.name}</td>
-                  <td data-label="Dates">
-                    {formatDate(e.startDate)} – {formatDate(e.endDate)}
+                  <td data-label="Classes">
+                    {e.schedules.length === 0 ? (
+                      <span className="muted">None yet</span>
+                    ) : (
+                      e.schedules.map((s) => (
+                        <span key={s.id} className="badge" style={{ marginRight: '0.3rem' }}>
+                          {s.class.name}
+                        </span>
+                      ))
+                    )}
                   </td>
-                  <td data-label="Status">
-                    <span className={`badge ${e.status === 'PUBLISHED' ? 'status-badge-present' : ''}`}>
-                      {e.status === 'PUBLISHED' ? 'Published' : 'Draft'}
-                    </span>
-                  </td>
-                  <td data-label="Subjects">{e.subjects.length}</td>
                   <td data-label="Actions">
                     <div className="row-actions">
                       <Link to={`/exams/${e.id}`}>

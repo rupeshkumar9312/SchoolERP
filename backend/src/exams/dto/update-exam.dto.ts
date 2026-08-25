@@ -1,10 +1,8 @@
 import { ExamType } from '@prisma/client';
-import { IsDateString, IsEnum, IsOptional, IsString, MinLength } from 'class-validator';
+import { IsEnum, IsOptional, IsString, MinLength } from 'class-validator';
 
-// classId is deliberately not editable — "move" an exam to a different class
-// means delete+recreate, same rule Assignments applies to classId/sectionId/
-// subjectId. The subject list is managed separately via the subjects
-// sub-resource routes, not through this DTO.
+// Umbrella-level fields only — name/type. Dates/class/status all live on
+// ExamSchedule now; see UpdateExamScheduleDto.
 export class UpdateExamDto {
   @IsOptional()
   @IsString()
@@ -14,12 +12,4 @@ export class UpdateExamDto {
   @IsOptional()
   @IsEnum(ExamType)
   type?: ExamType;
-
-  @IsOptional()
-  @IsDateString()
-  startDate?: string;
-
-  @IsOptional()
-  @IsDateString()
-  endDate?: string;
 }

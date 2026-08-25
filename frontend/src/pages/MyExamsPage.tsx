@@ -53,15 +53,15 @@ export function MyExamsPage() {
               </thead>
               <tbody>
                 {entries.map((e) => (
-                  <tr key={`${e.exam.id}-${e.examSubject.id}-${e.section.id}`}>
+                  <tr key={`${e.schedule.id}-${e.examSubject.id}-${e.section.id}`}>
                     <td data-label="Exam">{e.exam.name}</td>
                     <td data-label="Type">{EXAM_TYPE_LABELS[e.exam.type]}</td>
                     <td data-label="Class">{e.class.name}</td>
                     <td data-label="Section">{e.section.name}</td>
                     <td data-label="Subject">{e.examSubject.subjectName}</td>
                     <td data-label="Status">
-                      <span className={`badge ${e.exam.status === 'PUBLISHED' ? 'status-badge-present' : ''}`}>
-                        {e.exam.status === 'PUBLISHED' ? 'Published' : 'Draft'}
+                      <span className={`badge ${e.schedule.status === 'PUBLISHED' ? 'status-badge-present' : ''}`}>
+                        {e.schedule.status === 'PUBLISHED' ? 'Published' : 'Draft'}
                       </span>
                     </td>
                     <td data-label="Marks entered">
@@ -69,7 +69,7 @@ export function MyExamsPage() {
                     </td>
                     <td data-label="Actions">
                       <Link
-                        to={`/exams/${e.exam.id}/marks?subjectId=${e.examSubject.subjectId}&sectionId=${e.section.id}`}
+                        to={`/exams/${e.exam.id}/schedules/${e.schedule.id}/marks?subjectId=${e.examSubject.subjectId}&sectionId=${e.section.id}`}
                       >
                         <button type="button">Enter marks</button>
                       </Link>

@@ -1,11 +1,11 @@
 import { apiGet, apiPost } from './client';
 
 // Mobile only covers the teacher-facing marks-entry flow (Phase 2) — exam
-// definition stays a web-only, admin-tier task (Phase 1 decision: low
-// frequency, form-heavy, not worth building twice yet).
+// definition and class-schedule creation stay a web-only, admin-tier task
+// (Phase 1 decision: low frequency, form-heavy, not worth building twice).
 
 export type ExamType = 'CLASS_TEST' | 'UNIT_TEST' | 'MID_TERM' | 'TERM_EXAM' | 'FINAL_EXAM' | 'OTHER';
-export type ExamStatus = 'DRAFT' | 'PUBLISHED';
+export type ExamScheduleStatus = 'DRAFT' | 'PUBLISHED';
 
 export const EXAM_TYPE_LABELS: Record<ExamType, string> = {
   CLASS_TEST: 'Class test',
@@ -16,10 +16,12 @@ export const EXAM_TYPE_LABELS: Record<ExamType, string> = {
   OTHER: 'Other',
 };
 
-/** One (exam, subject a teacher teaches, section they teach it in) combo —
- * a flattened list of concrete marks-entry targets, not one row per exam. */
+/** One (exam, schedule, subject a teacher teaches, section they teach it in)
+ * combo — a flattened list of concrete marks-entry targets, not one row per
+ * exam or per schedule. */
 export interface TeacherExamEntry {
-  exam: { id: number; name: string; type: ExamType; status: ExamStatus; startDate: string; endDate: string };
+  exam: { id: number; name: string; type: ExamType };
+  schedule: { id: number; status: ExamScheduleStatus; startDate: string; endDate: string };
   class: { id: number; name: string };
   section: { id: number; name: string };
   examSubject: {
@@ -47,10 +49,13 @@ export interface ExamMarkRosterRow {
 
 export function getExamMarksRoster(
   examId: number,
+  scheduleId: number,
   subjectId: number,
   sectionId: number,
 ): Promise<ExamMarkRosterRow[]> {
-  return apiGet<ExamMarkRosterRow[]>(`/exams/${examId}/marks?subjectId=${subjectId}&sectionId=${sectionId}`);
+  return apiGet<ExamMarkRosterRow[]>(
+    `/exams/${examId}/schedules/${scheduleId}/marks?subjectId=${subjectId}&sectionId=${sectionId}`,
+  );
 }
 
 export interface ExamMarkRecordInput {
@@ -65,6 +70,10 @@ export interface SaveExamMarksPayload {
   records: ExamMarkRecordInput[];
 }
 
-export function saveExamMarks(examId: number, payload: SaveExamMarksPayload): Promise<ExamMarkRosterRow[]> {
-  return apiPost<ExamMarkRosterRow[]>(`/exams/${examId}/marks`, payload);
+export function saveExamMarks(
+  examId: number,
+  scheduleId: number,
+  payload: SaveExamMarksPayload,
+): Promise<ExamMarkRosterRow[]> {
+  return apiPost<ExamMarkRosterRow[]>(`/exams/${examId}/schedules/${scheduleId}/marks`, payload);
 }
