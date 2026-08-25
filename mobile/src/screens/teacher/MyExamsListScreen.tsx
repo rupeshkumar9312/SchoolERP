@@ -19,6 +19,27 @@ function entryKey(e: TeacherExamEntry): string {
   return `${e.schedule.id}-${e.examSubject.id}-${e.section.id}`;
 }
 
+interface ExamGroup {
+  exam: TeacherExamEntry['exam'];
+  entries: TeacherExamEntry[];
+}
+
+// Grouped by the Exam umbrella (e.g. "Unit Test 1") rather than one flat
+// card per class+section+subject — the umbrella shows once, with every
+// class/section/subject the teacher teaches under it nested beneath.
+function groupByExam(entries: TeacherExamEntry[]): ExamGroup[] {
+  const groups = new Map<number, ExamGroup>();
+  for (const entry of entries) {
+    const existing = groups.get(entry.exam.id);
+    if (existing) {
+      existing.entries.push(entry);
+    } else {
+      groups.set(entry.exam.id, { exam: entry.exam, entries: [entry] });
+    }
+  }
+  return [...groups.values()];
+}
+
 export function MyExamsListScreen({ navigation }: Props): React.JSX.Element {
   const [entries, setEntries] = useState<TeacherExamEntry[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -44,34 +65,48 @@ export function MyExamsListScreen({ navigation }: Props): React.JSX.Element {
   if (loading) return <LoadingView />;
   if (error) return <Screen><ErrorView message={error} onRetry={load} /></Screen>;
 
+  const groups = entries ? groupByExam(entries) : [];
+
   return (
     <Screen refreshing={loading} onRefresh={load}>
       <Text style={styles.heading}>My Exams</Text>
       <Text style={styles.muted}>Exams for the subjects and sections you teach.</Text>
 
-      {entries && entries.length === 0 && (
+      {entries && groups.length === 0 && (
         <Card><Text style={styles.muted}>No exams yet.</Text></Card>
       )}
-      {entries?.map((e) => (
-        <Touchable
-          key={entryKey(e)}
-          onPress={() => navigation.navigate('MarksEntry', { entry: e })}
-          style={styles.touchable}
-        >
-          <Card style={styles.card}>
-            <View style={styles.titleRow}>
-              <Text style={styles.title}>{e.exam.name}</Text>
-              <Badge label={e.schedule.status === 'PUBLISHED' ? 'Published' : 'Draft'} tone={e.schedule.status === 'PUBLISHED' ? 'success' : 'muted'} />
-            </View>
-            <Text style={styles.muted}>
-              {EXAM_TYPE_LABELS[e.exam.type]} · {e.class.name} - {e.section.name} · {e.examSubject.subjectName}
-            </Text>
-            <View style={styles.footerRow}>
-              <Text style={styles.muted}>Max marks {e.examSubject.maxMarks}</Text>
-              <Badge label={`${e.enteredCount}/${e.totalStudents} entered`} tone="primary" />
-            </View>
-          </Card>
-        </Touchable>
+
+      {groups.map((group) => (
+        <View key={group.exam.id} style={styles.group}>
+          <View style={styles.groupHeaderRow}>
+            <Text style={styles.groupTitle}>{group.exam.name}</Text>
+            <Badge label={EXAM_TYPE_LABELS[group.exam.type]} tone="muted" />
+          </View>
+
+          {group.entries.map((e) => (
+            <Touchable
+              key={entryKey(e)}
+              onPress={() => navigation.navigate('MarksEntry', { entry: e })}
+              style={styles.touchable}
+            >
+              <Card style={styles.card}>
+                <View style={styles.titleRow}>
+                  <Text style={styles.title}>
+                    {e.class.name} - {e.section.name} · {e.examSubject.subjectName}
+                  </Text>
+                  <Badge
+                    label={e.schedule.status === 'PUBLISHED' ? 'Published' : 'Draft'}
+                    tone={e.schedule.status === 'PUBLISHED' ? 'success' : 'muted'}
+                  />
+                </View>
+                <View style={styles.footerRow}>
+                  <Text style={styles.muted}>Max marks {e.examSubject.maxMarks}</Text>
+                  <Badge label={`${e.enteredCount}/${e.totalStudents} entered`} tone="primary" />
+                </View>
+              </Card>
+            </Touchable>
+          ))}
+        </View>
       ))}
     </Screen>
   );
@@ -80,9 +115,12 @@ export function MyExamsListScreen({ navigation }: Props): React.JSX.Element {
 const styles = StyleSheet.create({
   heading: { fontSize: 20, fontFamily: fonts.headingBold, color: colors.text },
   muted: { fontSize: 13, fontFamily: fonts.body, color: colors.textMuted, marginTop: 2 },
+  group: { marginTop: spacing.md },
+  groupHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.xs },
+  groupTitle: { fontSize: 17, fontFamily: fonts.headingBold, color: colors.text },
   touchable: { borderRadius: radius.lg, overflow: 'hidden', marginTop: spacing.sm },
   card: { gap: spacing.xs },
   titleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.xs },
-  title: { fontSize: 16, fontFamily: fonts.bodySemiBold, color: colors.text },
+  title: { fontSize: 15, fontFamily: fonts.bodySemiBold, color: colors.text, flexShrink: 1 },
   footerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: spacing.xs },
 });
