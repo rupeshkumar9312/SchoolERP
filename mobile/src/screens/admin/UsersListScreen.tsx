@@ -3,6 +3,7 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useFocusEffect } from '@react-navigation/native';
 import { Alert, Modal, StyleSheet, Text, TextInput, View } from 'react-native';
 import { ApiError } from '../../api/client';
+import { PAGE_SIZE } from '../../api/pagination';
 import { Role, listRoles } from '../../api/roles';
 import { UserListItem, deleteUser, listUsers, resetUserPassword } from '../../api/users';
 import { useAuth } from '../../auth/AuthContext';
@@ -13,6 +14,7 @@ import { DataRow, DataRowText } from '../../components/DataRow';
 import { ErrorView } from '../../components/ErrorView';
 import { LoadingView } from '../../components/LoadingView';
 import { Screen } from '../../components/Screen';
+import { SearchInput } from '../../components/SearchInput';
 import { SelectField } from '../../components/SelectField';
 import { colors, fonts, radius, spacing } from '../../theme';
 import { edvanceLoginAlias, sharePasswordResetViaWhatsApp } from '../../utils/whatsapp';
@@ -28,24 +30,28 @@ export function UsersListScreen({ navigation }: Props): React.JSX.Element {
   const canDelete = hasPermission('user.delete');
 
   const [users, setUsers] = useState<UserListItem[] | null>(null);
+  const [total, setTotal] = useState(0);
   const [roles, setRoles] = useState<Role[]>([]);
   const [roleFilter, setRoleFilter] = useState<number | null>(null);
+  const [search, setSearch] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [resettingId, setResettingId] = useState<number | null>(null);
   const [resetResult, setResetResult] = useState<
     { name: string; email: string; edvanceId: string; temporaryPassword: string } | null
   >(null);
 
-  const load = useCallback(async (filter: number | null) => {
+  const load = useCallback(async (filter: number | null, searchText: string) => {
     setError(null);
     try {
-      const [userRows, roleRows] = await Promise.all([
-        listUsers(filter ?? undefined),
+      const [result, roleRows] = await Promise.all([
+        listUsers({ roleId: filter ?? undefined, search: searchText.trim() || undefined, page: 1, limit: PAGE_SIZE }),
         roles.length ? Promise.resolve(roles) : listRoles(),
       ]);
-      setUsers(userRows);
+      setUsers(result.items);
+      setTotal(result.total);
       if (!roles.length) setRoles(roleRows);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not load users');
@@ -55,11 +61,32 @@ export function UsersListScreen({ navigation }: Props): React.JSX.Element {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const loadMore = async () => {
+    if (!users) return;
+    setLoadingMore(true);
+    try {
+      const nextPage = Math.floor(users.length / PAGE_SIZE) + 1;
+      const result = await listUsers({
+        roleId: roleFilter ?? undefined,
+        search: search.trim() || undefined,
+        page: nextPage,
+        limit: PAGE_SIZE,
+      });
+      setUsers((prev) => [...(prev ?? []), ...result.items]);
+      setTotal(result.total);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Could not load more users');
+    } finally {
+      setLoadingMore(false);
+    }
+  };
+
   useFocusEffect(
     useCallback(() => {
-      load(roleFilter);
+      const timeout = setTimeout(() => load(roleFilter, search), 250);
+      return () => clearTimeout(timeout);
       // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [roleFilter]),
+    }, [roleFilter, search]),
   );
 
   const handleDelete = (u: UserListItem) => {
@@ -73,6 +100,7 @@ export function UsersListScreen({ navigation }: Props): React.JSX.Element {
           try {
             await deleteUser(u.id);
             setUsers((prev) => (prev ?? []).filter((x) => x.id !== u.id));
+            setTotal((prev) => prev - 1);
           } catch (err) {
             setError(err instanceof ApiError ? err.message : 'Could not delete user');
           } finally {
@@ -108,10 +136,16 @@ export function UsersListScreen({ navigation }: Props): React.JSX.Element {
   };
 
   if (loading) return <LoadingView />;
-  if (error && !users) return <Screen><ErrorView message={error} onRetry={() => load(roleFilter)} /></Screen>;
+  if (error && !users) {
+    return (
+      <Screen>
+        <ErrorView message={error} onRetry={() => load(roleFilter, search)} />
+      </Screen>
+    );
+  }
 
   return (
-    <Screen refreshing={loading} onRefresh={() => load(roleFilter)}>
+    <Screen refreshing={loading} onRefresh={() => load(roleFilter, search)}>
       <View style={styles.headerRow}>
         <Text style={styles.heading}>Users</Text>
         {canCreate && <Button label="+ New" onPress={() => navigation.navigate('UserForm', undefined)} />}
@@ -124,12 +158,13 @@ export function UsersListScreen({ navigation }: Props): React.JSX.Element {
         placeholder="All roles"
         options={[{ value: null, label: 'All roles' }, ...roles.map((r) => ({ value: r.id, label: r.name }))]}
       />
+      <SearchInput value={search} onChangeText={setSearch} placeholder="Name or login ID" />
 
       {error && users && <Text style={styles.error}>{error}</Text>}
 
       {users && users.length === 0 && (
         <Card>
-          <Text style={styles.muted}>No users found. Try a different role filter, or create the first one.</Text>
+          <Text style={styles.muted}>No users found. Try clearing your filters, or create the first one.</Text>
         </Card>
       )}
 
@@ -171,6 +206,10 @@ export function UsersListScreen({ navigation }: Props): React.JSX.Element {
           )}
         </Card>
       ))}
+
+      {users && users.length > 0 && users.length < total && (
+        <Button label={`Load more (${users.length} of ${total})`} variant="secondary" onPress={() => void loadMore()} loading={loadingMore} />
+      )}
 
       <Modal
         visible={!!resetResult}

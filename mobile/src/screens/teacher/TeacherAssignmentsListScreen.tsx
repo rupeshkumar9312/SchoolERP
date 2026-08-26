@@ -4,6 +4,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { StyleSheet, Text, View } from 'react-native';
 import { HomeworkAssignment, listHomeworkAssignments } from '../../api/homework';
 import { ApiError } from '../../api/client';
+import { PAGE_SIZE } from '../../api/pagination';
 import { Badge } from '../../components/Badge';
 import { Button } from '../../components/Button';
 import { Card } from '../../components/Card';
@@ -19,21 +20,41 @@ type Props = NativeStackScreenProps<TeacherAssignmentsStackParamList, 'Assignmen
 
 export function TeacherAssignmentsListScreen({ navigation }: Props): React.JSX.Element {
   const [assignments, setAssignments] = useState<HomeworkAssignment[] | null>(null);
+  const [total, setTotal] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
 
   const load = useCallback(async () => {
     setError(null);
     try {
-      const data = await listHomeworkAssignments();
-      data.sort((a, b) => b.dueDate.localeCompare(a.dueDate));
+      const result = await listHomeworkAssignments({ page: 1, limit: PAGE_SIZE });
+      const data = [...result.items].sort((a, b) => b.dueDate.localeCompare(a.dueDate));
       setAssignments(data);
+      setTotal(result.total);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not load assignments');
     } finally {
       setLoading(false);
     }
   }, []);
+
+  const loadMore = async () => {
+    if (!assignments) return;
+    setLoadingMore(true);
+    try {
+      const nextPage = Math.floor(assignments.length / PAGE_SIZE) + 1;
+      const result = await listHomeworkAssignments({ page: nextPage, limit: PAGE_SIZE });
+      setAssignments((prev) =>
+        [...(prev ?? []), ...result.items].sort((a, b) => b.dueDate.localeCompare(a.dueDate)),
+      );
+      setTotal(result.total);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Could not load more assignments');
+    } finally {
+      setLoadingMore(false);
+    }
+  };
 
   useFocusEffect(
     useCallback(() => {
@@ -73,6 +94,10 @@ export function TeacherAssignmentsListScreen({ navigation }: Props): React.JSX.E
           </Card>
         </Touchable>
       ))}
+
+      {assignments && assignments.length > 0 && assignments.length < total && (
+        <Button label={`Load more (${assignments.length} of ${total})`} variant="secondary" onPress={() => void loadMore()} loading={loadingMore} />
+      )}
     </Screen>
   );
 }

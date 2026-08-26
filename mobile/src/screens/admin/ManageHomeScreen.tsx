@@ -76,6 +76,14 @@ export function ManageHomeScreen({ navigation }: Props): React.JSX.Element {
           <Button label="Open" variant="secondary" onPress={() => navigation.navigate('AuditLog')} />
         </Card>
       )}
+
+      {isSuperAdmin && (
+        <Card style={styles.card}>
+          <Text style={styles.cardTitle}>Login History</Text>
+          <Text style={styles.muted}>Who logged in, when, and from where.</Text>
+          <Button label="Open" variant="secondary" onPress={() => navigation.navigate('LoginHistory')} />
+        </Card>
+      )}
     </Screen>
   );
 }

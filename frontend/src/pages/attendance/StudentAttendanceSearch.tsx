@@ -57,7 +57,7 @@ export function StudentAttendanceSearch({ fetchHistory }: StudentAttendanceSearc
     setSearchError(null);
     const handle = setTimeout(() => {
       listStudents({ search: q })
-        .then(setResults)
+        .then((result) => setResults(result.items))
         .catch((err) => setSearchError(err instanceof ApiError ? err.message : 'Search failed'))
         .finally(() => setSearching(false));
     }, 300);

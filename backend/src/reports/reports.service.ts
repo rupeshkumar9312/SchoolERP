@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { AttendanceStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import {
@@ -8,6 +8,11 @@ import {
 } from './dto/report-queries.dto';
 
 const DEFAULT_THRESHOLD = 75;
+/** Nothing in these DTOs previously stopped a caller requesting a
+ * multi-year range — that's an unbounded aggregation over the whole
+ * attendance table. A year plus a little slack covers every legitimate
+ * "whole academic year" report. */
+const MAX_RANGE_DAYS = 366;
 
 interface Counts {
   present: number;
@@ -54,12 +59,12 @@ function emptyCounts(): Counts {
   return { present: 0, absent: 0, late: 0, leave: 0, totalMarked: 0, percent: null };
 }
 
-function tally(counts: Counts, status: AttendanceStatus): void {
-  counts.totalMarked++;
-  if (status === 'PRESENT') counts.present++;
-  else if (status === 'ABSENT') counts.absent++;
-  else if (status === 'LATE') counts.late++;
-  else if (status === 'LEAVE') counts.leave++;
+function tallyCount(counts: Counts, status: AttendanceStatus, count: number): void {
+  counts.totalMarked += count;
+  if (status === 'PRESENT') counts.present += count;
+  else if (status === 'ABSENT') counts.absent += count;
+  else if (status === 'LATE') counts.late += count;
+  else if (status === 'LEAVE') counts.leave += count;
 }
 
 function finalizePercent(counts: Counts): void {
@@ -75,18 +80,48 @@ function toIsoDate(date: Date): string {
 export class ReportsService {
   constructor(private readonly prisma: PrismaService) {}
 
+  /** Aggregates in SQL via groupBy — one (studentId, status, classId,
+   * sectionId) row per combination that actually occurred, instead of
+   * fetching every attendance row in the range and tallying them in JS.
+   * classId/sectionId ride along in the group key because StudentAttendance
+   * snapshots a student's class/section as of the day it was marked (see
+   * the schema comment on StudentAttendance) — a student who changed
+   * section mid-range keeps each period's real section here, same as the
+   * row-by-row version this replaces. */
   async getAttendanceSummary(query: AttendanceSummaryQueryDto): Promise<AttendanceSummaryView> {
     const { from, to } = this.resolveRange(query.from, query.to);
     const holidayDates = await this.holidayDates(from, to);
 
-    const rows = await this.prisma.studentAttendance.findMany({
+    const statusRows = await this.prisma.studentAttendance.groupBy({
+      by: ['studentId', 'status', 'classId', 'sectionId'],
       where: {
         date: { gte: from, lte: to, notIn: holidayDates },
         classId: query.classId,
         sectionId: query.sectionId,
       },
-      include: { student: true, class: true, section: true },
+      _count: { _all: true },
     });
+
+    const studentIds = [...new Set(statusRows.map((r) => r.studentId))];
+    const classIds = [...new Set(statusRows.map((r) => r.classId))];
+    const sectionIds = [...new Set(statusRows.map((r) => r.sectionId))];
+    const [studentRows, classRows, sectionRows] = await Promise.all([
+      this.prisma.student.findMany({
+        where: { id: { in: studentIds } },
+        select: { id: true, name: true, admissionNo: true },
+      }),
+      this.prisma.class.findMany({
+        where: { id: { in: classIds } },
+        select: { id: true, name: true },
+      }),
+      this.prisma.section.findMany({
+        where: { id: { in: sectionIds } },
+        select: { id: true, name: true },
+      }),
+    ]);
+    const studentById = new Map(studentRows.map((s) => [s.id, s]));
+    const classById = new Map(classRows.map((c) => [c.id, c]));
+    const sectionById = new Map(sectionRows.map((s) => [s.id, s]));
 
     const perStudent = new Map<
       number,
@@ -96,22 +131,17 @@ export class ReportsService {
         section: { id: number; name: string };
       }
     >();
-    for (const row of rows) {
+    for (const row of statusRows) {
       let entry = perStudent.get(row.studentId);
       if (!entry) {
-        entry = {
-          ...emptyCounts(),
-          student: {
-            id: row.student.id,
-            admissionNo: row.student.admissionNo,
-            name: row.student.name,
-          },
-          class: { id: row.class.id, name: row.class.name },
-          section: { id: row.section.id, name: row.section.name },
-        };
+        const student = studentById.get(row.studentId);
+        const klass = classById.get(row.classId);
+        const section = sectionById.get(row.sectionId);
+        if (!student || !klass || !section) continue;
+        entry = { ...emptyCounts(), student, class: klass, section };
         perStudent.set(row.studentId, entry);
       }
-      tally(entry, row.status);
+      tallyCount(entry, row.status, row._count._all);
     }
 
     const students: StudentAttendanceRow[] = [...perStudent.values()]
@@ -171,22 +201,32 @@ export class ReportsService {
     const { from, to } = this.resolveRange(query.from, query.to);
     const holidayDates = await this.holidayDates(from, to);
 
-    const rows = await this.prisma.teacherAttendance.findMany({
+    const statusRows = await this.prisma.teacherAttendance.groupBy({
+      by: ['teacherId', 'status'],
       where: {
         date: { gte: from, lte: to, notIn: holidayDates },
         teacherId: query.teacherId,
       },
-      include: { teacher: { include: { user: true } } },
+      _count: { _all: true },
     });
 
+    const teacherIds = [...new Set(statusRows.map((r) => r.teacherId))];
+    const teacherRows = await this.prisma.teacher.findMany({
+      where: { id: { in: teacherIds } },
+      select: { id: true, user: { select: { name: true } } },
+    });
+    const teacherById = new Map(teacherRows.map((t) => [t.id, { id: t.id, name: t.user.name }]));
+
     const perTeacher = new Map<number, Counts & { teacher: { id: number; name: string } }>();
-    for (const row of rows) {
+    for (const row of statusRows) {
       let entry = perTeacher.get(row.teacherId);
       if (!entry) {
-        entry = { ...emptyCounts(), teacher: { id: row.teacher.id, name: row.teacher.user.name } };
+        const teacher = teacherById.get(row.teacherId);
+        if (!teacher) continue;
+        entry = { ...emptyCounts(), teacher };
         perTeacher.set(row.teacherId, entry);
       }
-      tally(entry, row.status);
+      tallyCount(entry, row.status, row._count._all);
     }
 
     const teachers: TeacherAttendanceRow[] = [...perTeacher.values()]
@@ -216,9 +256,14 @@ export class ReportsService {
     const defaultFrom = new Date(Date.UTC(year, month, 1));
     const defaultTo = new Date(Date.UTC(year, month + 1, 0));
 
-    return {
-      from: fromStr ? new Date(fromStr) : defaultFrom,
-      to: toStr ? new Date(toStr) : defaultTo,
-    };
+    const from = fromStr ? new Date(fromStr) : defaultFrom;
+    const to = toStr ? new Date(toStr) : defaultTo;
+
+    const spanDays = (to.getTime() - from.getTime()) / (24 * 60 * 60 * 1000);
+    if (spanDays > MAX_RANGE_DAYS) {
+      throw new BadRequestException(`Date range cannot exceed ${MAX_RANGE_DAYS} days`);
+    }
+
+    return { from, to };
   }
 }

@@ -1,4 +1,5 @@
 import { apiDelete, apiGet, apiGetBlob, apiPatch, apiPost, apiUpload } from './client';
+import { appendPageParams, type PageParams, type Paginated } from './pagination';
 
 // Named "Homework*" here (not "Assignment*") even though the backend model
 // and UI both say "Assignment" — `api/teachers.ts` already exports an
@@ -49,7 +50,7 @@ export interface SetHomeworkSubmissionPayload {
   remarks?: string;
 }
 
-export interface ListHomeworkAssignmentsFilters {
+export interface ListHomeworkAssignmentsFilters extends PageParams {
   classId?: number;
   sectionId?: number;
   subjectId?: number;
@@ -89,14 +90,15 @@ export interface HomeworkBulkImportResult {
 
 export function listHomeworkAssignments(
   filters: ListHomeworkAssignmentsFilters = {},
-): Promise<HomeworkAssignment[]> {
+): Promise<Paginated<HomeworkAssignment>> {
   const params = new URLSearchParams();
   if (filters.classId !== undefined) params.set('classId', String(filters.classId));
   if (filters.sectionId !== undefined) params.set('sectionId', String(filters.sectionId));
   if (filters.subjectId !== undefined) params.set('subjectId', String(filters.subjectId));
   if (filters.teacherId !== undefined) params.set('teacherId', String(filters.teacherId));
+  appendPageParams(params, filters);
   const query = params.toString();
-  return apiGet<HomeworkAssignment[]>(`/assignments${query ? `?${query}` : ''}`);
+  return apiGet<Paginated<HomeworkAssignment>>(`/assignments${query ? `?${query}` : ''}`);
 }
 
 export function listMyHomeworkAssignments(): Promise<StudentHomeworkAssignment[]> {

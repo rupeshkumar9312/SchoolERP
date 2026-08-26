@@ -4,6 +4,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { Alert, StyleSheet, Text, View } from 'react-native';
 import * as academic from '../../api/academic';
 import { ApiError } from '../../api/client';
+import { PAGE_SIZE } from '../../api/pagination';
 import { Student, deleteStudent, listStudents } from '../../api/students';
 import { useAuth } from '../../auth/AuthContext';
 import { Badge } from '../../components/Badge';
@@ -35,7 +36,9 @@ export function StudentsListScreen({ navigation }: Props): React.JSX.Element {
   const [search, setSearch] = useState('');
 
   const [students, setStudents] = useState<Student[] | null>(null);
+  const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
 
@@ -62,13 +65,15 @@ export function StudentsListScreen({ navigation }: Props): React.JSX.Element {
   const load = useCallback(async () => {
     setError(null);
     try {
-      setStudents(
-        await listStudents({
-          classId: classId ?? undefined,
-          sectionId: sectionId ?? undefined,
-          search: search.trim() || undefined,
-        }),
-      );
+      const result = await listStudents({
+        classId: classId ?? undefined,
+        sectionId: sectionId ?? undefined,
+        search: search.trim() || undefined,
+        page: 1,
+        limit: PAGE_SIZE,
+      });
+      setStudents(result.items);
+      setTotal(result.total);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not load students');
     } finally {
@@ -76,6 +81,27 @@ export function StudentsListScreen({ navigation }: Props): React.JSX.Element {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [classId, sectionId, search]);
+
+  const loadMore = async () => {
+    if (!students) return;
+    setLoadingMore(true);
+    try {
+      const nextPage = Math.floor(students.length / PAGE_SIZE) + 1;
+      const result = await listStudents({
+        classId: classId ?? undefined,
+        sectionId: sectionId ?? undefined,
+        search: search.trim() || undefined,
+        page: nextPage,
+        limit: PAGE_SIZE,
+      });
+      setStudents((prev) => [...(prev ?? []), ...result.items]);
+      setTotal(result.total);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Could not load more students');
+    } finally {
+      setLoadingMore(false);
+    }
+  };
 
   useFocusEffect(
     useCallback(() => {
@@ -186,6 +212,10 @@ export function StudentsListScreen({ navigation }: Props): React.JSX.Element {
           )}
         </Card>
       ))}
+
+      {students && students.length > 0 && students.length < total && (
+        <Button label={`Load more (${students.length} of ${total})`} variant="secondary" onPress={() => void loadMore()} loading={loadingMore} />
+      )}
     </Screen>
   );
 }

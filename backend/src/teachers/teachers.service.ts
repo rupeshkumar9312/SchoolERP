@@ -10,6 +10,7 @@ import { AuditLogService } from '../audit/audit-log.service';
 import { TEACHER_ROLE } from '../auth/roles.constants';
 import { edvanceLoginAlias, nextEdvanceId } from '../common/generate-edvance-id';
 import { generateTempPassword } from '../common/generate-temp-password';
+import { PaginatedResult, resolvePagination } from '../common/pagination';
 import { withTransactionRetry } from '../common/with-transaction-retry';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateAssignmentDto } from './dto/create-assignment.dto';
@@ -55,7 +56,19 @@ export interface ClassTeacherSectionView {
   section: { id: number; name: string };
 }
 
-type TeacherWithUser = Prisma.TeacherGetPayload<{ include: { user: true } }>;
+/** Exactly the fields toView() below reads — narrower than `include: { user:
+ * true }`, which pulled the whole User row (passwordHash, hashedRefreshToken
+ * included) into memory on every teacher fetch. */
+const TEACHER_SELECT = {
+  id: true,
+  userId: true,
+  qualification: true,
+  joiningDate: true,
+  createdAt: true,
+  user: { select: { name: true, email: true, edvanceId: true, phone: true, isActive: true } },
+} satisfies Prisma.TeacherSelect;
+
+type TeacherWithUser = Prisma.TeacherGetPayload<{ select: typeof TEACHER_SELECT }>;
 type AssignmentWithRefs = Prisma.TeacherClassSubjectGetPayload<{
   include: { class: true; section: true; subject: true };
 }>;
@@ -68,19 +81,27 @@ export class TeachersService {
     private readonly audit: AuditLogService,
   ) {}
 
-  async findAll(query: ListTeachersQueryDto = {}): Promise<TeacherView[]> {
-    const teachers = await this.prisma.teacher.findMany({
-      where: query.isActive !== undefined ? { user: { isActive: query.isActive } } : undefined,
-      include: { user: true },
-      orderBy: { user: { name: 'asc' } },
-    });
-    return teachers.map((t) => this.toView(t));
+  async findAll(query: ListTeachersQueryDto = {}): Promise<PaginatedResult<TeacherView>> {
+    const where: Prisma.TeacherWhereInput =
+      query.isActive !== undefined ? { user: { isActive: query.isActive } } : {};
+    const { page, pageSize, skip, take } = resolvePagination(query);
+    const [teachers, total] = await Promise.all([
+      this.prisma.teacher.findMany({
+        where,
+        select: TEACHER_SELECT,
+        orderBy: { user: { name: 'asc' } },
+        skip,
+        take,
+      }),
+      this.prisma.teacher.count({ where }),
+    ]);
+    return { items: teachers.map((t) => this.toView(t)), total, page, pageSize };
   }
 
   async findOne(id: number): Promise<TeacherView> {
     const teacher = await this.prisma.teacher.findUnique({
       where: { id },
-      include: { user: true },
+      select: TEACHER_SELECT,
     });
     if (!teacher) throw new NotFoundException('Teacher not found');
     return this.toView(teacher);
@@ -113,7 +134,7 @@ export class TeachersService {
                   },
                 },
               },
-              include: { user: true },
+              select: TEACHER_SELECT,
             });
           },
           { maxWait: 10000, timeout: 15000 },
@@ -142,7 +163,7 @@ export class TeachersService {
   async update(id: number, dto: UpdateTeacherDto, actorId?: number): Promise<TeacherView> {
     const existing = await this.prisma.teacher.findUnique({
       where: { id },
-      include: { user: true },
+      select: TEACHER_SELECT,
     });
     if (!existing) throw new NotFoundException('Teacher not found');
 
@@ -160,7 +181,7 @@ export class TeachersService {
             },
           },
         },
-        include: { user: true },
+        select: TEACHER_SELECT,
       });
       await this.audit.record({
         entityType: 'Teacher',
@@ -179,7 +200,7 @@ export class TeachersService {
   async remove(id: number, actorId?: number): Promise<void> {
     const existing = await this.prisma.teacher.findUnique({
       where: { id },
-      include: { user: true },
+      select: TEACHER_SELECT,
     });
     if (!existing) throw new NotFoundException('Teacher not found');
     try {

@@ -5,6 +5,7 @@ import { Alert, StyleSheet, Text, View } from 'react-native';
 import * as academic from '../../api/academic';
 import { ApiError } from '../../api/client';
 import { EXAM_TYPE_LABELS, Exam, ExamScheduleStatus, ExamType, deleteExam, listExams } from '../../api/exams';
+import { PAGE_SIZE } from '../../api/pagination';
 import { useAuth } from '../../auth/AuthContext';
 import { Badge } from '../../components/Badge';
 import { Button } from '../../components/Button';
@@ -27,8 +28,10 @@ export function ExamsListScreen({ navigation }: Props): React.JSX.Element {
   const canDelete = hasPermission('exam.delete');
 
   const [exams, setExams] = useState<Exam[] | null>(null);
+  const [total, setTotal] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [deletingId, setDeletingId] = useState<number | null>(null);
 
   const [years, setYears] = useState<academic.AcademicYear[]>([]);
@@ -54,20 +57,44 @@ export function ExamsListScreen({ navigation }: Props): React.JSX.Element {
   const load = useCallback(async () => {
     setError(null);
     try {
-      setExams(
-        await listExams({
-          academicYearId: yearId ?? undefined,
-          classId: classId ?? undefined,
-          type: type ?? undefined,
-          status: status ?? undefined,
-        }),
-      );
+      const result = await listExams({
+        academicYearId: yearId ?? undefined,
+        classId: classId ?? undefined,
+        type: type ?? undefined,
+        status: status ?? undefined,
+        page: 1,
+        limit: PAGE_SIZE,
+      });
+      setExams(result.items);
+      setTotal(result.total);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not load exams');
     } finally {
       setLoading(false);
     }
   }, [yearId, classId, type, status]);
+
+  const loadMore = async () => {
+    if (!exams) return;
+    setLoadingMore(true);
+    try {
+      const nextPage = Math.floor(exams.length / PAGE_SIZE) + 1;
+      const result = await listExams({
+        academicYearId: yearId ?? undefined,
+        classId: classId ?? undefined,
+        type: type ?? undefined,
+        status: status ?? undefined,
+        page: nextPage,
+        limit: PAGE_SIZE,
+      });
+      setExams((prev) => [...(prev ?? []), ...result.items]);
+      setTotal(result.total);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Could not load more exams');
+    } finally {
+      setLoadingMore(false);
+    }
+  };
 
   useFocusEffect(
     useCallback(() => {
@@ -175,6 +202,10 @@ export function ExamsListScreen({ navigation }: Props): React.JSX.Element {
           </View>
         </Card>
       ))}
+
+      {exams && exams.length > 0 && exams.length < total && (
+        <Button label={`Load more (${exams.length} of ${total})`} variant="secondary" onPress={() => void loadMore()} loading={loadingMore} />
+      )}
     </Screen>
   );
 }

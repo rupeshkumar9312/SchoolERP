@@ -1,4 +1,5 @@
 import { apiDelete, apiGet, apiPatch, apiPost, apiUpload, PickedFile } from './client';
+import { appendPageParams, PageParams, Paginated } from './pagination';
 
 export interface Student {
   id: number;
@@ -26,7 +27,7 @@ export interface StudentCreateResult extends Student {
   login: { email: string; alias: string; temporaryPassword: string };
 }
 
-export interface StudentFilters {
+export interface StudentFilters extends PageParams {
   classId?: number;
   sectionId?: number;
   search?: string;
@@ -63,13 +64,14 @@ export interface UpdateStudentPayload {
 
 /** ADMIN-tier only (student.view) — every student in the school, optionally
  * filtered. A TEACHER should use listMyClassStudents() instead. */
-export function listStudents(filters: StudentFilters = {}): Promise<Student[]> {
+export function listStudents(filters: StudentFilters = {}): Promise<Paginated<Student>> {
   const params = new URLSearchParams();
   if (filters.classId) params.set('classId', String(filters.classId));
   if (filters.sectionId) params.set('sectionId', String(filters.sectionId));
   if (filters.search) params.set('search', filters.search);
+  appendPageParams(params, filters);
   const query = params.toString();
-  return apiGet<Student[]>(`/students${query ? `?${query}` : ''}`);
+  return apiGet<Paginated<Student>>(`/students${query ? `?${query}` : ''}`);
 }
 
 export function getStudent(id: number): Promise<Student> {

@@ -6,11 +6,13 @@ import type { Exam, ExamScheduleStatus, ExamType } from '../api/exams';
 import { EXAM_TYPE_LABELS, deleteExam, listExams } from '../api/exams';
 import { useAuth } from '../auth/useAuth';
 import { EmptyState } from '../components/EmptyState';
+import { Pager } from '../components/Pager';
 import { TableSkeleton } from '../components/Skeleton';
 import { useConfirm } from '../components/useConfirm';
 import { useToast } from '../components/useToast';
 
 const EXAM_TYPES: ExamType[] = ['CLASS_TEST', 'UNIT_TEST', 'MID_TERM', 'TERM_EXAM', 'FINAL_EXAM', 'OTHER'];
+const PAGE_SIZE = 25;
 
 export function ExamsListPage() {
   const { hasPermission } = useAuth();
@@ -18,6 +20,8 @@ export function ExamsListPage() {
   const toast = useToast();
 
   const [exams, setExams] = useState<Exam[]>([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
@@ -45,20 +49,22 @@ export function ExamsListPage() {
     setLoading(true);
     setError(null);
     try {
-      setExams(
-        await listExams({
-          academicYearId: yearId ? Number(yearId) : undefined,
-          classId: classId ? Number(classId) : undefined,
-          type: (type || undefined) as ExamType | undefined,
-          status: (status || undefined) as ExamScheduleStatus | undefined,
-        }),
-      );
+      const result = await listExams({
+        academicYearId: yearId ? Number(yearId) : undefined,
+        classId: classId ? Number(classId) : undefined,
+        type: (type || undefined) as ExamType | undefined,
+        status: (status || undefined) as ExamScheduleStatus | undefined,
+        page,
+        limit: PAGE_SIZE,
+      });
+      setExams(result.items);
+      setTotal(result.total);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Failed to load exams');
     } finally {
       setLoading(false);
     }
-  }, [yearId, classId, type, status]);
+  }, [yearId, classId, type, status, page]);
 
   useEffect(() => {
     void load();
@@ -75,6 +81,7 @@ export function ExamsListPage() {
     try {
       await deleteExam(exam.id);
       setExams((prev) => prev.filter((e) => e.id !== exam.id));
+      setTotal((prev) => prev - 1);
       toast('Exam deleted.');
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Failed to delete exam');
@@ -103,6 +110,7 @@ export function ExamsListPage() {
             onChange={(e) => {
               setYearId(e.target.value);
               setClassId('');
+              setPage(1);
             }}
           >
             <option value="">All years</option>
@@ -116,7 +124,14 @@ export function ExamsListPage() {
 
         <label className="field">
           <span>Class</span>
-          <select value={classId} onChange={(e) => setClassId(e.target.value)} disabled={!yearId}>
+          <select
+            value={classId}
+            onChange={(e) => {
+              setClassId(e.target.value);
+              setPage(1);
+            }}
+            disabled={!yearId}
+          >
             <option value="">All classes</option>
             {classes.map((c) => (
               <option key={c.id} value={c.id}>
@@ -128,7 +143,13 @@ export function ExamsListPage() {
 
         <label className="field">
           <span>Type</span>
-          <select value={type} onChange={(e) => setType(e.target.value)}>
+          <select
+            value={type}
+            onChange={(e) => {
+              setType(e.target.value);
+              setPage(1);
+            }}
+          >
             <option value="">All types</option>
             {EXAM_TYPES.map((t) => (
               <option key={t} value={t}>
@@ -140,7 +161,13 @@ export function ExamsListPage() {
 
         <label className="field">
           <span>Status</span>
-          <select value={status} onChange={(e) => setStatus(e.target.value)}>
+          <select
+            value={status}
+            onChange={(e) => {
+              setStatus(e.target.value);
+              setPage(1);
+            }}
+          >
             <option value="">All statuses</option>
             <option value="DRAFT">Draft</option>
             <option value="PUBLISHED">Published</option>
@@ -210,6 +237,7 @@ export function ExamsListPage() {
               ))}
             </tbody>
           </table>
+          <Pager page={page} pageSize={PAGE_SIZE} total={total} onPageChange={setPage} />
         </div>
       )}
     </>

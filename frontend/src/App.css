@@ -1205,3 +1205,26 @@ button.danger:hover:not(:disabled) {
     font-size: 0.78rem;
   }
 }
+
+.pager {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-top: 1.25rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--color-border);
+}
+
+.pager-summary,
+.pager-page {
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+}
+
+.pager-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}

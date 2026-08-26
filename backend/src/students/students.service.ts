@@ -10,6 +10,7 @@ import { AuditLogService } from '../audit/audit-log.service';
 import { STUDENT_ROLE } from '../auth/roles.constants';
 import { edvanceLoginAlias, nextEdvanceId } from '../common/generate-edvance-id';
 import { generateTempPassword } from '../common/generate-temp-password';
+import { PaginatedResult, resolvePagination } from '../common/pagination';
 import { withTransactionRetry } from '../common/with-transaction-retry';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateStudentDto } from './dto/create-student.dto';
@@ -49,9 +50,29 @@ export interface StudentCreateResult extends StudentView {
   login: { email: string; alias: string; temporaryPassword: string };
 }
 
-type StudentWithRefs = Prisma.StudentGetPayload<{
-  include: { class: true; section: true; user: true };
-}>;
+/** Exactly the fields toView() below reads — used everywhere a Student row
+ * is fetched so no call site pulls the full related class/section/user rows
+ * just to discard most of them. */
+const STUDENT_SELECT = {
+  id: true,
+  admissionNo: true,
+  name: true,
+  dateOfBirth: true,
+  gender: true,
+  class: { select: { id: true, name: true } },
+  section: { select: { id: true, name: true } },
+  guardianName: true,
+  guardianPhone: true,
+  guardianEmail: true,
+  address: true,
+  isActive: true,
+  admissionDate: true,
+  createdAt: true,
+  userId: true,
+  user: { select: { edvanceId: true } },
+} satisfies Prisma.StudentSelect;
+
+type StudentWithRefs = Prisma.StudentGetPayload<{ select: typeof STUDENT_SELECT }>;
 
 @Injectable()
 export class StudentsService {
@@ -60,30 +81,34 @@ export class StudentsService {
     private readonly audit: AuditLogService,
   ) {}
 
-  async findAll(query: ListStudentsQueryDto): Promise<StudentView[]> {
-    const students = await this.prisma.student.findMany({
-      where: {
-        classId: query.classId,
-        sectionId: query.sectionId,
-        ...(query.search
-          ? {
-              OR: [
-                { name: { contains: query.search } },
-                { admissionNo: { contains: query.search } },
-              ],
-            }
-          : {}),
-      },
-      include: { class: true, section: true, user: true },
-      orderBy: { name: 'asc' },
-    });
-    return students.map((s) => this.toView(s));
+  async findAll(query: ListStudentsQueryDto): Promise<PaginatedResult<StudentView>> {
+    const where: Prisma.StudentWhereInput = {
+      classId: query.classId,
+      sectionId: query.sectionId,
+      ...(query.search
+        ? {
+            OR: [{ name: { contains: query.search } }, { admissionNo: { contains: query.search } }],
+          }
+        : {}),
+    };
+    const { page, pageSize, skip, take } = resolvePagination(query);
+    const [students, total] = await Promise.all([
+      this.prisma.student.findMany({
+        where,
+        select: STUDENT_SELECT,
+        orderBy: { name: 'asc' },
+        skip,
+        take,
+      }),
+      this.prisma.student.count({ where }),
+    ]);
+    return { items: students.map((s) => this.toView(s)), total, page, pageSize };
   }
 
   async findOne(id: number): Promise<StudentView> {
     const student = await this.prisma.student.findUnique({
       where: { id },
-      include: { class: true, section: true, user: true },
+      select: STUDENT_SELECT,
     });
     if (!student) throw new NotFoundException('Student not found');
     return this.toView(student);
@@ -133,7 +158,7 @@ export class StudentsService {
                 admissionDate: dto.admissionDate ? new Date(dto.admissionDate) : undefined,
                 userId: user.id,
               },
-              include: { class: true, section: true, user: true },
+              select: STUDENT_SELECT,
             });
             return { student, loginEmail };
           },
@@ -192,7 +217,7 @@ export class StudentsService {
           admissionDate: dto.admissionDate ? new Date(dto.admissionDate) : undefined,
           isActive: dto.isActive,
         },
-        include: { class: true, section: true, user: true },
+        select: STUDENT_SELECT,
       });
       await this.audit.record({
         entityType: 'Student',
@@ -259,7 +284,7 @@ export class StudentsService {
       where: {
         OR: [...scopes.values()].map((a) => ({ classId: a.classId, sectionId: a.sectionId })),
       },
-      include: { class: true, section: true, user: true },
+      select: STUDENT_SELECT,
       orderBy: { name: 'asc' },
     });
     return students.map((s) => this.toView(s));

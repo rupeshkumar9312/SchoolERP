@@ -1,8 +1,10 @@
 import { BadRequestException, ForbiddenException, Injectable, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService, JwtSignOptions } from '@nestjs/jwt';
+import { LoginPlatform } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import { resolveEdvanceIdFromAlias } from '../common/generate-edvance-id';
+import { LoginAuditService } from '../login-audit/login-audit.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { JwtPayload } from './auth.types';
 import { PermissionsService } from './permissions.service';
@@ -14,6 +16,15 @@ const PASSWORD_BCRYPT_ROUNDS = 10;
 export interface AuthTokens {
   accessToken: string;
   refreshToken: string;
+}
+
+/** Request metadata the controller extracts once and passes through to
+ * login()/refresh() purely for the login-audit trail — AuthService itself
+ * never inspects the raw Request object. */
+export interface LoginContext {
+  platform: LoginPlatform;
+  ipAddress: string | null;
+  userAgent: string | null;
 }
 
 export interface AuthenticatedUserView {
@@ -56,11 +67,13 @@ export class AuthService {
     private readonly jwt: JwtService,
     private readonly config: ConfigService,
     private readonly permissions: PermissionsService,
+    private readonly loginAudit: LoginAuditService,
   ) {}
 
   async login(
     identifier: string,
     password: string,
+    context: LoginContext,
   ): Promise<{ tokens: AuthTokens; user: AuthenticatedUserView }> {
     const user = await this.findUserByIdentifier(identifier);
 
@@ -69,14 +82,40 @@ export class AuthService {
     // a wrong password alone still gets the same generic message either way,
     // so this doesn't turn into an account-enumeration oracle.
     if (!user || !(await bcrypt.compare(password, user.passwordHash))) {
+      await this.loginAudit.record({
+        event: 'LOGIN_FAILED',
+        platform: context.platform,
+        identifier,
+        userId: user?.id ?? null,
+        failureReason: 'Invalid email or password',
+        ipAddress: context.ipAddress,
+        userAgent: context.userAgent,
+      });
       throw new UnauthorizedException('Invalid email or password');
     }
     if (!user.isActive) {
+      await this.loginAudit.record({
+        event: 'LOGIN_FAILED',
+        platform: context.platform,
+        identifier,
+        userId: user.id,
+        failureReason: 'Account disabled',
+        ipAddress: context.ipAddress,
+        userAgent: context.userAgent,
+      });
       throw new ForbiddenException('Sorry, you are not authorized. Please contact your administrator.');
     }
 
     const tokens = await this.issueTokens(user);
     const view = await this.toUserView(user);
+    await this.loginAudit.record({
+      event: 'LOGIN',
+      platform: context.platform,
+      identifier,
+      userId: user.id,
+      ipAddress: context.ipAddress,
+      userAgent: context.userAgent,
+    });
     return { tokens, user: view };
   }
 
@@ -99,6 +138,7 @@ export class AuthService {
 
   async refresh(
     refreshToken: string,
+    context: LoginContext,
   ): Promise<{ tokens: AuthTokens; user: AuthenticatedUserView }> {
     const payload = await this.verifyRefreshToken(refreshToken);
 
@@ -120,6 +160,17 @@ export class AuthService {
 
     const tokens = await this.issueTokens(user);
     const view = await this.toUserView(user);
+    // No credentials re-entered — the session was silently resumed from a
+    // stored refresh token (a page reload on web, or the app reopening on
+    // mobile with an expired access token).
+    await this.loginAudit.record({
+      event: 'REFRESH',
+      platform: context.platform,
+      identifier: user.email,
+      userId: user.id,
+      ipAddress: context.ipAddress,
+      userAgent: context.userAgent,
+    });
     return { tokens, user: view };
   }
 

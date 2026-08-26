@@ -5,9 +5,12 @@ import { AUDIENCE_LABELS, deleteAnnouncement, listAnnouncements } from '../api/a
 import { ApiError } from '../api/client';
 import { useAuth } from '../auth/useAuth';
 import { EmptyState } from '../components/EmptyState';
+import { Pager } from '../components/Pager';
 import { TableSkeleton } from '../components/Skeleton';
 import { useConfirm } from '../components/useConfirm';
 import { useToast } from '../components/useToast';
+
+const PAGE_SIZE = 25;
 
 export function AnnouncementsListPage() {
   const { state, hasPermission } = useAuth();
@@ -21,17 +24,21 @@ export function AnnouncementsListPage() {
   const confirm = useConfirm();
   const toast = useToast();
   const [announcements, setAnnouncements] = useState<Announcement[] | null>(null);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
   const [error, setError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
 
   const load = useCallback(async () => {
     setError(null);
     try {
-      setAnnouncements(await listAnnouncements());
+      const result = await listAnnouncements({ page, limit: PAGE_SIZE });
+      setAnnouncements(result.items);
+      setTotal(result.total);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Failed to load announcements');
     }
-  }, []);
+  }, [page]);
 
   useEffect(() => {
     void load();
@@ -48,6 +55,7 @@ export function AnnouncementsListPage() {
     try {
       await deleteAnnouncement(announcement.id);
       setAnnouncements((prev) => (prev ?? []).filter((a) => a.id !== announcement.id));
+      setTotal((prev) => prev - 1);
       toast('Announcement deleted.');
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Failed to delete announcement');
@@ -125,6 +133,7 @@ export function AnnouncementsListPage() {
                 )}
               </div>
             ))}
+            <Pager page={page} pageSize={PAGE_SIZE} total={total} onPageChange={setPage} />
           </>
         ))}
     </>

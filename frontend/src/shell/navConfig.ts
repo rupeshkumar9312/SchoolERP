@@ -31,5 +31,6 @@ export const navItems: NavItem[] = [
   { label: 'My Results', path: '/student/results', roles: ['STUDENT'] },
   { label: 'Announcements', path: '/announcements' },
   { label: 'Audit Log', path: '/audit-logs', roles: ['SUPER_ADMIN'] },
+  { label: 'Login History', path: '/login-history', roles: ['SUPER_ADMIN'] },
   { label: 'Settings', path: '/settings' },
 ];

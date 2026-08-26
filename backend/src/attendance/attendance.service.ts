@@ -82,17 +82,17 @@ export class AttendanceService {
       ),
     );
 
-    await Promise.all(
+    await this.audit.recordMany(
       rows.map((row) => {
         const before = existingByStudentId.get(row.studentId) ?? null;
-        return this.audit.record({
+        return {
           entityType: 'StudentAttendance',
           entityId: row.id,
           action: before ? 'UPDATE' : 'CREATE',
           userId: actor.id,
           oldValues: before,
           newValues: row,
-        });
+        };
       }),
     );
 

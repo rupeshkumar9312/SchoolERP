@@ -8,7 +8,10 @@ import { useAuth } from '../auth/useAuth';
 import { useConfirm } from '../components/useConfirm';
 import { useToast } from '../components/useToast';
 import { EmptyState } from '../components/EmptyState';
+import { Pager } from '../components/Pager';
 import { TableSkeleton } from '../components/Skeleton';
+
+const PAGE_SIZE = 25;
 
 export function StudentsListPage() {
   const { hasPermission } = useAuth();
@@ -22,8 +25,10 @@ export function StudentsListPage() {
   const [classId, setClassId] = useState('');
   const [sectionId, setSectionId] = useState('');
   const [search, setSearch] = useState('');
+  const [page, setPage] = useState(1);
 
   const [students, setStudents] = useState<Student[]>([]);
+  const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
@@ -52,19 +57,21 @@ export function StudentsListPage() {
     setLoading(true);
     setError(null);
     try {
-      setStudents(
-        await listStudents({
-          classId: classId ? Number(classId) : undefined,
-          sectionId: sectionId ? Number(sectionId) : undefined,
-          search: search || undefined,
-        }),
-      );
+      const result = await listStudents({
+        classId: classId ? Number(classId) : undefined,
+        sectionId: sectionId ? Number(sectionId) : undefined,
+        search: search || undefined,
+        page,
+        limit: PAGE_SIZE,
+      });
+      setStudents(result.items);
+      setTotal(result.total);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Failed to load students');
     } finally {
       setLoading(false);
     }
-  }, [classId, sectionId, search]);
+  }, [classId, sectionId, search, page]);
 
   useEffect(() => {
     void load();
@@ -81,6 +88,7 @@ export function StudentsListPage() {
     try {
       await deleteStudent(student.id);
       setStudents((prev) => prev.filter((s) => s.id !== student.id));
+      setTotal((prev) => prev - 1);
       toast(`${student.name} was deleted.`);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Failed to delete student');
@@ -120,6 +128,7 @@ export function StudentsListPage() {
               setYearId(e.target.value);
               setClassId('');
               setSectionId('');
+              setPage(1);
             }}
           >
             <option value="">All years</option>
@@ -138,6 +147,7 @@ export function StudentsListPage() {
             onChange={(e) => {
               setClassId(e.target.value);
               setSectionId('');
+              setPage(1);
             }}
             disabled={!yearId}
           >
@@ -152,7 +162,14 @@ export function StudentsListPage() {
 
         <label className="field">
           <span>Section</span>
-          <select value={sectionId} onChange={(e) => setSectionId(e.target.value)} disabled={!classId}>
+          <select
+            value={sectionId}
+            onChange={(e) => {
+              setSectionId(e.target.value);
+              setPage(1);
+            }}
+            disabled={!classId}
+          >
             <option value="">All sections</option>
             {sections.map((s) => (
               <option key={s.id} value={s.id}>
@@ -166,7 +183,10 @@ export function StudentsListPage() {
           <span>Search</span>
           <input
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => {
+              setSearch(e.target.value);
+              setPage(1);
+            }}
             placeholder="Name or admission no."
           />
         </label>
@@ -230,6 +250,7 @@ export function StudentsListPage() {
               ))}
             </tbody>
           </table>
+          <Pager page={page} pageSize={PAGE_SIZE} total={total} onPageChange={setPage} />
         </div>
       )}
     </>

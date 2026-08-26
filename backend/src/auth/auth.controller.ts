@@ -11,6 +11,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { Request, Response } from 'express';
+import type { LoginContext } from './auth.service';
 import { AuthService } from './auth.service';
 import { CurrentUser } from './decorators/current-user.decorator';
 import { ChangePasswordDto } from './dto/change-password.dto';
@@ -34,6 +35,25 @@ function isMobileClient(req: Request): boolean {
   return req.headers[MOBILE_CLIENT_HEADER] === MOBILE_CLIENT_VALUE;
 }
 
+/** Login-audit context for this request — used only to attribute a row in
+ * the trail, never for anything auth-related itself. Vercel (and most
+ * platforms fronting the API with a proxy) sets x-forwarded-for to the real
+ * client IP; req.socket.remoteAddress is the fallback for local dev, where
+ * there's no proxy in front of the app at all. */
+function buildLoginContext(req: Request): LoginContext {
+  const forwardedFor = req.headers['x-forwarded-for'];
+  const ipAddress = Array.isArray(forwardedFor)
+    ? (forwardedFor[0] ?? null)
+    : (forwardedFor?.split(',')[0]?.trim() ?? req.socket.remoteAddress ?? null);
+  const userAgent = req.headers['user-agent'] ?? null;
+
+  return {
+    platform: isMobileClient(req) ? 'MOBILE' : 'WEB',
+    ipAddress,
+    userAgent,
+  };
+}
+
 @Controller('auth')
 export class AuthController {
   constructor(
@@ -48,7 +68,7 @@ export class AuthController {
     @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
   ) {
-    const { tokens, user } = await this.auth.login(dto.email, dto.password);
+    const { tokens, user } = await this.auth.login(dto.email, dto.password, buildLoginContext(req));
     this.setRefreshCookie(res, tokens.refreshToken);
     return {
       accessToken: tokens.accessToken,
@@ -71,7 +91,7 @@ export class AuthController {
       throw new UnauthorizedException('No refresh token supplied');
     }
 
-    const { tokens, user } = await this.auth.refresh(token);
+    const { tokens, user } = await this.auth.refresh(token, buildLoginContext(req));
     this.setRefreshCookie(res, tokens.refreshToken);
     return {
       accessToken: tokens.accessToken,

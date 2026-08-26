@@ -19,6 +19,7 @@ import { ExamMarksEntryPage } from './pages/ExamMarksEntryPage';
 import { ExamReportCardPage } from './pages/ExamReportCardPage';
 import { ExamSchedulePage } from './pages/ExamSchedulePage';
 import { ExamsListPage } from './pages/ExamsListPage';
+import { LoginHistoryPage } from './pages/LoginHistoryPage';
 import { LoginPage } from './pages/LoginPage';
 import { MarkAttendancePage } from './pages/MarkAttendancePage';
 import { MyAttendancePage } from './pages/MyAttendancePage';
@@ -152,6 +153,7 @@ function App() {
 
               <Route element={<ProtectedRoute roles={['SUPER_ADMIN']} />}>
                 <Route path="/audit-logs" element={<AuditLogsPage />} />
+                <Route path="/login-history" element={<LoginHistoryPage />} />
               </Route>
 
               <Route element={<ProtectedRoute roles={['STUDENT']} />}>

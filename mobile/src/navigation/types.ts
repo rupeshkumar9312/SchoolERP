@@ -105,6 +105,7 @@ export type ManageStackParamList = {
   StudentsBulkImport: undefined;
   Reports: undefined;
   AuditLog: undefined;
+  LoginHistory: undefined;
   ExamsList: undefined;
   ExamForm: { exam?: Exam } | undefined;
   ExamDetail: { examId: number };

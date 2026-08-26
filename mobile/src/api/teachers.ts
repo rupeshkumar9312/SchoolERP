@@ -1,4 +1,5 @@
 import { apiDelete, apiGet, apiPatch, apiPost } from './client';
+import { appendPageParams, PageParams, Paginated } from './pagination';
 
 export interface Teacher {
   id: number;
@@ -37,11 +38,14 @@ export interface UpdateTeacherPayload {
 /** ADMIN-tier only (teacher.view) — every teacher in the school, or only
  * active ones when a roster shouldn't offer a deactivated teacher (e.g. the
  * staff attendance screen). */
-export function listTeachers(filters: { isActive?: boolean } = {}): Promise<Teacher[]> {
+export function listTeachers(
+  filters: PageParams & { isActive?: boolean } = {},
+): Promise<Paginated<Teacher>> {
   const params = new URLSearchParams();
   if (filters.isActive !== undefined) params.set('isActive', String(filters.isActive));
+  appendPageParams(params, filters);
   const query = params.toString();
-  return apiGet<Teacher[]>(`/teachers${query ? `?${query}` : ''}`);
+  return apiGet<Paginated<Teacher>>(`/teachers${query ? `?${query}` : ''}`);
 }
 
 export function getTeacher(id: number): Promise<Teacher> {

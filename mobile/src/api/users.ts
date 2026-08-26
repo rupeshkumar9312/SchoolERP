@@ -1,4 +1,5 @@
 import { apiDelete, apiGet, apiPatch, apiPost } from './client';
+import { appendPageParams, PageParams, Paginated } from './pagination';
 
 export interface UserListItem {
   id: number;
@@ -31,9 +32,18 @@ export interface UpdateUserPayload {
   isActive?: boolean;
 }
 
-export function listUsers(roleId?: number): Promise<UserListItem[]> {
-  const query = roleId ? `?roleId=${roleId}` : '';
-  return apiGet<UserListItem[]>(`/users${query}`);
+export interface UserFilters extends PageParams {
+  roleId?: number;
+  search?: string;
+}
+
+export function listUsers(filters: UserFilters = {}): Promise<Paginated<UserListItem>> {
+  const params = new URLSearchParams();
+  if (filters.roleId) params.set('roleId', String(filters.roleId));
+  if (filters.search) params.set('search', filters.search);
+  appendPageParams(params, filters);
+  const query = params.toString();
+  return apiGet<Paginated<UserListItem>>(`/users${query ? `?${query}` : ''}`);
 }
 
 export function getUser(id: number): Promise<UserListItem> {

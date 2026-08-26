@@ -1,4 +1,5 @@
 import { apiDelete, apiGet, apiPatch, apiPost, apiUpload, PickedFile } from './client';
+import { appendPageParams, PageParams, Paginated } from './pagination';
 
 export type AudienceRole = 'STUDENT' | 'TEACHER' | 'ADMIN';
 
@@ -31,8 +32,11 @@ export interface UpdateAnnouncementPayload {
 
 /** The server scopes this to the caller's own audience group — a
  * STUDENT/TEACHER gets only announcements addressed to them. */
-export function listAnnouncements(): Promise<Announcement[]> {
-  return apiGet<Announcement[]>('/announcements');
+export function listAnnouncements(params: PageParams = {}): Promise<Paginated<Announcement>> {
+  const search = new URLSearchParams();
+  appendPageParams(search, params);
+  const query = search.toString();
+  return apiGet<Paginated<Announcement>>(`/announcements${query ? `?${query}` : ''}`);
 }
 
 export function createAnnouncement(payload: CreateAnnouncementPayload): Promise<Announcement> {

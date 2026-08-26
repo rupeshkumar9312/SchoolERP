@@ -4,9 +4,11 @@ import { AuditLogService } from '../audit/audit-log.service';
 import { AuthenticatedUser } from '../auth/auth.types';
 import { STUDENT_ROLE, SUPER_ADMIN_ROLE, TEACHER_ROLE } from '../auth/roles.constants';
 import { CloudinaryService } from '../cloudinary/cloudinary.service';
+import { PaginatedResult, resolvePagination } from '../common/pagination';
 import { PrismaService } from '../prisma/prisma.service';
 import { PushNotificationService } from '../push-notifications/push-notifications.service';
 import { CreateAnnouncementDto } from './dto/create-announcement.dto';
+import { ListAnnouncementsQueryDto } from './dto/list-announcements.query.dto';
 import { UpdateAnnouncementDto } from './dto/update-announcement.dto';
 
 export interface AnnouncementView {
@@ -44,13 +46,23 @@ export class AnnouncementsService {
   /** Admin-tier roles see every announcement (they're the ones managing them,
    * including ones not addressed to ADMIN); a TEACHER or STUDENT only sees
    * announcements whose audience list includes their own group. */
-  async findAll(actor: AuthenticatedUser): Promise<AnnouncementView[]> {
-    const rows = await this.prisma.announcement.findMany({
-      where: this.isAdminTier(actor) ? {} : this.visibleToWhere(actor),
-      include: ANNOUNCEMENT_INCLUDE,
-      orderBy: { createdAt: 'desc' },
-    });
-    return rows.map((r) => this.toView(r));
+  async findAll(
+    actor: AuthenticatedUser,
+    query: ListAnnouncementsQueryDto = {},
+  ): Promise<PaginatedResult<AnnouncementView>> {
+    const where = this.isAdminTier(actor) ? {} : this.visibleToWhere(actor);
+    const { page, pageSize, skip, take } = resolvePagination(query);
+    const [rows, total] = await Promise.all([
+      this.prisma.announcement.findMany({
+        where,
+        include: ANNOUNCEMENT_INCLUDE,
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take,
+      }),
+      this.prisma.announcement.count({ where }),
+    ]);
+    return { items: rows.map((r) => this.toView(r)), total, page, pageSize };
   }
 
   async findOne(id: number, actor: AuthenticatedUser): Promise<AnnouncementView> {
