@@ -66,6 +66,7 @@ export type TeacherAssignmentsStackParamList = {
 export type TeacherExamsStackParamList = {
   ExamsList: undefined;
   MarksEntry: { entry: TeacherExamEntry };
+  NewClassTest: undefined;
 };
 
 export type TeacherDashboardStackParamList = {

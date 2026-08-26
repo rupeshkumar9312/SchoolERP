@@ -25,6 +25,7 @@ import { MyAttendancePage } from './pages/MyAttendancePage';
 import { MyClassesPage } from './pages/MyClassesPage';
 import { MyExamsPage } from './pages/MyExamsPage';
 import { MyStudentsPage } from './pages/MyStudentsPage';
+import { NewClassTestPage } from './pages/NewClassTestPage';
 import { ReportsPage } from './pages/ReportsPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { StaffAttendancePage } from './pages/StaffAttendancePage';
@@ -127,11 +128,17 @@ function App() {
                 <Route path="/exams/:id/schedules/:scheduleId" element={<ExamSchedulePage />} />
                 <Route path="/exams/:id/schedules/:scheduleId/report-card" element={<ExamReportCardPage />} />
               </Route>
-              <Route element={<ProtectedRoute permission="exam.create" />}>
+              {/* roles, not permission="exam.create" — TEACHER now holds that
+                  key too (self-serve class tests via /my-exams/new below),
+                  but this admin umbrella form has no class/type restriction
+                  and would let a teacher submit a request the backend then
+                  has to reject. */}
+              <Route element={<ProtectedRoute roles={['SUPER_ADMIN', 'DIRECTOR', 'PRINCIPAL', 'ADMIN']} />}>
                 <Route path="/exams/new" element={<ExamFormPage />} />
               </Route>
               <Route element={<ProtectedRoute roles={['TEACHER']} />}>
                 <Route path="/my-exams" element={<MyExamsPage />} />
+                <Route path="/my-exams/new" element={<NewClassTestPage />} />
                 <Route path="/exams/:id/schedules/:scheduleId/marks" element={<ExamMarksEntryPage />} />
               </Route>
 

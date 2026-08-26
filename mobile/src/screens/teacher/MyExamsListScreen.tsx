@@ -5,6 +5,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import { ApiError } from '../../api/client';
 import { EXAM_TYPE_LABELS, listMyExams, TeacherExamEntry } from '../../api/exams';
 import { Badge } from '../../components/Badge';
+import { Button } from '../../components/Button';
 import { Card } from '../../components/Card';
 import { ErrorView } from '../../components/ErrorView';
 import { LoadingView } from '../../components/LoadingView';
@@ -69,7 +70,10 @@ export function MyExamsListScreen({ navigation }: Props): React.JSX.Element {
 
   return (
     <Screen refreshing={loading} onRefresh={load}>
-      <Text style={styles.heading}>My Exams</Text>
+      <View style={styles.headerRow}>
+        <Text style={styles.heading}>My Exams</Text>
+        <Button label="+ New class test" onPress={() => navigation.navigate('NewClassTest')} />
+      </View>
       <Text style={styles.muted}>Exams for the subjects and sections you teach.</Text>
 
       {entries && groups.length === 0 && (
@@ -113,6 +117,7 @@ export function MyExamsListScreen({ navigation }: Props): React.JSX.Element {
 }
 
 const styles = StyleSheet.create({
+  headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm },
   heading: { fontSize: 20, fontFamily: fonts.headingBold, color: colors.text },
   muted: { fontSize: 13, fontFamily: fonts.body, color: colors.textMuted, marginTop: 2 },
   group: { marginTop: spacing.md },

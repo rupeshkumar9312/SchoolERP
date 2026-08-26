@@ -41,7 +41,12 @@ export function MyExamsPage() {
 
   return (
     <>
-      <h1>My Exams</h1>
+      <div className="card-head">
+        <h1>My Exams</h1>
+        <Link to="/my-exams/new">
+          <button type="button">+ New class test</button>
+        </Link>
+      </div>
       <p className="subtitle">Exams for the subjects and sections you teach.</p>
 
       {error && (

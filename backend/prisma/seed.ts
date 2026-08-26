@@ -52,7 +52,10 @@ const MANAGEMENT_PERMISSION_KEYS = PERMISSIONS.map((p) => p.key);
 // TEACHER gets exactly the attendance permissions — marking attendance for
 // their own assigned classes is their core daily task. AttendanceService
 // scopes *which* classes/sections/dates they may touch; the permission just
-// gets them past the guard. TEACHER has no other permissions.
+// gets them past the guard. exam.create is the one exception to "no other
+// permissions" below — ExamsService restricts it server-side to class tests
+// for a teacher's own class+subjects only; everything else exam-related
+// (unit tests, term exams, editing, deleting) stays admin-tier.
 const TEACHER_PERMISSION_KEYS = [
   'attendance.student.view',
   'attendance.student.mark',
@@ -63,6 +66,7 @@ const TEACHER_PERMISSION_KEYS = [
   'assignment.create',
   'assignment.edit',
   'assignment.delete',
+  'exam.create',
   'exam.marks.enter',
 ];
 

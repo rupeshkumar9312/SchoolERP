@@ -578,6 +578,24 @@ export class ExamsService {
       await this.assertSubjectsBelongToClass(dto.schedule.classId, dto.schedule.subjects);
     }
 
+    // A TEACHER holds exam.create only to self-serve class tests for their
+    // own classes — everything else (unit tests, term exams, editing,
+    // deleting, scheduling classes they don't teach) stays admin-tier.
+    if (actor.roleName === TEACHER_ROLE) {
+      if (dto.type !== 'CLASS_TEST') {
+        throw new ForbiddenException('Teachers may only create class tests');
+      }
+      if (!dto.schedule) {
+        throw new BadRequestException('Select a class, dates and subjects');
+      }
+      const teacher = await this.getOwnTeacher(actor.id);
+      await this.assertTeacherTeachesClassSubjects(
+        teacher.id,
+        dto.schedule.classId,
+        dto.schedule.subjects.map((s) => s.subjectId),
+      );
+    }
+
     try {
       const row = await this.prisma.exam.create({
         data: {
@@ -672,9 +690,21 @@ export class ExamsService {
    * list picked from that class's real subjects, no name-matching, no
    * shared template. */
   async addSchedule(examId: number, dto: CreateExamScheduleDto, actor: AuthenticatedUser): Promise<ExamView> {
-    await this.findRowOrThrow(examId);
+    const exam = await this.findRowOrThrow(examId);
     this.assertDateRangeValid(dto.startDate, dto.endDate);
     await this.assertSubjectsBelongToClass(dto.classId, dto.subjects);
+
+    if (actor.roleName === TEACHER_ROLE) {
+      if (exam.type !== 'CLASS_TEST') {
+        throw new ForbiddenException('Teachers may only schedule classes for class tests');
+      }
+      const teacher = await this.getOwnTeacher(actor.id);
+      await this.assertTeacherTeachesClassSubjects(
+        teacher.id,
+        dto.classId,
+        dto.subjects.map((s) => s.subjectId),
+      );
+    }
 
     try {
       const created = await this.prisma.examSchedule.create({
@@ -964,6 +994,29 @@ export class ExamsService {
     });
     if (!assignment) {
       throw new ForbiddenException('You are not assigned to teach this class, section and subject');
+    }
+  }
+
+  /** A teacher self-serving a class test may only pick a class they're
+   * actually assigned to (any section) and, within it, only subjects they
+   * teach there — unlike assertAssignedToTeach above, this isn't scoped to
+   * one section, since ExamSchedule itself spans the whole class. */
+  private async assertTeacherTeachesClassSubjects(
+    teacherId: number,
+    classId: number,
+    subjectIds: number[],
+  ): Promise<void> {
+    const assignments = await this.prisma.teacherClassSubject.findMany({
+      where: { teacherId, classId },
+      select: { subjectId: true },
+    });
+    if (assignments.length === 0) {
+      throw new ForbiddenException('You are not assigned to teach this class');
+    }
+    const taughtSubjectIds = new Set(assignments.map((a) => a.subjectId));
+    const untaught = subjectIds.filter((id) => !taughtSubjectIds.has(id));
+    if (untaught.length > 0) {
+      throw new ForbiddenException('You may only add subjects you teach in this class');
     }
   }
 

@@ -12,6 +12,7 @@ import { MarkAttendanceScreen } from '../screens/teacher/MarkAttendanceScreen';
 import { MyAttendanceScreen } from '../screens/teacher/MyAttendanceScreen';
 import { MyExamsListScreen } from '../screens/teacher/MyExamsListScreen';
 import { NewAssignmentScreen } from '../screens/teacher/NewAssignmentScreen';
+import { NewClassTestScreen } from '../screens/teacher/NewClassTestScreen';
 import { RosterScreen } from '../screens/teacher/RosterScreen';
 import { StudentAttendanceHistoryScreen } from '../screens/teacher/StudentAttendanceHistoryScreen';
 import { StudentSearchScreen } from '../screens/teacher/StudentSearchScreen';
@@ -70,6 +71,11 @@ function ExamsStackNavigator(): React.JSX.Element {
     <ExamsStack.Navigator screenOptions={brandedHeaderOptions}>
       <ExamsStack.Screen name="ExamsList" component={MyExamsListScreen} options={{ title: 'My Exams' }} />
       <ExamsStack.Screen name="MarksEntry" component={ExamMarksEntryScreen} options={{ title: 'Enter marks' }} />
+      <ExamsStack.Screen
+        name="NewClassTest"
+        component={NewClassTestScreen}
+        options={{ title: 'New class test', presentation: 'modal' }}
+      />
     </ExamsStack.Navigator>
   );
 }
