@@ -85,7 +85,10 @@ export class AuthController {
   @HttpCode(204)
   async logout(@CurrentUser() user: AuthenticatedUser, @Res({ passthrough: true }) res: Response) {
     await this.auth.logout(user.id);
-    res.clearCookie(REFRESH_COOKIE_NAME, { path: REFRESH_COOKIE_PATH });
+    // Must repeat the same secure/sameSite attributes used when the cookie
+    // was set — browsers key a clear on the full attribute set, not just
+    // name+path, so a mismatch here silently fails to clear it.
+    res.clearCookie(REFRESH_COOKIE_NAME, { path: REFRESH_COOKIE_PATH, ...this.refreshCookieAttributes() });
   }
 
   @UseGuards(JwtAuthGuard)
@@ -107,9 +110,18 @@ export class AuthController {
   private setRefreshCookie(res: Response, refreshToken: string): void {
     res.cookie(REFRESH_COOKIE_NAME, refreshToken, {
       httpOnly: true,
-      secure: this.config.get<string>('NODE_ENV') === 'production',
-      sameSite: 'lax',
       path: REFRESH_COOKIE_PATH,
+      ...this.refreshCookieAttributes(),
     });
+  }
+
+  /** Web and API are deployed as two separate Vercel apps — different sites,
+   * so this cookie only reaches the backend on a cross-site fetch (every
+   * /auth/refresh call) if it's SameSite=None, which browsers only honor
+   * alongside Secure. Local dev stays Lax/non-secure (plain http, and
+   * frontend+backend are same-site there anyway — only the port differs). */
+  private refreshCookieAttributes(): { secure: boolean; sameSite: 'none' | 'lax' } {
+    const isProduction = this.config.get<string>('NODE_ENV') === 'production';
+    return { secure: isProduction, sameSite: isProduction ? 'none' : 'lax' };
   }
 }
