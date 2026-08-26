@@ -9,6 +9,7 @@ import {
   ParseIntPipe,
   Patch,
   Post,
+  Query,
   UseGuards,
   UseInterceptors,
   UploadedFile,
@@ -21,6 +22,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { PermissionGuard } from '../auth/guards/permission.guard';
 import { AnnouncementsService } from './announcements.service';
 import { CreateAnnouncementDto } from './dto/create-announcement.dto';
+import { ListAnnouncementsQueryDto } from './dto/list-announcements.query.dto';
 import { UpdateAnnouncementDto } from './dto/update-announcement.dto';
 
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
@@ -36,8 +38,8 @@ export class AnnouncementsController {
   // audience scoping, same "shared route, service does the restriction"
   // pattern used for attendance/assignments elsewhere in this app.
   @Get()
-  findAll(@CurrentUser() user: AuthenticatedUser) {
-    return this.announcements.findAll(user);
+  findAll(@CurrentUser() user: AuthenticatedUser, @Query() query: ListAnnouncementsQueryDto) {
+    return this.announcements.findAll(user, query);
   }
 
   @Get(':id')

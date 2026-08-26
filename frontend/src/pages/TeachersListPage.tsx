@@ -7,13 +7,18 @@ import { useAuth } from '../auth/useAuth';
 import { useConfirm } from '../components/useConfirm';
 import { useToast } from '../components/useToast';
 import { EmptyState } from '../components/EmptyState';
+import { Pager } from '../components/Pager';
 import { TableSkeleton } from '../components/Skeleton';
+
+const PAGE_SIZE = 25;
 
 export function TeachersListPage() {
   const { hasPermission } = useAuth();
   const confirm = useConfirm();
   const toast = useToast();
   const [teachers, setTeachers] = useState<Teacher[]>([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
@@ -22,13 +27,15 @@ export function TeachersListPage() {
     setLoading(true);
     setError(null);
     try {
-      setTeachers(await listTeachers());
+      const result = await listTeachers({ page, limit: PAGE_SIZE });
+      setTeachers(result.items);
+      setTotal(result.total);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Failed to load teachers');
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [page]);
 
   useEffect(() => {
     void load();
@@ -45,6 +52,7 @@ export function TeachersListPage() {
     try {
       await deleteTeacher(teacher.id);
       setTeachers((prev) => prev.filter((t) => t.id !== teacher.id));
+      setTotal((prev) => prev - 1);
       toast(`${teacher.name} was deleted.`);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Failed to delete teacher');
@@ -132,6 +140,7 @@ export function TeachersListPage() {
               ))}
             </tbody>
           </table>
+          <Pager page={page} pageSize={PAGE_SIZE} total={total} onPageChange={setPage} />
         </div>
       )}
     </>

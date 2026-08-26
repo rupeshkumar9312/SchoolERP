@@ -11,6 +11,7 @@ import { DashboardModule } from './dashboard/dashboard.module';
 import { ExamsModule } from './exams/exams.module';
 import { HealthModule } from './health/health.module';
 import { HolidaysModule } from './holidays/holidays.module';
+import { LoginAuditModule } from './login-audit/login-audit.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { PushNotificationsModule } from './push-notifications/push-notifications.module';
 import { ReportsModule } from './reports/reports.module';
@@ -28,6 +29,7 @@ import { UsersModule } from './users/users.module';
     PrismaModule,
     HealthModule,
     AuditModule,
+    LoginAuditModule,
     AuthModule,
     UsersModule,
     RolesModule,

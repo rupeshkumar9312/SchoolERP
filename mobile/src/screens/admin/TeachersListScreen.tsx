@@ -3,6 +3,7 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useFocusEffect } from '@react-navigation/native';
 import { Alert, StyleSheet, Text, View } from 'react-native';
 import { ApiError } from '../../api/client';
+import { PAGE_SIZE } from '../../api/pagination';
 import { Teacher, deleteTeacher, listTeachers } from '../../api/teachers';
 import { useAuth } from '../../auth/AuthContext';
 import { Badge } from '../../components/Badge';
@@ -27,20 +28,39 @@ export function TeachersListScreen({ navigation }: Props): React.JSX.Element {
   const showActions = canEdit || canDelete || canAssign;
 
   const [teachers, setTeachers] = useState<Teacher[] | null>(null);
+  const [total, setTotal] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [deletingId, setDeletingId] = useState<number | null>(null);
 
   const load = useCallback(async () => {
     setError(null);
     try {
-      setTeachers(await listTeachers());
+      const result = await listTeachers({ page: 1, limit: PAGE_SIZE });
+      setTeachers(result.items);
+      setTotal(result.total);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not load teachers');
     } finally {
       setLoading(false);
     }
   }, []);
+
+  const loadMore = async () => {
+    if (!teachers) return;
+    setLoadingMore(true);
+    try {
+      const nextPage = Math.floor(teachers.length / PAGE_SIZE) + 1;
+      const result = await listTeachers({ page: nextPage, limit: PAGE_SIZE });
+      setTeachers((prev) => [...(prev ?? []), ...result.items]);
+      setTotal(result.total);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Could not load more teachers');
+    } finally {
+      setLoadingMore(false);
+    }
+  };
 
   useFocusEffect(
     useCallback(() => {
@@ -121,6 +141,10 @@ export function TeachersListScreen({ navigation }: Props): React.JSX.Element {
           )}
         </Card>
       ))}
+
+      {teachers && teachers.length > 0 && teachers.length < total && (
+        <Button label={`Load more (${teachers.length} of ${total})`} variant="secondary" onPress={() => void loadMore()} loading={loadingMore} />
+      )}
     </Screen>
   );
 }

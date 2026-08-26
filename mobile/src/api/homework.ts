@@ -1,4 +1,5 @@
 import { apiDelete, apiGet, apiPatch, apiPost, apiUpload, type PickedFile } from './client';
+import { appendPageParams, PageParams, Paginated } from './pagination';
 
 export interface HomeworkAssignment {
   id: number;
@@ -40,7 +41,7 @@ export interface SetHomeworkSubmissionPayload {
   remarks?: string;
 }
 
-export interface ListHomeworkAssignmentsFilters {
+export interface ListHomeworkAssignmentsFilters extends PageParams {
   classId?: number;
   sectionId?: number;
   subjectId?: number;
@@ -59,14 +60,15 @@ export interface CreateHomeworkAssignmentPayload {
 
 export function listHomeworkAssignments(
   filters: ListHomeworkAssignmentsFilters = {},
-): Promise<HomeworkAssignment[]> {
+): Promise<Paginated<HomeworkAssignment>> {
   const params = new URLSearchParams();
   if (filters.classId !== undefined) params.set('classId', String(filters.classId));
   if (filters.sectionId !== undefined) params.set('sectionId', String(filters.sectionId));
   if (filters.subjectId !== undefined) params.set('subjectId', String(filters.subjectId));
   if (filters.teacherId !== undefined) params.set('teacherId', String(filters.teacherId));
+  appendPageParams(params, filters);
   const query = params.toString();
-  return apiGet<HomeworkAssignment[]>(`/assignments${query ? `?${query}` : ''}`);
+  return apiGet<Paginated<HomeworkAssignment>>(`/assignments${query ? `?${query}` : ''}`);
 }
 
 export function listMyHomeworkAssignments(): Promise<StudentHomeworkAssignment[]> {

@@ -16,6 +16,7 @@ import { ExamFormScreen } from '../screens/admin/ExamFormScreen';
 import { ExamReportCardScreen } from '../screens/admin/ExamReportCardScreen';
 import { ExamScheduleDetailScreen } from '../screens/admin/ExamScheduleDetailScreen';
 import { ExamsListScreen } from '../screens/admin/ExamsListScreen';
+import { LoginHistoryScreen } from '../screens/admin/LoginHistoryScreen';
 import { ManageHomeScreen } from '../screens/admin/ManageHomeScreen';
 import { ReportsScreen } from '../screens/admin/ReportsScreen';
 import { StaffAttendanceScreen } from '../screens/admin/StaffAttendanceScreen';
@@ -65,6 +66,7 @@ function ManageStackNavigator(): React.JSX.Element {
       <ManageStack.Screen name="StudentsBulkImport" component={StudentsBulkImportScreen} />
       <ManageStack.Screen name="Reports" component={ReportsScreen} />
       <ManageStack.Screen name="AuditLog" component={AuditLogScreen} />
+      <ManageStack.Screen name="LoginHistory" component={LoginHistoryScreen} />
       <ManageStack.Screen name="ExamsList" component={ExamsListScreen} />
       <ManageStack.Screen name="ExamForm" component={ExamFormScreen} options={{ presentation: 'modal' }} />
       <ManageStack.Screen name="ExamDetail" component={ExamDetailScreen} />

@@ -75,7 +75,7 @@ export function StudentSearchScreen({ navigation }: Props): React.JSX.Element {
     setError(null);
     const handle = setTimeout(() => {
       listStudents({ search: q })
-        .then(setResults)
+        .then((result) => setResults(result.items))
         .catch((err) => setError(err instanceof ApiError ? err.message : 'Search failed'))
         .finally(() => setSearching(false));
     }, 300);

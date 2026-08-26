@@ -10,6 +10,7 @@ import { ExamScheduleStatus, ExamType, Prisma, Student, Teacher } from '@prisma/
 import { AuditLogService } from '../audit/audit-log.service';
 import { AuthenticatedUser } from '../auth/auth.types';
 import { TEACHER_ROLE } from '../auth/roles.constants';
+import { PaginatedResult, resolvePagination } from '../common/pagination';
 import { PrismaService } from '../prisma/prisma.service';
 import { PushNotificationService } from '../push-notifications/push-notifications.service';
 import { BulkMarksDto } from './dto/bulk-marks.dto';
@@ -198,27 +199,34 @@ export class ExamsService {
     private readonly pushNotifications: PushNotificationService,
   ) {}
 
-  async findAll(query: ListExamsQueryDto): Promise<ExamView[]> {
+  async findAll(query: ListExamsQueryDto): Promise<PaginatedResult<ExamView>> {
     const hasScheduleFilter =
       query.classId !== undefined || query.academicYearId !== undefined || query.status !== undefined;
 
-    const rows = await this.prisma.exam.findMany({
-      where: {
-        type: query.type,
-        schedules: hasScheduleFilter
-          ? {
-              some: {
-                classId: query.classId,
-                status: query.status,
-                class: query.academicYearId ? { academicYearId: query.academicYearId } : undefined,
-              },
-            }
-          : undefined,
-      },
-      include: EXAM_INCLUDE,
-      orderBy: { createdAt: 'desc' },
-    });
-    return rows.map((row) => this.toView(row));
+    const where: Prisma.ExamWhereInput = {
+      type: query.type,
+      schedules: hasScheduleFilter
+        ? {
+            some: {
+              classId: query.classId,
+              status: query.status,
+              class: query.academicYearId ? { academicYearId: query.academicYearId } : undefined,
+            },
+          }
+        : undefined,
+    };
+    const { page, pageSize, skip, take } = resolvePagination(query);
+    const [rows, total] = await Promise.all([
+      this.prisma.exam.findMany({
+        where,
+        include: EXAM_INCLUDE,
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take,
+      }),
+      this.prisma.exam.count({ where }),
+    ]);
+    return { items: rows.map((row) => this.toView(row)), total, page, pageSize };
   }
 
   async findOne(id: number): Promise<ExamView> {
@@ -250,41 +258,69 @@ export class ExamsService {
     ]);
     const sectionById = new Map(sections.map((s) => [s.id, s]));
 
-    const entries: TeacherExamEntry[] = [];
+    // Resolve every (schedule, assignment) pair that has both a matching
+    // ExamSubject and a known Section first, with no DB access — this is
+    // exactly the set of rows the batched counts below need to cover.
+    const rows: Array<{
+      schedule: (typeof schedules)[number];
+      examSubject: (typeof schedules)[number]['subjects'][number];
+      section: (typeof sections)[number];
+    }> = [];
     for (const schedule of schedules) {
       for (const a of assignments.filter((x) => x.classId === schedule.classId)) {
         const examSubject = schedule.subjects.find((s) => s.subject.id === a.subjectId);
         const section = sectionById.get(a.sectionId);
         if (!examSubject || !section) continue;
-
-        const [enteredCount, totalStudents] = await Promise.all([
-          this.prisma.examMark.count({ where: { examSubjectId: examSubject.id, sectionId: a.sectionId } }),
-          this.prisma.student.count({ where: { classId: schedule.classId, sectionId: a.sectionId, isActive: true } }),
-        ]);
-        entries.push({
-          exam: { id: schedule.exam.id, name: schedule.exam.name, type: schedule.exam.type },
-          schedule: {
-            id: schedule.id,
-            status: schedule.status,
-            startDate: schedule.startDate,
-            endDate: schedule.endDate,
-          },
-          class: { id: schedule.class.id, name: schedule.class.name },
-          section: { id: section.id, name: section.name },
-          examSubject: {
-            id: examSubject.id,
-            subjectId: examSubject.subject.id,
-            subjectName: examSubject.subject.name,
-            maxMarks: examSubject.maxMarks,
-            passMarks: examSubject.passMarks,
-            examDate: examSubject.examDate,
-          },
-          enteredCount,
-          totalStudents,
-        });
+        rows.push({ schedule, examSubject, section });
       }
     }
-    return entries;
+    if (rows.length === 0) return [];
+
+    // Two batched counts instead of two queries per (schedule, assignment)
+    // pair — the previous version issued them inside the loop above.
+    const examSubjectIds = [...new Set(rows.map((r) => r.examSubject.id))];
+    const rowSectionIds = [...new Set(rows.map((r) => r.section.id))];
+    const rowClassIds = [...new Set(rows.map((r) => r.schedule.classId))];
+    const [markCounts, studentCounts] = await Promise.all([
+      this.prisma.examMark.groupBy({
+        by: ['examSubjectId', 'sectionId'],
+        where: { examSubjectId: { in: examSubjectIds }, sectionId: { in: rowSectionIds } },
+        _count: { _all: true },
+      }),
+      this.prisma.student.groupBy({
+        by: ['classId', 'sectionId'],
+        where: { classId: { in: rowClassIds }, sectionId: { in: rowSectionIds }, isActive: true },
+        _count: { _all: true },
+      }),
+    ]);
+    const enteredByKey = new Map(
+      markCounts.map((c) => [`${c.examSubjectId}:${c.sectionId}`, c._count._all]),
+    );
+    const studentsByKey = new Map(
+      studentCounts.map((c) => [`${c.classId}:${c.sectionId}`, c._count._all]),
+    );
+
+    return rows.map(({ schedule, examSubject, section }) => ({
+      exam: { id: schedule.exam.id, name: schedule.exam.name, type: schedule.exam.type },
+      schedule: {
+        id: schedule.id,
+        status: schedule.status,
+        startDate: schedule.startDate,
+        endDate: schedule.endDate,
+      },
+      class: { id: schedule.class.id, name: schedule.class.name },
+      section: { id: section.id, name: section.name },
+      examSubject: {
+        id: examSubject.id,
+        subjectId: examSubject.subject.id,
+        subjectName: examSubject.subject.name,
+        maxMarks: examSubject.maxMarks,
+        passMarks: examSubject.passMarks,
+        examDate: examSubject.examDate,
+      },
+      enteredCount: enteredByKey.get(`${examSubject.id}:${section.id}`) ?? 0,
+      totalStudents: studentsByKey.get(`${schedule.classId}:${section.id}`) ?? 0,
+    }));
   }
 
   /** Identity-pinned "me" route for a STUDENT — every PUBLISHED schedule for
@@ -550,17 +586,17 @@ export class ExamsService {
       ),
     );
 
-    await Promise.all(
+    await this.audit.recordMany(
       rows.map((row) => {
         const before = existingByStudentId.get(row.studentId) ?? null;
-        return this.audit.record({
+        return {
           entityType: 'ExamMark',
           entityId: row.id,
           action: before ? 'UPDATE' : 'CREATE',
           userId: actor.id,
           oldValues: before,
           newValues: row,
-        });
+        };
       }),
     );
 

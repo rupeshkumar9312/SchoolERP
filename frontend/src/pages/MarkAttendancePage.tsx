@@ -3,6 +3,7 @@ import type { AttendanceStatus } from '../api/attendance';
 import { listAttendance, markAttendance } from '../api/attendance';
 import { ApiError } from '../api/client';
 import type { Student } from '../api/students';
+import { MAX_ROSTER_PAGE_SIZE } from '../api/pagination';
 import { listMyClassStudents, listStudents } from '../api/students';
 import { AttendanceStatusToggle } from './attendance/AttendanceStatusToggle';
 import { todayUtcDate } from './attendance/todayUtc';
@@ -31,7 +32,11 @@ export function MarkAttendancePage() {
       // A TEACHER has no student.view — reuse the scoped /students/my-classes
       // roster (Module 5) instead of the full GET /students an admin uses.
       const rosterPromise = scope.canBrowseAcademicStructure
-        ? listStudents({ classId: Number(classId), sectionId: Number(sectionId) })
+        ? listStudents({
+            classId: Number(classId),
+            sectionId: Number(sectionId),
+            limit: MAX_ROSTER_PAGE_SIZE,
+          }).then((result) => result.items)
         : listMyClassStudents().then((all) =>
             all.filter((s) => s.class.id === Number(classId) && s.section.id === Number(sectionId)),
           );

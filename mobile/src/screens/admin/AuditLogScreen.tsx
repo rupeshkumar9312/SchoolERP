@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { AuditAction, AuditLogEntry, listAuditLogs } from '../../api/auditLogs';
 import { ApiError } from '../../api/client';
+import { MAX_ROSTER_PAGE_SIZE } from '../../api/pagination';
 import { UserListItem, listUsers } from '../../api/users';
 import { Badge } from '../../components/Badge';
 import { Card } from '../../components/Card';
@@ -44,7 +45,21 @@ export function AuditLogScreen(): React.JSX.Element {
   const [expandedId, setExpandedId] = useState<number | null>(null);
 
   useEffect(() => {
-    void listUsers().then(setUsers);
+    // Populates the actor-filter dropdown — needs every user, not one page,
+    // and a school can have more of them than a single page holds (the
+    // backend caps a page at MAX_ROSTER_PAGE_SIZE), so page through until
+    // exhausted. Runs once on mount, not a hot path.
+    void (async () => {
+      const all: UserListItem[] = [];
+      let page = 1;
+      for (;;) {
+        const result = await listUsers({ page, limit: MAX_ROSTER_PAGE_SIZE });
+        all.push(...result.items);
+        if (all.length >= result.total || result.items.length === 0) break;
+        page += 1;
+      }
+      setUsers(all);
+    })();
   }, []);
 
   const load = useCallback(async () => {

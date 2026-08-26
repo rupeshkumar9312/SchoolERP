@@ -1,4 +1,5 @@
 import { apiDelete, apiGet, apiPatch, apiPost } from './client';
+import { appendPageParams, type PageParams, type Paginated } from './pagination';
 
 export type ExamType = 'CLASS_TEST' | 'UNIT_TEST' | 'MID_TERM' | 'TERM_EXAM' | 'FINAL_EXAM' | 'OTHER';
 export type ExamScheduleStatus = 'DRAFT' | 'PUBLISHED';
@@ -89,21 +90,22 @@ export interface UpdateExamSchedulePayload {
   endDate?: string;
 }
 
-export interface ListExamsFilters {
+export interface ListExamsFilters extends PageParams {
   academicYearId?: number;
   classId?: number;
   type?: ExamType;
   status?: ExamScheduleStatus;
 }
 
-export function listExams(filters: ListExamsFilters = {}): Promise<Exam[]> {
+export function listExams(filters: ListExamsFilters = {}): Promise<Paginated<Exam>> {
   const params = new URLSearchParams();
   if (filters.academicYearId !== undefined) params.set('academicYearId', String(filters.academicYearId));
   if (filters.classId !== undefined) params.set('classId', String(filters.classId));
   if (filters.type !== undefined) params.set('type', filters.type);
   if (filters.status !== undefined) params.set('status', filters.status);
+  appendPageParams(params, filters);
   const query = params.toString();
-  return apiGet<Exam[]>(`/exams${query ? `?${query}` : ''}`);
+  return apiGet<Paginated<Exam>>(`/exams${query ? `?${query}` : ''}`);
 }
 
 export function getExam(id: number): Promise<Exam> {

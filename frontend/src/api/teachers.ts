@@ -1,4 +1,5 @@
 import { apiDelete, apiGet, apiPatch, apiPost } from './client';
+import { appendPageParams, type PageParams, type Paginated } from './pagination';
 
 export interface Teacher {
   id: number;
@@ -48,11 +49,16 @@ export interface UpdateTeacherPayload {
   isActive?: boolean;
 }
 
-export function listTeachers(filters: { isActive?: boolean } = {}): Promise<Teacher[]> {
+export interface TeacherFilters extends PageParams {
+  isActive?: boolean;
+}
+
+export function listTeachers(filters: TeacherFilters = {}): Promise<Paginated<Teacher>> {
   const params = new URLSearchParams();
   if (filters.isActive !== undefined) params.set('isActive', String(filters.isActive));
+  appendPageParams(params, filters);
   const query = params.toString();
-  return apiGet<Teacher[]>(`/teachers${query ? `?${query}` : ''}`);
+  return apiGet<Paginated<Teacher>>(`/teachers${query ? `?${query}` : ''}`);
 }
 
 export function getTeacher(id: number): Promise<Teacher> {

@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { AttendanceStatus } from '../../api/attendance';
 import { ApiError } from '../../api/client';
+import { MAX_ROSTER_PAGE_SIZE } from '../../api/pagination';
 import { listTeacherAttendanceForDate, markTeacherAttendance, TeacherAttendanceRecord } from '../../api/teacherAttendance';
 import { listTeachers, Teacher } from '../../api/teachers';
 import { Card } from '../../components/Card';
@@ -32,10 +33,10 @@ export function StaffAttendanceScreen(): React.JSX.Element {
     setError(null);
     try {
       const [allTeachers, attendance] = await Promise.all([
-        listTeachers({ isActive: true }),
+        listTeachers({ isActive: true, limit: MAX_ROSTER_PAGE_SIZE }),
         listTeacherAttendanceForDate(date),
       ]);
-      setTeachers(allTeachers);
+      setTeachers(allTeachers.items);
       setRecords(attendance);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not load staff attendance');

@@ -73,6 +73,7 @@ model User {
   markedAttendance        StudentAttendance[] @relation("AttendanceMarkedBy")
   markedTeacherAttendance TeacherAttendance[] @relation("TeacherAttendanceMarkedBy")
   auditLogs               AuditLog[]          @relation("AuditLogActor")
+  loginAudits             LoginAudit[]        @relation("LoginAuditUser")
   announcements           Announcement[]      @relation("AnnouncementAuthor")
   pushTokens              PushToken[]
   createdExams            Exam[]              @relation("ExamCreatedBy")
@@ -298,6 +299,7 @@ model Student {
   assignmentSubmissions AssignmentSubmission[]
   examMarks             ExamMark[]
 
+  @@index([classId, sectionId, isActive])
   @@map("students")
 }
 
@@ -326,6 +328,8 @@ model StudentAttendance {
   updatedAt  DateTime         @updatedAt
 
   @@unique([studentId, date])
+  @@index([classId, sectionId, date])
+  @@index([date])
   @@map("student_attendance")
 }
 
@@ -343,6 +347,7 @@ model TeacherAttendance {
   updatedAt  DateTime         @updatedAt
 
   @@unique([teacherId, date])
+  @@index([date])
   @@map("teacher_attendance")
 }
 
@@ -382,6 +387,51 @@ model AuditLog {
   @@index([userId])
   @@index([createdAt])
   @@map("audit_logs")
+}
+
+enum LoginEventType {
+  /// A successful email/password login.
+  LOGIN
+  /// A session silently resumed via the refresh token — no credentials
+  /// re-entered (a page reload on web, or the app reopening on mobile).
+  REFRESH
+  /// A rejected login attempt — wrong password, unknown identifier, or a
+  /// disabled account. userId is set only when the identifier resolved to a
+  /// real account (a disabled account or wrong password); unknown identifiers
+  /// leave it null.
+  LOGIN_FAILED
+}
+
+enum LoginPlatform {
+  WEB
+  MOBILE
+}
+
+/// Login activity trail — separate from AuditLog above, which tracks
+/// mutations to app data, not authentication events. userId is nullable for
+/// the same reason as AuditLog.userId (a later account deletion shouldn't
+/// erase the history) and additionally because a LOGIN_FAILED row for an
+/// identifier that never matched a real account has no user to link to.
+model LoginAudit {
+  id            Int             @id @default(autoincrement())
+  event         LoginEventType
+  platform      LoginPlatform
+  /// The email/alias exactly as submitted — kept even on success (where it's
+  /// redundant with user.email) so every row has a consistent, always-present
+  /// field to display/search on.
+  identifier    String
+  userId        Int?
+  user          User?           @relation("LoginAuditUser", fields: [userId], references: [id], onDelete: SetNull)
+  /// Only set for LOGIN_FAILED — e.g. "Invalid email or password".
+  failureReason String?
+  ipAddress     String?
+  userAgent     String?         @db.Text
+  createdAt     DateTime        @default(now())
+
+  @@index([userId])
+  @@index([event])
+  @@index([createdAt])
+  @@map("audit_logins")
 }
 
 /// The three visibility groups an announcement can target — deliberately

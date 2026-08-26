@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { AttendanceStatus } from '../api/attendance';
 import { ApiError } from '../api/client';
+import { MAX_ROSTER_PAGE_SIZE } from '../api/pagination';
 import type { Teacher } from '../api/teachers';
 import { listTeachers } from '../api/teachers';
 import { listTeacherAttendance, markTeacherAttendance } from '../api/teacherAttendance';
@@ -23,10 +24,10 @@ export function StaffAttendancePage() {
     setError(null);
     try {
       const [allTeachers, attendance] = await Promise.all([
-        listTeachers({ isActive: true }),
+        listTeachers({ isActive: true, limit: MAX_ROSTER_PAGE_SIZE }),
         listTeacherAttendance({ date }),
       ]);
-      setTeachers(allTeachers);
+      setTeachers(allTeachers.items);
       setRecords(attendance);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Failed to load staff attendance');

@@ -57,6 +57,31 @@ export class AuditLogService {
     }
   }
 
+  /** Same fire-and-forget contract as record(), but for the bulk-write flows
+   * (attendance, exam marks) that previously fired one INSERT per row via
+   * Promise.all(rows.map(record)) — this replaces that with a single
+   * createMany. */
+  async recordMany(entries: RecordAuditLogParams[]): Promise<void> {
+    if (entries.length === 0) return;
+    try {
+      await this.prisma.auditLog.createMany({
+        data: entries.map((params) => ({
+          entityType: params.entityType,
+          entityId: params.entityId,
+          action: params.action,
+          userId: params.userId ?? null,
+          oldValues: this.toJson(params.oldValues),
+          newValues: this.toJson(params.newValues),
+        })),
+      });
+    } catch (error) {
+      this.logger.error(
+        `Failed to write ${entries.length} batched audit log entries for ${entries[0].entityType}`,
+        error instanceof Error ? error.stack : String(error),
+      );
+    }
+  }
+
   async findAll(query: ListAuditLogsQueryDto): Promise<AuditLogView[]> {
     const rows = await this.prisma.auditLog.findMany({
       where: {

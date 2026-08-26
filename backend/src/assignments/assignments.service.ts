@@ -11,6 +11,7 @@ import { AuditLogService } from '../audit/audit-log.service';
 import { AuthenticatedUser } from '../auth/auth.types';
 import { STUDENT_ROLE, TEACHER_ROLE } from '../auth/roles.constants';
 import { CloudinaryService } from '../cloudinary/cloudinary.service';
+import { PaginatedResult, resolvePagination } from '../common/pagination';
 import { PrismaService } from '../prisma/prisma.service';
 import { PushNotificationService } from '../push-notifications/push-notifications.service';
 import { CreateAssignmentDto } from './dto/create-assignment.dto';
@@ -105,7 +106,7 @@ export class AssignmentsService {
   async findAll(
     query: ListAssignmentsQueryDto,
     actor: AuthenticatedUser,
-  ): Promise<AssignmentView[]> {
+  ): Promise<PaginatedResult<AssignmentView>> {
     const where: Prisma.AssignmentWhereInput = {
       classId: query.classId,
       sectionId: query.sectionId,
@@ -119,12 +120,52 @@ export class AssignmentsService {
       where.teacherId = query.teacherId;
     }
 
-    const rows = await this.prisma.assignment.findMany({
-      where,
-      include: ASSIGNMENT_INCLUDE,
-      orderBy: { dueDate: 'asc' },
-    });
-    return Promise.all(rows.map((row) => this.toView(row)));
+    const { page, pageSize, skip, take } = resolvePagination(query);
+    const [rows, total] = await Promise.all([
+      this.prisma.assignment.findMany({
+        where,
+        include: ASSIGNMENT_INCLUDE,
+        orderBy: { dueDate: 'asc' },
+        skip,
+        take,
+      }),
+      this.prisma.assignment.count({ where }),
+    ]);
+    if (rows.length === 0) return { items: [], total, page, pageSize };
+
+    // Two batched groupBys instead of 2 queries per row (see performance
+    // audit finding A3 — the previous version fanned Promise.all(toView) out
+    // over every row).
+    const assignmentIds = rows.map((r) => r.id);
+    const classIds = [...new Set(rows.map((r) => r.classId))];
+    const sectionIds = [...new Set(rows.map((r) => r.sectionId))];
+    const [submittedCounts, studentCounts] = await Promise.all([
+      this.prisma.assignmentSubmission.groupBy({
+        by: ['assignmentId'],
+        where: { assignmentId: { in: assignmentIds }, submitted: true },
+        _count: { _all: true },
+      }),
+      this.prisma.student.groupBy({
+        by: ['classId', 'sectionId'],
+        where: { classId: { in: classIds }, sectionId: { in: sectionIds }, isActive: true },
+        _count: { _all: true },
+      }),
+    ]);
+    const submittedByAssignmentId = new Map(
+      submittedCounts.map((c) => [c.assignmentId, c._count._all]),
+    );
+    const studentsByClassSection = new Map(
+      studentCounts.map((c) => [`${c.classId}:${c.sectionId}`, c._count._all]),
+    );
+
+    const items = rows.map((row) =>
+      this.toViewSync(
+        row,
+        submittedByAssignmentId.get(row.id) ?? 0,
+        studentsByClassSection.get(`${row.classId}:${row.sectionId}`) ?? 0,
+      ),
+    );
+    return { items, total, page, pageSize };
   }
 
   async findOne(id: number, actor: AuthenticatedUser): Promise<AssignmentView> {
@@ -573,7 +614,17 @@ export class AssignmentsService {
         where: { classId: row.classId, sectionId: row.sectionId, isActive: true },
       }),
     ]);
+    return this.toViewSync(row, submittedCount, totalStudents);
+  }
 
+  /** Same shape as toView(), but takes its two counts pre-computed — used by
+   * findAll() to build every row's view from two batched groupBy queries
+   * instead of firing 2 queries per row (see performance audit finding A3). */
+  private toViewSync(
+    row: AssignmentWithRefs,
+    submittedCount: number,
+    totalStudents: number,
+  ): AssignmentView {
     return {
       id: row.id,
       title: row.title,

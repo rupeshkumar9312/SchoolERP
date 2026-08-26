@@ -9,8 +9,11 @@ import { useAuth } from '../auth/useAuth';
 import { useConfirm } from '../components/useConfirm';
 import { useToast } from '../components/useToast';
 import { EmptyState } from '../components/EmptyState';
+import { Pager } from '../components/Pager';
 import { TableSkeleton } from '../components/Skeleton';
 import { edvanceLoginAlias, sharePasswordResetViaWhatsApp } from '../utils/whatsapp';
+
+const PAGE_SIZE = 25;
 
 export function UsersListPage() {
   const { state, hasPermission } = useAuth();
@@ -18,8 +21,11 @@ export function UsersListPage() {
   const confirm = useConfirm();
   const toast = useToast();
   const [users, setUsers] = useState<UserListItem[]>([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
   const [roles, setRoles] = useState<Role[]>([]);
   const [roleFilter, setRoleFilter] = useState<string>('');
+  const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
@@ -33,8 +39,12 @@ export function UsersListPage() {
     setError(null);
     try {
       const roleId = roleFilter ? Number(roleFilter) : undefined;
-      const [userRows, roleRows] = await Promise.all([listUsers(roleId), roles.length ? Promise.resolve(roles) : listRoles()]);
-      setUsers(userRows);
+      const [result, roleRows] = await Promise.all([
+        listUsers({ roleId, search: search.trim() || undefined, page, limit: PAGE_SIZE }),
+        roles.length ? Promise.resolve(roles) : listRoles(),
+      ]);
+      setUsers(result.items);
+      setTotal(result.total);
       if (!roles.length) setRoles(roleRows);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Failed to load users');
@@ -42,7 +52,7 @@ export function UsersListPage() {
       setLoading(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [roleFilter]);
+  }, [roleFilter, search, page]);
 
   useEffect(() => {
     void load();
@@ -59,6 +69,7 @@ export function UsersListPage() {
     try {
       await deleteUser(user.id);
       setUsers((prev) => prev.filter((u) => u.id !== user.id));
+      setTotal((prev) => prev - 1);
       toast(`${user.name} was deleted.`);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Failed to delete user');
@@ -96,16 +107,36 @@ export function UsersListPage() {
         )}
       </div>
 
-      <div className="field field-inline">
-        <span>Filter by role</span>
-        <select value={roleFilter} onChange={(e) => setRoleFilter(e.target.value)}>
-          <option value="">All roles</option>
-          {roles.map((r) => (
-            <option key={r.id} value={r.id}>
-              {r.name}
-            </option>
-          ))}
-        </select>
+      <div className="filter-bar">
+        <div className="field field-inline">
+          <span>Filter by role</span>
+          <select
+            value={roleFilter}
+            onChange={(e) => {
+              setRoleFilter(e.target.value);
+              setPage(1);
+            }}
+          >
+            <option value="">All roles</option>
+            {roles.map((r) => (
+              <option key={r.id} value={r.id}>
+                {r.name}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <label className="field">
+          <span>Search</span>
+          <input
+            value={search}
+            onChange={(e) => {
+              setSearch(e.target.value);
+              setPage(1);
+            }}
+            placeholder="Name or login ID"
+          />
+        </label>
       </div>
 
       {error && (
@@ -118,7 +149,7 @@ export function UsersListPage() {
       {loading ? (
         <TableSkeleton columns={5} />
       ) : users.length === 0 ? (
-        <EmptyState title="No users found" message="Try a different role filter, or create the first one." />
+        <EmptyState title="No users found" message="Try clearing your filters, or create the first one." />
       ) : (
         <div className="card">
           <table className="data-table">
@@ -175,6 +206,7 @@ export function UsersListPage() {
               ))}
             </tbody>
           </table>
+          <Pager page={page} pageSize={PAGE_SIZE} total={total} onPageChange={setPage} />
         </div>
       )}
 

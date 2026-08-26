@@ -3,6 +3,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import { AcademicYear, listAcademicYears, listClasses, listSections, SchoolClass, Section } from '../../api/academic';
 import { AttendanceStatus, listAttendance, markAttendance } from '../../api/attendance';
 import { ApiError } from '../../api/client';
+import { MAX_ROSTER_PAGE_SIZE } from '../../api/pagination';
 import { listStudents, Student } from '../../api/students';
 import { Button } from '../../components/Button';
 import { Card } from '../../components/Card';
@@ -70,10 +71,10 @@ export function AdminMarkAttendanceScreen(): React.JSX.Element {
     setSavedAt(null);
     try {
       const [roster, existing] = await Promise.all([
-        listStudents({ classId: klass.id, sectionId: section.id }),
+        listStudents({ classId: klass.id, sectionId: section.id, limit: MAX_ROSTER_PAGE_SIZE }),
         listAttendance({ classId: klass.id, sectionId: section.id, date }),
       ]);
-      setStudents(roster);
+      setStudents(roster.items);
       const initial: Partial<Record<number, AttendanceStatus>> = {};
       for (const record of existing) initial[record.student.id] = record.status;
       setStatuses(initial);

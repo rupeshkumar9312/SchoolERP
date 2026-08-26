@@ -46,6 +46,7 @@ const NAV_ICONS: Record<
   "/student/results": IconRibbon,
   "/announcements": IconMegaphone,
   "/audit-logs": IconShieldCheck,
+  "/login-history": IconHistory,
   "/settings": IconSettings,
 };
 

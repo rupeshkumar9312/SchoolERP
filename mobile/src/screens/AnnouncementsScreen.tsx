@@ -4,6 +4,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { Alert, Image, StyleSheet, Text, View } from 'react-native';
 import { Announcement, deleteAnnouncement, listAnnouncements } from '../api/announcements';
 import { ApiError } from '../api/client';
+import { PAGE_SIZE } from '../api/pagination';
 import { useAuth } from '../auth/AuthContext';
 import { Badge } from '../components/Badge';
 import { Button } from '../components/Button';
@@ -33,21 +34,40 @@ export function AnnouncementsScreen({ navigation }: Props): React.JSX.Element {
     !!user && (user.role.name === 'SUPER_ADMIN' || user.id === a.createdBy?.id);
 
   const [announcements, setAnnouncements] = useState<Announcement[] | null>(null);
+  const [total, setTotal] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [viewerUri, setViewerUri] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setError(null);
     try {
-      setAnnouncements(await listAnnouncements());
+      const result = await listAnnouncements({ page: 1, limit: PAGE_SIZE });
+      setAnnouncements(result.items);
+      setTotal(result.total);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not load announcements');
     } finally {
       setLoading(false);
     }
   }, []);
+
+  const loadMore = async () => {
+    if (!announcements) return;
+    setLoadingMore(true);
+    try {
+      const nextPage = Math.floor(announcements.length / PAGE_SIZE) + 1;
+      const result = await listAnnouncements({ page: nextPage, limit: PAGE_SIZE });
+      setAnnouncements((prev) => [...(prev ?? []), ...result.items]);
+      setTotal(result.total);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Could not load more announcements');
+    } finally {
+      setLoadingMore(false);
+    }
+  };
 
   useFocusEffect(
     useCallback(() => {
@@ -138,6 +158,10 @@ export function AnnouncementsScreen({ navigation }: Props): React.JSX.Element {
           )}
         </Card>
       ))}
+
+      {announcements && announcements.length > 0 && announcements.length < total && (
+        <Button label={`Load more (${announcements.length} of ${total})`} variant="secondary" onPress={() => void loadMore()} loading={loadingMore} />
+      )}
       <ImageViewerModal uri={viewerUri} onClose={() => setViewerUri(null)} />
     </Screen>
   );

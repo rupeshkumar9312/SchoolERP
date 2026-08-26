@@ -12,6 +12,7 @@ import { AuthenticatedUser } from '../auth/auth.types';
 import { SUPER_ADMIN_ROLE } from '../auth/roles.constants';
 import { edvanceLoginAlias, nextEdvanceId } from '../common/generate-edvance-id';
 import { generateTempPassword } from '../common/generate-temp-password';
+import { PaginatedResult, resolvePagination } from '../common/pagination';
 import { withTransactionRetry } from '../common/with-transaction-retry';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateUserDto } from './dto/create-user.dto';
@@ -38,6 +39,20 @@ export interface UserCreateResult extends UserView {
   login: { email: string; alias: string; temporaryPassword: string };
 }
 
+/** Exactly the fields toView() reads — narrower than `include: { role: true
+ * }`, which pulled the whole User row (passwordHash, hashedRefreshToken
+ * included) into memory on every fetch. */
+const USER_SELECT = {
+  id: true,
+  email: true,
+  edvanceId: true,
+  name: true,
+  phone: true,
+  isActive: true,
+  createdAt: true,
+  role: { select: { id: true, name: true } },
+} satisfies Prisma.UserSelect;
+
 @Injectable()
 export class UsersService {
   constructor(
@@ -45,24 +60,31 @@ export class UsersService {
     private readonly audit: AuditLogService,
   ) {}
 
-  async findAll(query: ListUsersQueryDto): Promise<UserView[]> {
-    const users = await this.prisma.user.findMany({
-      where: {
-        roleId: query.roleId,
-        ...(query.search
-          ? {
-              OR: [{ name: { contains: query.search } }, { email: { contains: query.search } }],
-            }
-          : {}),
-      },
-      include: { role: true },
-      orderBy: { name: 'asc' },
-    });
-    return users.map((u) => this.toView(u));
+  async findAll(query: ListUsersQueryDto): Promise<PaginatedResult<UserView>> {
+    const where: Prisma.UserWhereInput = {
+      roleId: query.roleId,
+      ...(query.search
+        ? {
+            OR: [{ name: { contains: query.search } }, { email: { contains: query.search } }],
+          }
+        : {}),
+    };
+    const { page, pageSize, skip, take } = resolvePagination(query);
+    const [users, total] = await Promise.all([
+      this.prisma.user.findMany({
+        where,
+        select: USER_SELECT,
+        orderBy: { name: 'asc' },
+        skip,
+        take,
+      }),
+      this.prisma.user.count({ where }),
+    ]);
+    return { items: users.map((u) => this.toView(u)), total, page, pageSize };
   }
 
   async findOne(id: number): Promise<UserView> {
-    const user = await this.prisma.user.findUnique({ where: { id }, include: { role: true } });
+    const user = await this.prisma.user.findUnique({ where: { id }, select: USER_SELECT });
     if (!user) throw new NotFoundException('User not found');
     return this.toView(user);
   }
@@ -89,7 +111,7 @@ export class UsersService {
                 passwordHash,
                 roleId: dto.roleId,
               },
-              include: { role: true },
+              select: USER_SELECT,
             });
           },
           { maxWait: 10000, timeout: 15000 },
@@ -100,7 +122,7 @@ export class UsersService {
         entityId: user.id,
         action: 'CREATE',
         userId: actor.id,
-        newValues: this.redact(user),
+        newValues: user,
       });
       return {
         ...this.toView(user),
@@ -116,7 +138,7 @@ export class UsersService {
   }
 
   async update(id: number, dto: UpdateUserDto, actor: AuthenticatedUser): Promise<UserView> {
-    const existing = await this.prisma.user.findUnique({ where: { id }, include: { role: true } });
+    const existing = await this.prisma.user.findUnique({ where: { id }, select: USER_SELECT });
     if (!existing) throw new NotFoundException('User not found');
     this.assertMayModify(existing.role.name, actor);
 
@@ -135,15 +157,15 @@ export class UsersService {
           roleId: dto.roleId,
           isActive: dto.isActive,
         },
-        include: { role: true },
+        select: USER_SELECT,
       });
       await this.audit.record({
         entityType: 'User',
         entityId: user.id,
         action: 'UPDATE',
         userId: actor.id,
-        oldValues: this.redact(existing),
-        newValues: this.redact(user),
+        oldValues: existing,
+        newValues: user,
       });
       return this.toView(user);
     } catch (error) {
@@ -152,7 +174,7 @@ export class UsersService {
   }
 
   async remove(id: number, actor: AuthenticatedUser): Promise<void> {
-    const existing = await this.prisma.user.findUnique({ where: { id }, include: { role: true } });
+    const existing = await this.prisma.user.findUnique({ where: { id }, select: USER_SELECT });
     if (!existing) throw new NotFoundException('User not found');
     this.assertMayModify(existing.role.name, actor);
 
@@ -162,7 +184,7 @@ export class UsersService {
       entityId: id,
       action: 'DELETE',
       userId: actor.id,
-      oldValues: this.redact(existing),
+      oldValues: existing,
     });
   }
 
@@ -176,7 +198,7 @@ export class UsersService {
     id: number,
     actor: AuthenticatedUser,
   ): Promise<{ temporaryPassword: string }> {
-    const existing = await this.prisma.user.findUnique({ where: { id }, include: { role: true } });
+    const existing = await this.prisma.user.findUnique({ where: { id }, select: USER_SELECT });
     if (!existing) throw new NotFoundException('User not found');
 
     const temporaryPassword = generateTempPassword();
@@ -190,20 +212,10 @@ export class UsersService {
       entityId: id,
       action: 'UPDATE',
       userId: actor.id,
-      oldValues: this.redact(existing),
+      oldValues: existing,
       newValues: { mustChangePassword: true },
     });
     return { temporaryPassword };
-  }
-
-  /** Never let a bcrypt hash or refresh-token hash land in the audit trail. */
-  private redact<T extends { passwordHash?: unknown; hashedRefreshToken?: unknown }>(
-    entity: T,
-  ): Omit<T, 'passwordHash' | 'hashedRefreshToken'> {
-    const copy: Record<string, unknown> = { ...entity };
-    delete copy.passwordHash;
-    delete copy.hashedRefreshToken;
-    return copy as Omit<T, 'passwordHash' | 'hashedRefreshToken'>;
   }
 
   /** Non-SUPER_ADMIN callers may neither touch an existing SUPER_ADMIN account... */

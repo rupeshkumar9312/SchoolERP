@@ -20,10 +20,12 @@ import { listMyAssignments } from '../api/teachers';
 import { triggerBlobDownload } from '../api/students';
 import { useAuth } from '../auth/useAuth';
 import { EmptyState } from '../components/EmptyState';
+import { Pager } from '../components/Pager';
 import { TableSkeleton } from '../components/Skeleton';
 import { useConfirm } from '../components/useConfirm';
 import { useToast } from '../components/useToast';
 
+const PAGE_SIZE = 25;
 const ATTACHMENT_ACCEPT =
   '.pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.png,.jpg,.jpeg,application/pdf,application/msword,image/png,image/jpeg';
 
@@ -48,6 +50,8 @@ export function AssignmentsPage() {
   const isTeacher = state.status === 'authenticated' && state.user.role.name === 'TEACHER';
 
   const [assignments, setAssignments] = useState<HomeworkAssignment[]>([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -116,22 +120,24 @@ export function AssignmentsPage() {
     setLoading(true);
     setError(null);
     try {
-      setAssignments(
-        await listHomeworkAssignments(
-          isTeacher
-            ? {}
-            : {
-                classId: classId ? Number(classId) : undefined,
-                sectionId: sectionId ? Number(sectionId) : undefined,
-              },
-        ),
+      const result = await listHomeworkAssignments(
+        isTeacher
+          ? { page, limit: PAGE_SIZE }
+          : {
+              classId: classId ? Number(classId) : undefined,
+              sectionId: sectionId ? Number(sectionId) : undefined,
+              page,
+              limit: PAGE_SIZE,
+            },
       );
+      setAssignments(result.items);
+      setTotal(result.total);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Failed to load assignments');
     } finally {
       setLoading(false);
     }
-  }, [isTeacher, classId, sectionId]);
+  }, [isTeacher, classId, sectionId, page]);
 
   useEffect(() => {
     void load();
@@ -169,6 +175,7 @@ export function AssignmentsPage() {
         toast('Recurring assignments created.');
       } else {
         setAssignments((prev) => [...prev, created].sort((a, b) => a.dueDate.localeCompare(b.dueDate)));
+        setTotal((prev) => prev + 1);
         toast('Assignment created.');
       }
 
@@ -224,6 +231,7 @@ export function AssignmentsPage() {
     try {
       await deleteHomeworkAssignment(a.id);
       setAssignments((prev) => prev.filter((x) => x.id !== a.id));
+      setTotal((prev) => prev - 1);
       if (expandedSubmissionsId === a.id) setExpandedSubmissionsId(null);
       toast('Assignment deleted.');
     } catch (err) {
@@ -454,6 +462,7 @@ export function AssignmentsPage() {
                 setYearId(e.target.value);
                 setClassId('');
                 setSectionId('');
+                setPage(1);
               }}
             >
               <option value="">All years</option>
@@ -472,6 +481,7 @@ export function AssignmentsPage() {
               onChange={(e) => {
                 setClassId(e.target.value);
                 setSectionId('');
+                setPage(1);
               }}
               disabled={!yearId}
             >
@@ -486,7 +496,14 @@ export function AssignmentsPage() {
 
           <label className="field">
             <span>Section</span>
-            <select value={sectionId} onChange={(e) => setSectionId(e.target.value)} disabled={!classId}>
+            <select
+              value={sectionId}
+              onChange={(e) => {
+                setSectionId(e.target.value);
+                setPage(1);
+              }}
+              disabled={!classId}
+            >
               <option value="">All sections</option>
               {sections.map((s) => (
                 <option key={s.id} value={s.id}>
@@ -714,6 +731,7 @@ export function AssignmentsPage() {
               ))}
             </tbody>
           </table>
+          <Pager page={page} pageSize={PAGE_SIZE} total={total} onPageChange={setPage} />
         </div>
       )}
     </>
