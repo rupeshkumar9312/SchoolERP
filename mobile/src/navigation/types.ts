@@ -1,6 +1,6 @@
 import type { NavigatorScreenParams } from '@react-navigation/native';
 import type { Announcement } from '../api/announcements';
-import type { TeacherExamEntry } from '../api/exams';
+import type { Exam, TeacherExamEntry } from '../api/exams';
 import type { StudentHomeworkAssignment, HomeworkAssignment } from '../api/homework';
 import type { Student } from '../api/students';
 import type { Teacher } from '../api/teachers';
@@ -104,6 +104,12 @@ export type ManageStackParamList = {
   StudentsBulkImport: undefined;
   Reports: undefined;
   AuditLog: undefined;
+  ExamsList: undefined;
+  ExamForm: { exam?: Exam } | undefined;
+  ExamDetail: { examId: number };
+  AddExamSchedule: { examId: number };
+  ExamScheduleDetail: { examId: number; scheduleId: number };
+  ExamReportCard: { examId: number; scheduleId: number };
 };
 
 export type AdminTabsParamList = {

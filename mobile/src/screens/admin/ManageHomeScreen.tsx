@@ -53,6 +53,14 @@ export function ManageHomeScreen({ navigation }: Props): React.JSX.Element {
         </Card>
       )}
 
+      {hasPermission('exam.view') && (
+        <Card style={styles.card}>
+          <Text style={styles.cardTitle}>Exams</Text>
+          <Text style={styles.muted}>Define exams, schedule classes, publish results and report cards.</Text>
+          <Button label="Open" variant="secondary" onPress={() => navigation.navigate('ExamsList')} />
+        </Card>
+      )}
+
       {hasPermission('academic.view') && (
         <Card style={styles.card}>
           <Text style={styles.cardTitle}>Reports</Text>
