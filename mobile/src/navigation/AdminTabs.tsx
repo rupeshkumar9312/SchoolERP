@@ -5,11 +5,17 @@ import { Ionicons } from '@expo/vector-icons';
 import { AnnouncementsStackNavigator } from './AnnouncementsStackNavigator';
 import { brandedHeaderOptions } from './brandedHeaderOptions';
 import { AcademicSetupScreen } from '../screens/admin/AcademicSetupScreen';
+import { AddExamScheduleScreen } from '../screens/admin/AddExamScheduleScreen';
 import { AdminAttendanceHomeScreen } from '../screens/admin/AdminAttendanceHomeScreen';
 import { AdminDashboardScreen } from '../screens/admin/AdminDashboardScreen';
 import { AdminMarkAttendanceScreen } from '../screens/admin/AdminMarkAttendanceScreen';
 import { AuditLogScreen } from '../screens/admin/AuditLogScreen';
 import { ClassAttendanceScreen } from '../screens/admin/ClassAttendanceScreen';
+import { ExamDetailScreen } from '../screens/admin/ExamDetailScreen';
+import { ExamFormScreen } from '../screens/admin/ExamFormScreen';
+import { ExamReportCardScreen } from '../screens/admin/ExamReportCardScreen';
+import { ExamScheduleDetailScreen } from '../screens/admin/ExamScheduleDetailScreen';
+import { ExamsListScreen } from '../screens/admin/ExamsListScreen';
 import { ManageHomeScreen } from '../screens/admin/ManageHomeScreen';
 import { ReportsScreen } from '../screens/admin/ReportsScreen';
 import { StaffAttendanceScreen } from '../screens/admin/StaffAttendanceScreen';
@@ -59,6 +65,12 @@ function ManageStackNavigator(): React.JSX.Element {
       <ManageStack.Screen name="StudentsBulkImport" component={StudentsBulkImportScreen} />
       <ManageStack.Screen name="Reports" component={ReportsScreen} />
       <ManageStack.Screen name="AuditLog" component={AuditLogScreen} />
+      <ManageStack.Screen name="ExamsList" component={ExamsListScreen} />
+      <ManageStack.Screen name="ExamForm" component={ExamFormScreen} options={{ presentation: 'modal' }} />
+      <ManageStack.Screen name="ExamDetail" component={ExamDetailScreen} />
+      <ManageStack.Screen name="AddExamSchedule" component={AddExamScheduleScreen} />
+      <ManageStack.Screen name="ExamScheduleDetail" component={ExamScheduleDetailScreen} />
+      <ManageStack.Screen name="ExamReportCard" component={ExamReportCardScreen} />
     </ManageStack.Navigator>
   );
 }

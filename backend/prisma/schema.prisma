@@ -75,6 +75,9 @@ model User {
   auditLogs               AuditLog[]          @relation("AuditLogActor")
   announcements           Announcement[]      @relation("AnnouncementAuthor")
   pushTokens              PushToken[]
+  createdExams            Exam[]              @relation("ExamCreatedBy")
+  createdExamSchedules    ExamSchedule[]      @relation("ExamScheduleCreatedBy")
+  enteredExamMarks        ExamMark[]          @relation("ExamMarkEnteredBy")
 
   @@map("users")
 }
@@ -128,6 +131,7 @@ model Class {
   students            Student[]
   attendance          StudentAttendance[]
   homeworkAssignments Assignment[]
+  examSchedules       ExamSchedule[]
   createdAt           DateTime              @default(now())
 
   @@unique([academicYearId, name])
@@ -149,6 +153,7 @@ model Section {
   classTeacherId      Int?
   classTeacher        Teacher?              @relation("ClassTeacherOf", fields: [classTeacherId], references: [id], onDelete: SetNull)
   homeworkAssignments Assignment[]
+  examMarks           ExamMark[]
   createdAt           DateTime              @default(now())
 
   @@unique([classId, name])
@@ -162,6 +167,7 @@ model Subject {
   class               Class                 @relation(fields: [classId], references: [id], onDelete: Restrict)
   assignments         TeacherClassSubject[]
   homeworkAssignments Assignment[]
+  examSubjects        ExamSubject[]
   createdAt           DateTime              @default(now())
 
   @@unique([classId, name])
@@ -290,6 +296,7 @@ model Student {
   user                  User?                  @relation(fields: [userId], references: [id], onDelete: Cascade)
   attendance            StudentAttendance[]
   assignmentSubmissions AssignmentSubmission[]
+  examMarks             ExamMark[]
 
   @@map("students")
 }
@@ -429,4 +436,109 @@ model AnnouncementAudience {
 
   @@id([announcementId, audience])
   @@map("announcement_audiences")
+}
+
+enum ExamType {
+  CLASS_TEST
+  UNIT_TEST
+  MID_TERM
+  TERM_EXAM
+  FINAL_EXAM
+  OTHER
+}
+
+enum ExamScheduleStatus {
+  DRAFT
+  PUBLISHED
+}
+
+/// The exam's identity — "Unit Test 1", "Term 1 Exam" — plus an optional
+/// overall date window shown at creation time. No classId, no subjects of
+/// its own: those belong to its ExamSchedule children, one per class the
+/// exam has been scheduled for, each with its own independent dates that
+/// may differ from this overall window. Renaming here updates every class's
+/// sitting of it at once, since the name is stored exactly once.
+model Exam {
+  id          Int            @id @default(autoincrement())
+  name        String
+  type        ExamType
+  startDate   DateTime?      @db.Date
+  endDate     DateTime?      @db.Date
+  createdById Int?
+  createdBy   User?          @relation("ExamCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  schedules   ExamSchedule[]
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  @@map("exams")
+}
+
+/// One class's sitting of an Exam — "Unit Test 1, for Class 8": its own date
+/// window, its own subject list, its own publish status (no publish routes
+/// exist yet — Phase 3). Fully independent of every other class's schedule
+/// under the same Exam — no shared subject template, no name-matching, and
+/// its dates are independent of the parent Exam's own startDate/endDate. No
+/// separate academicYearId column: a Class's academicYearId never changes
+/// post-creation, so filtering by year goes through `class.academicYearId`.
+model ExamSchedule {
+  id          Int                 @id @default(autoincrement())
+  examId      Int
+  exam        Exam                @relation(fields: [examId], references: [id], onDelete: Cascade)
+  classId     Int
+  class       Class               @relation(fields: [classId], references: [id], onDelete: Restrict)
+  startDate   DateTime            @db.Date
+  endDate     DateTime            @db.Date
+  status      ExamScheduleStatus  @default(DRAFT)
+  createdById Int?
+  createdBy   User?               @relation("ExamScheduleCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  subjects    ExamSubject[]
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+
+  @@unique([examId, classId])
+  @@index([classId])
+  @@map("exam_schedules")
+}
+
+/// One subject's paper within an ExamSchedule — its own max/pass marks and
+/// date, since different subjects in the same schedule are graded out of
+/// different totals and held on different days.
+model ExamSubject {
+  id             Int          @id @default(autoincrement())
+  examScheduleId Int
+  examSchedule   ExamSchedule @relation(fields: [examScheduleId], references: [id], onDelete: Cascade)
+  subjectId      Int
+  subject        Subject      @relation(fields: [subjectId], references: [id], onDelete: Restrict)
+  maxMarks       Int
+  passMarks      Int?
+  examDate       DateTime?    @db.Date
+  marks          ExamMark[]
+  createdAt      DateTime     @default(now())
+
+  @@unique([examScheduleId, subjectId])
+  @@map("exam_subjects")
+}
+
+/// One student's result for one subject's paper. sectionId is a snapshot
+/// (same reasoning as StudentAttendance.classId/sectionId) so a later
+/// section change never rewrites history or breaks a teacher's marks-entry
+/// scope check for what they already graded.
+model ExamMark {
+  id            Int         @id @default(autoincrement())
+  examSubjectId Int
+  examSubject   ExamSubject @relation(fields: [examSubjectId], references: [id], onDelete: Cascade)
+  studentId     Int
+  student       Student     @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  sectionId     Int
+  section       Section     @relation(fields: [sectionId], references: [id], onDelete: Restrict)
+  marksObtained Int?
+  isAbsent      Boolean     @default(false)
+  remarks       String?
+  enteredById   Int?
+  enteredBy     User?       @relation("ExamMarkEnteredBy", fields: [enteredById], references: [id], onDelete: SetNull)
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  @@unique([examSubjectId, studentId])
+  @@map("exam_marks")
 }

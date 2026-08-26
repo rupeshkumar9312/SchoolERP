@@ -1,8 +1,8 @@
 // Demo/test dataset — separate from prisma/seed.ts (roles/permissions/SUPER_ADMIN),
 // which every environment needs. This script is optional and adds realistic
-// classes, subjects, teachers, students and attendance history so the app has
-// something to look at. Safe to re-run: every write is an upsert keyed on the
-// same unique constraints the app itself relies on.
+// classes, subjects, teachers, students, attendance history and exams so the
+// app has something to look at. Safe to re-run: every write is an upsert
+// keyed on the same unique constraints the app itself relies on.
 import { AttendanceStatus, PrismaClient } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 
@@ -325,6 +325,87 @@ async function main() {
     }
   }
   console.log(`Attendance history seeded for the last ${ATTENDANCE_DAYS} days.`);
+
+  // ---- Exams: one umbrella + one schedule per class (all subjects, every
+  // student marked) — gives the Exams/Results/report-card screens something
+  // real to show. Unit Test 1 is fully graded and published; Half-Yearly
+  // Exam is fully graded but left as a draft, so the Publish button on the
+  // schedule page has something to actually do.
+  const superAdmin = await prisma.user.findFirst({ where: { role: { name: 'SUPER_ADMIN' } } });
+  if (!superAdmin) throw new Error('No SUPER_ADMIN user found — run `npm run db:seed` first.');
+
+  interface ExamPlan {
+    name: string;
+    type: 'UNIT_TEST' | 'TERM_EXAM';
+    maxMarks: number;
+    passMarks: number;
+    publish: boolean;
+  }
+  const EXAM_PLAN: ExamPlan[] = [
+    { name: 'Unit Test 1', type: 'UNIT_TEST', maxMarks: 25, passMarks: 10, publish: true },
+    { name: 'Half-Yearly Exam', type: 'TERM_EXAM', maxMarks: 80, passMarks: 32, publish: false },
+  ];
+
+  /** Skewed toward a decent score (50%-98% of max), with an occasional
+   * absence — realistic-looking rather than uniformly random. */
+  function randomMark(maxMarks: number): { marksObtained: number | null; isAbsent: boolean } {
+    if (Math.random() < 0.03) return { marksObtained: null, isAbsent: true };
+    const pct = 0.5 + Math.random() * 0.48;
+    return { marksObtained: Math.min(maxMarks, Math.round(maxMarks * pct)), isAbsent: false };
+  }
+
+  for (const examPlan of EXAM_PLAN) {
+    // No unique constraint on Exam.name (by design — nothing stops two
+    // unrelated exams sharing a name), so re-run safety here is a manual
+    // find-or-create rather than a real upsert.
+    let exam = await prisma.exam.findFirst({ where: { name: examPlan.name } });
+    if (!exam) {
+      exam = await prisma.exam.create({ data: { name: examPlan.name, type: examPlan.type, createdById: superAdmin.id } });
+    }
+
+    for (let ci = 0; ci < CLASS_PLAN.length; ci++) {
+      const classId = classIds[ci];
+      const schedule = await prisma.examSchedule.upsert({
+        where: { examId_classId: { examId: exam.id, classId } },
+        update: {},
+        create: {
+          examId: exam.id,
+          classId,
+          startDate: utcDateDaysAgo(21),
+          endDate: utcDateDaysAgo(14),
+          status: examPlan.publish ? 'PUBLISHED' : 'DRAFT',
+          createdById: superAdmin.id,
+        },
+      });
+
+      const examSubjectIdByName: Record<string, number> = {};
+      for (const subjectName of SUBJECT_NAMES) {
+        const subjectId = subjectIdByClassAndName[ci][subjectName];
+        const examSubject = await prisma.examSubject.upsert({
+          where: { examScheduleId_subjectId: { examScheduleId: schedule.id, subjectId } },
+          update: {},
+          create: { examScheduleId: schedule.id, subjectId, maxMarks: examPlan.maxMarks, passMarks: examPlan.passMarks },
+        });
+        examSubjectIdByName[subjectName] = examSubject.id;
+      }
+
+      for (let si = 0; si < CLASS_PLAN[ci].sections.length; si++) {
+        const sectionId = sectionIds[ci][si];
+        for (const studentId of studentsBySection[ci][si]) {
+          for (const subjectName of SUBJECT_NAMES) {
+            const examSubjectId = examSubjectIdByName[subjectName];
+            const { marksObtained, isAbsent } = randomMark(examPlan.maxMarks);
+            await prisma.examMark.upsert({
+              where: { examSubjectId_studentId: { examSubjectId, studentId } },
+              update: {},
+              create: { examSubjectId, studentId, sectionId, marksObtained, isAbsent },
+            });
+          }
+        }
+      }
+    }
+  }
+  console.log(`Exams ready: ${EXAM_PLAN.map((e) => e.name).join(', ')}`);
 
   console.log('\n=== Demo teacher credentials (password is the same for all) ===');
   console.log(`Password: ${TEACHER_PASSWORD}\n`);

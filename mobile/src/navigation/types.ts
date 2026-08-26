@@ -1,5 +1,6 @@
 import type { NavigatorScreenParams } from '@react-navigation/native';
 import type { Announcement } from '../api/announcements';
+import type { Exam, TeacherExamEntry } from '../api/exams';
 import type { StudentHomeworkAssignment, HomeworkAssignment } from '../api/homework';
 import type { Student } from '../api/students';
 import type { Teacher } from '../api/teachers';
@@ -8,6 +9,10 @@ import type { UserListItem } from '../api/users';
 export type StudentAssignmentsStackParamList = {
   AssignmentsList: undefined;
   AssignmentDetail: { assignment: StudentHomeworkAssignment };
+};
+
+export type StudentResultsStackParamList = {
+  ResultsList: undefined;
 };
 
 // Shared by Student/Teacher/Admin tabs — only ADMIN-tier roles ever navigate
@@ -23,6 +28,7 @@ export type StudentTabsParamList = {
   Dashboard: undefined;
   Attendance: undefined;
   Assignments: NavigatorScreenParams<StudentAssignmentsStackParamList>;
+  Results: NavigatorScreenParams<StudentResultsStackParamList>;
   Announcements: NavigatorScreenParams<AnnouncementsStackParamList>;
   Settings: undefined;
 };
@@ -57,6 +63,11 @@ export type TeacherAssignmentsStackParamList = {
   NewAssignment: undefined;
 };
 
+export type TeacherExamsStackParamList = {
+  ExamsList: undefined;
+  MarksEntry: { entry: TeacherExamEntry };
+};
+
 export type TeacherDashboardStackParamList = {
   DashboardHome: undefined;
   MyAttendance: undefined;
@@ -66,6 +77,7 @@ export type TeacherTabsParamList = {
   Dashboard: NavigatorScreenParams<TeacherDashboardStackParamList>;
   Classes: NavigatorScreenParams<TeacherClassesStackParamList>;
   Assignments: NavigatorScreenParams<TeacherAssignmentsStackParamList>;
+  Exams: NavigatorScreenParams<TeacherExamsStackParamList>;
   Announcements: NavigatorScreenParams<AnnouncementsStackParamList>;
   Settings: undefined;
 };
@@ -92,6 +104,12 @@ export type ManageStackParamList = {
   StudentsBulkImport: undefined;
   Reports: undefined;
   AuditLog: undefined;
+  ExamsList: undefined;
+  ExamForm: { exam?: Exam } | undefined;
+  ExamDetail: { examId: number };
+  AddExamSchedule: { examId: number };
+  ExamScheduleDetail: { examId: number; scheduleId: number };
+  ExamReportCard: { examId: number; scheduleId: number };
 };
 
 export type AdminTabsParamList = {

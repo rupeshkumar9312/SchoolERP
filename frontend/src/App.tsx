@@ -13,10 +13,17 @@ import { ConfirmDialogProvider } from './components/ConfirmDialogProvider';
 import { ToastProvider } from './components/ToastProvider';
 import { ChangePasswordPage } from './pages/ChangePasswordPage';
 import { DashboardHome } from './pages/DashboardHome';
+import { ExamDetailPage } from './pages/ExamDetailPage';
+import { ExamFormPage } from './pages/ExamFormPage';
+import { ExamMarksEntryPage } from './pages/ExamMarksEntryPage';
+import { ExamReportCardPage } from './pages/ExamReportCardPage';
+import { ExamSchedulePage } from './pages/ExamSchedulePage';
+import { ExamsListPage } from './pages/ExamsListPage';
 import { LoginPage } from './pages/LoginPage';
 import { MarkAttendancePage } from './pages/MarkAttendancePage';
 import { MyAttendancePage } from './pages/MyAttendancePage';
 import { MyClassesPage } from './pages/MyClassesPage';
+import { MyExamsPage } from './pages/MyExamsPage';
 import { MyStudentsPage } from './pages/MyStudentsPage';
 import { ReportsPage } from './pages/ReportsPage';
 import { SettingsPage } from './pages/SettingsPage';
@@ -24,6 +31,7 @@ import { StaffAttendancePage } from './pages/StaffAttendancePage';
 import { StudentAssignmentsPage } from './pages/StudentAssignmentsPage';
 import { StudentAttendancePage } from './pages/StudentAttendancePage';
 import { StudentFormPage } from './pages/StudentFormPage';
+import { StudentResultsPage } from './pages/StudentResultsPage';
 import { StudentsBulkImportPage } from './pages/StudentsBulkImportPage';
 import { StudentsListPage } from './pages/StudentsListPage';
 import { TeacherAssignmentsPage } from './pages/TeacherAssignmentsPage';
@@ -113,6 +121,20 @@ function App() {
                 <Route path="/assignments/bulk-import" element={<AssignmentsBulkImportPage />} />
               </Route>
 
+              <Route element={<ProtectedRoute permission="exam.view" />}>
+                <Route path="/exams" element={<ExamsListPage />} />
+                <Route path="/exams/:id" element={<ExamDetailPage />} />
+                <Route path="/exams/:id/schedules/:scheduleId" element={<ExamSchedulePage />} />
+                <Route path="/exams/:id/schedules/:scheduleId/report-card" element={<ExamReportCardPage />} />
+              </Route>
+              <Route element={<ProtectedRoute permission="exam.create" />}>
+                <Route path="/exams/new" element={<ExamFormPage />} />
+              </Route>
+              <Route element={<ProtectedRoute roles={['TEACHER']} />}>
+                <Route path="/my-exams" element={<MyExamsPage />} />
+                <Route path="/exams/:id/schedules/:scheduleId/marks" element={<ExamMarksEntryPage />} />
+              </Route>
+
               <Route path="/announcements" element={<AnnouncementsListPage />} />
               <Route element={<ProtectedRoute permission="announcement.create" />}>
                 <Route path="/announcements/new" element={<AnnouncementFormPage />} />
@@ -128,6 +150,7 @@ function App() {
               <Route element={<ProtectedRoute roles={['STUDENT']} />}>
                 <Route path="/student/attendance" element={<StudentAttendancePage />} />
                 <Route path="/student/assignments" element={<StudentAssignmentsPage />} />
+                <Route path="/student/results" element={<StudentResultsPage />} />
               </Route>
             </Route>
           </Route>

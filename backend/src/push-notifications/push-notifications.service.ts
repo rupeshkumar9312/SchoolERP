@@ -97,6 +97,21 @@ export class PushNotificationService {
     await this.sendToTokens(tokens, payload);
   }
 
+  /** Narrower than notifyAudiences: only the students of one specific class
+   * (every section), not every student in the school — for a class-wide
+   * event like an exam schedule being published. Unlike
+   * notifyClassSectionStudents above, there's no sectionId to filter by:
+   * ExamSchedule spans every section of its class, same as Subject. */
+  async notifyClassStudents(classId: number, payload: PushNotificationPayload): Promise<void> {
+    const students = await this.prisma.student.findMany({
+      where: { classId, isActive: true, userId: { not: null } },
+      select: { user: { select: { pushTokens: { select: { token: true } } } } },
+    });
+    const tokens = students.flatMap((s) => s.user?.pushTokens.map((t) => t.token) ?? []);
+
+    await this.sendToTokens(tokens, payload);
+  }
+
   private async sendToTokens(tokens: string[], payload: PushNotificationPayload): Promise<void> {
     const validTokens = [...new Set(tokens)].filter(isExpoPushToken);
     if (validTokens.length === 0) return;

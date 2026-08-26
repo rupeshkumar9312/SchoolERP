@@ -18,3 +18,11 @@ export function navigateToAssignments(): void {
     navigationRef.navigate('Assignments' as never);
   }
 }
+
+/** Exam-published pushes only ever go to students, whose tab navigator names
+ * its results tab "Results" — same resolution pattern as above. */
+export function navigateToResults(): void {
+  if (navigationRef.isReady()) {
+    navigationRef.navigate('Results' as never);
+  }
+}
