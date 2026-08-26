@@ -151,6 +151,15 @@ export class ExamsController {
     return this.exams.getProgress(id, scheduleId);
   }
 
+  @Get(':id/schedules/:scheduleId/report-card')
+  @RequirePermission('exam.view')
+  getReportCard(
+    @Param('id', ParseIntPipe) id: number,
+    @Param('scheduleId', ParseIntPipe) scheduleId: number,
+  ) {
+    return this.exams.getReportCard(id, scheduleId);
+  }
+
   @Get(':id/schedules/:scheduleId/marks')
   @RequirePermission('exam.marks.enter')
   getMarksRoster(

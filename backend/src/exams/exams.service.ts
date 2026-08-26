@@ -3,6 +3,7 @@ import {
   ConflictException,
   ForbiddenException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { ExamScheduleStatus, ExamType, Prisma, Student, Teacher } from '@prisma/client';
@@ -10,6 +11,7 @@ import { AuditLogService } from '../audit/audit-log.service';
 import { AuthenticatedUser } from '../auth/auth.types';
 import { TEACHER_ROLE } from '../auth/roles.constants';
 import { PrismaService } from '../prisma/prisma.service';
+import { PushNotificationService } from '../push-notifications/push-notifications.service';
 import { BulkMarksDto } from './dto/bulk-marks.dto';
 import { CreateExamScheduleDto } from './dto/create-exam-schedule.dto';
 import { CreateExamSubjectDto } from './dto/create-exam-subject.dto';
@@ -101,6 +103,23 @@ export interface StudentExamResultSubject {
   passed: boolean | null;
 }
 
+/** Cross-subject standing for one student on one class's ExamSchedule.
+ * `totalObtained`/`percentage`/`rank` stay null until every subject on the
+ * schedule has a recorded ExamMark for that student (graded or absent) —
+ * a partial total would misrepresent where they stand while marks entry is
+ * still in progress. Absent counts as 0 toward the total, same as any
+ * school's standard convention. */
+export interface ScheduleStudentTotal {
+  totalObtained: number | null;
+  totalMax: number;
+  percentage: number | null;
+  /** Competition ranking (ties share a rank; the next rank skips
+   * accordingly, e.g. 1, 2, 2, 4) within the whole class — an ExamSchedule
+   * spans every section of its class, so rank does too. Null alongside
+   * totalObtained above. */
+  rank: number | null;
+}
+
 /** One class's PUBLISHED sitting of an Exam, from a student's own point of
  * view — every subject on that schedule, not just the ones already graded,
  * so an ungraded subject still shows (with null marks) rather than vanishing. */
@@ -108,6 +127,44 @@ export interface StudentExamResult {
   exam: { id: number; name: string; type: ExamType };
   schedule: { id: number; startDate: Date; endDate: Date };
   subjects: StudentExamResultSubject[];
+  summary: ScheduleStudentTotal & { totalStudents: number };
+}
+
+export interface ReportCardSubjectColumn {
+  examSubjectId: number;
+  subject: { id: number; name: string };
+  maxMarks: number;
+}
+
+export interface ReportCardSubjectCell {
+  examSubjectId: number;
+  marksObtained: number | null;
+  isAbsent: boolean;
+}
+
+export interface ReportCardRow {
+  student: { id: number; name: string; admissionNo: string | null };
+  section: { id: number; name: string };
+  subjects: ReportCardSubjectCell[];
+  total: ScheduleStudentTotal;
+}
+
+/** The full class's cross-subject standing for one ExamSchedule — every
+ * active student in the class (not just ones with marks entered so far),
+ * one column per subject on the schedule, sorted by rank (students whose
+ * total isn't computable yet — marks entry still incomplete for them —
+ * sort after, alphabetically). */
+export interface ScheduleReportCard {
+  exam: { id: number; name: string; type: ExamType };
+  schedule: {
+    id: number;
+    class: { id: number; name: string };
+    status: ExamScheduleStatus;
+    startDate: Date;
+    endDate: Date;
+  };
+  subjects: ReportCardSubjectColumn[];
+  rows: ReportCardRow[];
 }
 
 type ExamWithRefs = Prisma.ExamGetPayload<{ include: typeof EXAM_INCLUDE }>;
@@ -133,9 +190,12 @@ const SCHEDULE_INCLUDE = {
 
 @Injectable()
 export class ExamsService {
+  private readonly logger = new Logger(ExamsService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditLogService,
+    private readonly pushNotifications: PushNotificationService,
   ) {}
 
   async findAll(query: ListExamsQueryDto): Promise<ExamView[]> {
@@ -244,31 +304,58 @@ export class ExamsService {
     });
     if (schedules.length === 0) return [];
 
-    const examSubjectIds = schedules.flatMap((s) => s.subjects.map((su) => su.id));
-    const marks = await this.prisma.examMark.findMany({
-      where: { examSubjectId: { in: examSubjectIds }, studentId: student.id },
+    // Every classmate is needed to compute rank, even though only the
+    // caller's own marks are ever returned in the response below.
+    const classmates = await this.prisma.student.findMany({
+      where: { classId: student.classId, isActive: true },
+      select: { id: true },
     });
-    const markByExamSubjectId = new Map(marks.map((m) => [m.examSubjectId, m]));
+    const classmateIds = classmates.map((c) => c.id);
 
-    return schedules.map((schedule) => ({
-      exam: { id: schedule.exam.id, name: schedule.exam.name, type: schedule.exam.type },
-      schedule: { id: schedule.id, startDate: schedule.startDate, endDate: schedule.endDate },
-      subjects: schedule.subjects.map((su) => {
-        const mark = markByExamSubjectId.get(su.id);
-        const marksObtained = mark?.marksObtained ?? null;
-        const isAbsent = mark?.isAbsent ?? false;
-        return {
-          subject: { id: su.subject.id, name: su.subject.name },
-          maxMarks: su.maxMarks,
-          passMarks: su.passMarks,
-          marksObtained,
-          isAbsent,
-          percentage: marksObtained !== null ? Math.round((marksObtained / su.maxMarks) * 1000) / 10 : null,
-          passed:
-            marksObtained !== null && su.passMarks !== null ? marksObtained >= su.passMarks : null,
-        };
-      }),
-    }));
+    const allExamSubjectIds = schedules.flatMap((s) => s.subjects.map((su) => su.id));
+    const allMarks = await this.prisma.examMark.findMany({
+      where: { examSubjectId: { in: allExamSubjectIds } },
+    });
+    const marksByExamSubjectId = new Map<number, typeof allMarks>();
+    for (const m of allMarks) {
+      const list = marksByExamSubjectId.get(m.examSubjectId) ?? [];
+      list.push(m);
+      marksByExamSubjectId.set(m.examSubjectId, list);
+    }
+
+    return schedules.map((schedule) => {
+      const scheduleMarks = schedule.subjects.flatMap((su) => marksByExamSubjectId.get(su.id) ?? []);
+      const totals = this.computeClassTotals(
+        classmateIds,
+        schedule.subjects.map((s) => ({ id: s.id, maxMarks: s.maxMarks })),
+        scheduleMarks,
+      );
+      const myTotal = totals.get(student.id)!;
+      const myMarkByExamSubjectId = new Map(
+        scheduleMarks.filter((m) => m.studentId === student.id).map((m) => [m.examSubjectId, m]),
+      );
+
+      return {
+        exam: { id: schedule.exam.id, name: schedule.exam.name, type: schedule.exam.type },
+        schedule: { id: schedule.id, startDate: schedule.startDate, endDate: schedule.endDate },
+        subjects: schedule.subjects.map((su) => {
+          const mark = myMarkByExamSubjectId.get(su.id);
+          const marksObtained = mark?.marksObtained ?? null;
+          const isAbsent = mark?.isAbsent ?? false;
+          return {
+            subject: { id: su.subject.id, name: su.subject.name },
+            maxMarks: su.maxMarks,
+            passMarks: su.passMarks,
+            marksObtained,
+            isAbsent,
+            percentage: marksObtained !== null ? Math.round((marksObtained / su.maxMarks) * 1000) / 10 : null,
+            passed:
+              marksObtained !== null && su.passMarks !== null ? marksObtained >= su.passMarks : null,
+          };
+        }),
+        summary: { ...myTotal, totalStudents: classmateIds.length },
+      };
+    });
   }
 
   /** Per-subject "entered X / Y" progress for one class's schedule, for the
@@ -293,6 +380,77 @@ export class ExamsService {
       enteredCount: enteredByExamSubjectId.get(s.id) ?? 0,
       totalStudents,
     }));
+  }
+
+  /** Full class's cross-subject report card for one schedule — every active
+   * student in the class, one column per subject, with each row's total/
+   * percentage/rank. Admin-tier viewing only (exam.view), same as the exam
+   * definition routes — not exposed to teachers, who already see their own
+   * subject's roster via the marks-entry routes. */
+  async getReportCard(examId: number, scheduleId: number): Promise<ScheduleReportCard> {
+    const schedule = await this.findScheduleRowOrThrow(examId, scheduleId);
+    const exam = await this.prisma.exam.findUniqueOrThrow({
+      where: { id: examId },
+      select: { id: true, name: true, type: true },
+    });
+    const students = await this.prisma.student.findMany({
+      where: { classId: schedule.classId, isActive: true },
+      include: { section: true },
+      orderBy: { name: 'asc' },
+    });
+
+    const examSubjectIds = schedule.subjects.map((s) => s.id);
+    const marks = await this.prisma.examMark.findMany({ where: { examSubjectId: { in: examSubjectIds } } });
+    const totals = this.computeClassTotals(
+      students.map((s) => s.id),
+      schedule.subjects.map((s) => ({ id: s.id, maxMarks: s.maxMarks })),
+      marks,
+    );
+
+    const marksByStudentId = new Map<number, Map<number, (typeof marks)[number]>>();
+    for (const m of marks) {
+      if (!marksByStudentId.has(m.studentId)) marksByStudentId.set(m.studentId, new Map());
+      marksByStudentId.get(m.studentId)!.set(m.examSubjectId, m);
+    }
+
+    const rows: ReportCardRow[] = students.map((student) => {
+      const byExamSubjectId = marksByStudentId.get(student.id);
+      return {
+        student: { id: student.id, name: student.name, admissionNo: student.admissionNo },
+        section: { id: student.section.id, name: student.section.name },
+        subjects: schedule.subjects.map((su) => {
+          const mark = byExamSubjectId?.get(su.id);
+          return { examSubjectId: su.id, marksObtained: mark?.marksObtained ?? null, isAbsent: mark?.isAbsent ?? false };
+        }),
+        total: totals.get(student.id)!,
+      };
+    });
+
+    // Best rank first; students whose total isn't computable yet (marks
+    // entry still incomplete for them) sort after, alphabetically.
+    rows.sort((a, b) => {
+      if (a.total.rank !== null && b.total.rank !== null) return a.total.rank - b.total.rank;
+      if (a.total.rank !== null) return -1;
+      if (b.total.rank !== null) return 1;
+      return a.student.name.localeCompare(b.student.name);
+    });
+
+    return {
+      exam,
+      schedule: {
+        id: schedule.id,
+        class: { id: schedule.class.id, name: schedule.class.name },
+        status: schedule.status,
+        startDate: schedule.startDate,
+        endDate: schedule.endDate,
+      },
+      subjects: schedule.subjects.map((s) => ({
+        examSubjectId: s.id,
+        subject: { id: s.subject.id, name: s.subject.name },
+        maxMarks: s.maxMarks,
+      })),
+      rows,
+    };
   }
 
   // ---- Marks entry ----
@@ -614,7 +772,27 @@ export class ExamsService {
       oldValues: existing,
       newValues: row,
     });
-    return this.toView(await this.findRowOrThrow(examId));
+
+    const updated = this.toView(await this.findRowOrThrow(examId));
+
+    // Awaited, not fire-and-forget — same reasoning as
+    // AnnouncementsService.create(): the production API runs on Vercel's
+    // serverless functions, which freeze immediately once the response is
+    // sent. A push failure must never fail the publish itself, though.
+    try {
+      await this.pushNotifications.notifyClassStudents(existing.classId, {
+        title: 'Results published',
+        body: `${updated.name} results are now available.`,
+        data: { type: 'examResult', examId, scheduleId },
+      });
+    } catch (error) {
+      this.logger.error(
+        'Failed to send exam-published push notifications',
+        error instanceof Error ? error.stack : error,
+      );
+    }
+
+    return updated;
   }
 
   async unpublishSchedule(examId: number, scheduleId: number, actor: AuthenticatedUser): Promise<ExamView> {
@@ -793,6 +971,69 @@ export class ExamsService {
     if (new Date(endDate) < new Date(startDate)) {
       throw new BadRequestException('End date must be on or after the start date');
     }
+  }
+
+  /** Cross-subject total, percentage and competition rank (ties share a
+   * rank; the next rank skips accordingly — 1, 2, 2, 4) for every given
+   * student, scoped to one ExamSchedule's subject list and marks. A
+   * student's total stays null until every subject has a recorded
+   * ExamMark for them (graded or absent) — see ScheduleStudentTotal's doc
+   * comment for why. Shared by getReportCard (whole class) and
+   * findResultsForStudent (one student, but rank still needs the whole
+   * class's totals to place them). */
+  private computeClassTotals(
+    studentIds: number[],
+    examSubjects: Array<{ id: number; maxMarks: number }>,
+    marks: Array<{ studentId: number; examSubjectId: number; marksObtained: number | null; isAbsent: boolean }>,
+  ): Map<number, ScheduleStudentTotal> {
+    const totalMax = examSubjects.reduce((sum, s) => sum + s.maxMarks, 0);
+
+    const marksByStudentId = new Map<number, Map<number, (typeof marks)[number]>>();
+    for (const m of marks) {
+      if (!marksByStudentId.has(m.studentId)) marksByStudentId.set(m.studentId, new Map());
+      marksByStudentId.get(m.studentId)!.set(m.examSubjectId, m);
+    }
+
+    const partial = new Map<number, { totalObtained: number | null; percentage: number | null }>();
+    for (const studentId of studentIds) {
+      const byExamSubjectId = marksByStudentId.get(studentId);
+      const complete =
+        examSubjects.length > 0 && byExamSubjectId !== undefined && examSubjects.every((s) => byExamSubjectId.has(s.id));
+      const totalObtained = complete
+        ? examSubjects.reduce((sum, s) => sum + (byExamSubjectId!.get(s.id)!.isAbsent ? 0 : byExamSubjectId!.get(s.id)!.marksObtained ?? 0), 0)
+        : null;
+      const percentage = totalObtained !== null ? Math.round((totalObtained / totalMax) * 1000) / 10 : null;
+      partial.set(studentId, { totalObtained, percentage });
+    }
+
+    const ranked = [...partial.entries()]
+      .filter((entry): entry is [number, { totalObtained: number; percentage: number }] => entry[1].totalObtained !== null)
+      .sort((a, b) => b[1].totalObtained - a[1].totalObtained);
+
+    const rankByStudentId = new Map<number, number>();
+    let rank = 0;
+    let lastTotal: number | null = null;
+    let seen = 0;
+    for (const [studentId, t] of ranked) {
+      seen++;
+      if (t.totalObtained !== lastTotal) {
+        rank = seen;
+        lastTotal = t.totalObtained;
+      }
+      rankByStudentId.set(studentId, rank);
+    }
+
+    const result = new Map<number, ScheduleStudentTotal>();
+    for (const studentId of studentIds) {
+      const t = partial.get(studentId)!;
+      result.set(studentId, {
+        totalObtained: t.totalObtained,
+        totalMax,
+        percentage: t.percentage,
+        rank: rankByStudentId.get(studentId) ?? null,
+      });
+    }
+    return result;
   }
 
   private assertPassMarksValid(maxMarks: number, passMarks: number | undefined): void {

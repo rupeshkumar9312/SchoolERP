@@ -16,6 +16,7 @@ import { DashboardHome } from './pages/DashboardHome';
 import { ExamDetailPage } from './pages/ExamDetailPage';
 import { ExamFormPage } from './pages/ExamFormPage';
 import { ExamMarksEntryPage } from './pages/ExamMarksEntryPage';
+import { ExamReportCardPage } from './pages/ExamReportCardPage';
 import { ExamSchedulePage } from './pages/ExamSchedulePage';
 import { ExamsListPage } from './pages/ExamsListPage';
 import { LoginPage } from './pages/LoginPage';
@@ -124,6 +125,7 @@ function App() {
                 <Route path="/exams" element={<ExamsListPage />} />
                 <Route path="/exams/:id" element={<ExamDetailPage />} />
                 <Route path="/exams/:id/schedules/:scheduleId" element={<ExamSchedulePage />} />
+                <Route path="/exams/:id/schedules/:scheduleId/report-card" element={<ExamReportCardPage />} />
               </Route>
               <Route element={<ProtectedRoute permission="exam.create" />}>
                 <Route path="/exams/new" element={<ExamFormPage />} />

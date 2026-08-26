@@ -221,6 +221,11 @@ export function ExamSchedulePage() {
           <span className={`badge ${schedule.status === 'PUBLISHED' ? 'status-badge-present' : ''}`}>
             {schedule.status === 'PUBLISHED' ? 'Published' : 'Draft'}
           </span>
+          <Link to={`/exams/${examId}/schedules/${scheduleIdNum}/report-card`}>
+            <button type="button" className="secondary">
+              Report card
+            </button>
+          </Link>
           {canPublish && (
             <button
               type="button"

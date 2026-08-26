@@ -77,6 +77,22 @@ export function StudentResultsPage() {
                   ))}
                 </tbody>
               </table>
+
+              <p className="subtitle" style={{ marginTop: '0.75rem' }}>
+                {r.summary.totalObtained !== null ? (
+                  <>
+                    <strong>Total:</strong> {r.summary.totalObtained}/{r.summary.totalMax} ({r.summary.percentage}%)
+                    {r.summary.rank !== null && (
+                      <>
+                        {' · '}
+                        <strong>Rank:</strong> {r.summary.rank} of {r.summary.totalStudents}
+                      </>
+                    )}
+                  </>
+                ) : (
+                  'Total pending — not every subject has been graded yet.'
+                )}
+              </p>
             </section>
           ))
         ))}

@@ -91,6 +91,19 @@ export interface StudentExamResultSubject {
   passed: boolean | null;
 }
 
+/** Cross-subject total/percentage/rank for the signed-in student on one
+ * schedule. Null until every subject on the schedule has a recorded mark
+ * for them (graded or absent) — a partial total would misrepresent where
+ * they stand while marks entry is still in progress. */
+export interface ScheduleStudentTotal {
+  totalObtained: number | null;
+  totalMax: number;
+  percentage: number | null;
+  /** Competition ranking within the whole class (ties share a rank; the
+   * next rank skips accordingly — 1, 2, 2, 4). */
+  rank: number | null;
+}
+
 /** One class's PUBLISHED sitting of an exam, from the signed-in student's
  * own point of view. Unpublished schedules for their class never appear
  * here at all. */
@@ -98,6 +111,7 @@ export interface StudentExamResult {
   exam: { id: number; name: string; type: ExamType };
   schedule: { id: number; startDate: string; endDate: string };
   subjects: StudentExamResultSubject[];
+  summary: ScheduleStudentTotal & { totalStudents: number };
 }
 
 export function getMyExamResults(): Promise<StudentExamResult[]> {

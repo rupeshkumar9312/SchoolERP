@@ -183,6 +183,57 @@ export function getExamProgress(examId: number, scheduleId: number): Promise<Exa
   return apiGet<ExamSubjectProgress[]>(`/exams/${examId}/schedules/${scheduleId}/progress`);
 }
 
+/** Cross-subject total/percentage/rank for one student on one schedule.
+ * Null until every subject on the schedule has a recorded mark for them
+ * (graded or absent) — a partial total would misrepresent their standing. */
+export interface ScheduleStudentTotal {
+  totalObtained: number | null;
+  totalMax: number;
+  percentage: number | null;
+  /** Competition ranking within the whole class (ties share a rank; the
+   * next rank skips accordingly — 1, 2, 2, 4). */
+  rank: number | null;
+}
+
+export interface ReportCardSubjectColumn {
+  examSubjectId: number;
+  subject: { id: number; name: string };
+  maxMarks: number;
+}
+
+export interface ReportCardSubjectCell {
+  examSubjectId: number;
+  marksObtained: number | null;
+  isAbsent: boolean;
+}
+
+export interface ReportCardRow {
+  student: { id: number; name: string; admissionNo: string | null };
+  section: { id: number; name: string };
+  subjects: ReportCardSubjectCell[];
+  total: ScheduleStudentTotal;
+}
+
+/** The full class's cross-subject standing for one schedule — every active
+ * student in the class, sorted by rank (students whose total isn't
+ * computable yet sort after, alphabetically). */
+export interface ScheduleReportCard {
+  exam: { id: number; name: string; type: ExamType };
+  schedule: {
+    id: number;
+    class: { id: number; name: string };
+    status: ExamScheduleStatus;
+    startDate: string;
+    endDate: string;
+  };
+  subjects: ReportCardSubjectColumn[];
+  rows: ReportCardRow[];
+}
+
+export function getExamReportCard(examId: number, scheduleId: number): Promise<ScheduleReportCard> {
+  return apiGet<ScheduleReportCard>(`/exams/${examId}/schedules/${scheduleId}/report-card`);
+}
+
 // ---- Marks entry (teacher-facing) ----
 
 /** One (exam, schedule, subject a teacher teaches, section they teach it in)
@@ -266,6 +317,7 @@ export interface StudentExamResult {
   exam: { id: number; name: string; type: ExamType };
   schedule: { id: number; startDate: string; endDate: string };
   subjects: StudentExamResultSubject[];
+  summary: ScheduleStudentTotal & { totalStudents: number };
 }
 
 export function getMyExamResults(): Promise<StudentExamResult[]> {

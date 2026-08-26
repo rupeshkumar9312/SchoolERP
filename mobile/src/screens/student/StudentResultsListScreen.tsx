@@ -74,6 +74,14 @@ export function StudentResultsListScreen(): React.JSX.Element {
               </View>
             </Card>
           ))}
+
+          <Text style={styles.summary}>
+            {r.summary.totalObtained !== null
+              ? `Total: ${r.summary.totalObtained}/${r.summary.totalMax} (${r.summary.percentage}%)${
+                  r.summary.rank !== null ? ` · Rank: ${r.summary.rank} of ${r.summary.totalStudents}` : ''
+                }`
+              : 'Total pending — not every subject has been graded yet.'}
+          </Text>
         </View>
       ))}
     </Screen>
@@ -87,6 +95,12 @@ const styles = StyleSheet.create({
   groupHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.xs },
   groupTitle: { fontSize: 17, fontFamily: fonts.headingBold, color: colors.text },
   card: { gap: spacing.xs, marginTop: spacing.sm },
+  summary: {
+    fontSize: 13,
+    fontFamily: fonts.bodySemiBold,
+    color: colors.text,
+    marginTop: spacing.sm,
+  },
   titleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.xs },
   title: { fontSize: 15, fontFamily: fonts.bodySemiBold, color: colors.text },
   footerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: spacing.xs },
