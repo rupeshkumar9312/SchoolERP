@@ -218,7 +218,7 @@ export class TeacherQrService {
     // 4. Load today's row and pre-validate the direction *before* consuming the
     //    token, so a rejected check-out doesn't burn it.
     const now = new Date();
-    const date = this.schoolToday();
+    const date = this.todayDate();
     const existing = await this.prisma.teacherAttendance.findUnique({
       where: { teacherId_date: { teacherId: teacher.id, date } },
       include: ATTENDANCE_INCLUDE,
@@ -409,19 +409,20 @@ export class TeacherQrService {
     return secret;
   }
 
-  /** UTC midnight of the current calendar day in SCHOOL_TZ — matches how the
-   * rest of the app stores a `@db.Date`, but no longer keyed off server UTC. */
-  private schoolToday(): Date {
-    const tz = this.config.get<string>('SCHOOL_TZ') || 'UTC';
-    const ymd = new Intl.DateTimeFormat('en-CA', {
-      timeZone: tz,
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-    }).format(new Date());
-    return new Date(`${ymd}T00:00:00.000Z`);
+  /** The calendar day to file a scan under. Must match how the rest of the app
+   * buckets a `@db.Date` — the dashboard, the list endpoints and the mobile /
+   * web clients all use the UTC calendar day (see DashboardService.todayUtcDate
+   * and mobile `todayIsoDate`). Keying this off SCHOOL_TZ instead would file a
+   * scan on a different day than the dashboard queries whenever the two dates
+   * disagree (i.e. after UTC midnight but before the local day rolls over), so
+   * a fresh check-in would read back as "not checked in yet". */
+  private todayDate(): Date {
+    return new Date(`${new Date().toISOString().slice(0, 10)}T00:00:00.000Z`);
   }
 
+  /** Wall-clock "is it past the cutoff?" — genuinely a local-time question, so
+   * this one stays in SCHOOL_TZ. It only picks PRESENT vs LATE; it doesn't
+   * decide which day the row belongs to. */
   private isLateNow(): boolean {
     const tz = this.config.get<string>('SCHOOL_TZ') || 'UTC';
     const cutoff = this.config.get<string>('ATT_CUTOFF') || '09:00';

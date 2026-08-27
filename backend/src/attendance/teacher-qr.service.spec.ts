@@ -208,6 +208,18 @@ describe('TeacherQrService.scan', () => {
     expect(prisma.teacherAttendance.create.mock.calls[0][0].data.status).toBe('LATE');
   });
 
+  it('files the row under the UTC calendar day (matches the dashboard/list) even when SCHOOL_TZ has already rolled over', async () => {
+    jest.useFakeTimers().setSystemTime(new Date('2026-08-27T22:00:00.000Z')); // 03:30 next day in IST
+    try {
+      const { service, prisma, jwt } = makeService({ config: { SCHOOL_TZ: 'Asia/Kolkata' } });
+      await service.scan({ token: attToken(jwt, {}) }, actor);
+      const date: Date = prisma.teacherAttendance.create.mock.calls[0][0].data.date;
+      expect(date.toISOString()).toBe('2026-08-27T00:00:00.000Z');
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
   it('passes the scan coordinates to the geofence check', async () => {
     const { service, geofence, jwt } = makeService();
     await service.scan(
