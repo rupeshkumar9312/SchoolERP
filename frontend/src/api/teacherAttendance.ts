@@ -33,3 +33,14 @@ export function markTeacherAttendance(payload: {
 }): Promise<TeacherAttendanceRecord> {
   return apiPost<TeacherAttendanceRecord>('/attendance/teachers', payload);
 }
+
+export interface TeacherSelfServeConfig {
+  /** False once the app is switched to QR-only check-in — hide the manual toggle. */
+  manualMarkEnabled: boolean;
+  /** Non-secret geofence hints for the scan UI; enforcement is server-side. */
+  geofence: { enabled: boolean; maxAccuracyM: number };
+}
+
+export function getTeacherSelfServeConfig(): Promise<TeacherSelfServeConfig> {
+  return apiGet<TeacherSelfServeConfig>('/attendance/teachers/self-serve-config');
+}
