@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Header, Patch, Post, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Header, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
 import type { AuthenticatedUser } from '../auth/auth.types';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { RequirePermission } from '../auth/decorators/require-permission.decorator';
@@ -25,12 +25,14 @@ export class TeacherQrController {
     return this.qr.createKioskSession(actor);
   }
 
-  /** Kiosk polls this (~every rotateSec) for the token to display. */
+  /** Kiosk polls this (~every rotateSec) for the token to display. `mode=out`
+   * returns the check-out QR (400 if check-out is disabled); anything else is
+   * the check-in QR. */
   @Get('teacher-qr/current')
   @UseGuards(KioskTokenGuard)
   @Header('Cache-Control', 'no-store')
-  current(@Req() req: KioskRequest) {
-    return this.qr.getCurrentToken(req.kiosk);
+  current(@Req() req: KioskRequest, @Query('mode') mode?: string) {
+    return this.qr.getCurrentToken(req.kiosk, mode === 'out' ? 'out' : 'in');
   }
 
   /** Teacher scans the on-screen QR from their own device. */

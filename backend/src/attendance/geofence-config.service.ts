@@ -11,22 +11,38 @@ const DEFAULTS = {
   longitude: null as number | null,
   radiusM: 150,
   maxAccuracyM: 75,
+  checkoutEnabled: false,
+  checkoutAutoSwitchAt: null as string | null,
+  minSessionMinutes: 30,
+  allowCheckoutWithoutCheckin: false,
 };
 
-/** Admin-facing shape — the full config. */
+/** Admin-facing shape — the full config (geofence + check-out). */
 export interface GeofenceConfigView {
   enabled: boolean;
   latitude: number | null;
   longitude: number | null;
   radiusM: number;
   maxAccuracyM: number;
+  checkoutEnabled: boolean;
+  checkoutAutoSwitchAt: string | null;
+  minSessionMinutes: number;
+  allowCheckoutWithoutCheckin: boolean;
   updatedAt: string | null;
 }
 
-/** What a teacher's app is allowed to know — just enough to drive the scan UI. */
+/** What a teacher's app is allowed to know about the geofence — just enough to
+ * drive the scan UI. */
 export interface GeofencePublicView {
   enabled: boolean;
   maxAccuracyM: number;
+}
+
+/** What a teacher's app is allowed to know about check-out. */
+export interface CheckoutPublicView {
+  enabled: boolean;
+  minSessionMinutes: number;
+  autoSwitchAt: string | null;
 }
 
 export interface ScanCoords {
@@ -70,6 +86,10 @@ export class GeofenceConfigService {
       longitude: row.longitude,
       radiusM: row.radiusM,
       maxAccuracyM: row.maxAccuracyM,
+      checkoutEnabled: row.checkoutEnabled,
+      checkoutAutoSwitchAt: row.checkoutAutoSwitchAt,
+      minSessionMinutes: row.minSessionMinutes,
+      allowCheckoutWithoutCheckin: row.allowCheckoutWithoutCheckin,
       updatedAt: row.updatedAt.toISOString(),
     };
   }
@@ -77,6 +97,15 @@ export class GeofenceConfigService {
   async getPublic(): Promise<GeofencePublicView> {
     const cfg = await this.get();
     return { enabled: cfg.enabled, maxAccuracyM: cfg.maxAccuracyM };
+  }
+
+  async getCheckoutPublic(): Promise<CheckoutPublicView> {
+    const cfg = await this.get();
+    return {
+      enabled: cfg.checkoutEnabled,
+      minSessionMinutes: cfg.minSessionMinutes,
+      autoSwitchAt: cfg.checkoutAutoSwitchAt,
+    };
   }
 
   async update(dto: UpdateGeofenceConfigDto, actorId: number): Promise<GeofenceConfigView> {
@@ -98,6 +127,10 @@ export class GeofenceConfigService {
       longitude,
       radiusM: dto.radiusM,
       maxAccuracyM: dto.maxAccuracyM,
+      checkoutEnabled: dto.checkoutEnabled ?? false,
+      checkoutAutoSwitchAt: dto.checkoutAutoSwitchAt ?? null,
+      minSessionMinutes: dto.minSessionMinutes ?? DEFAULTS.minSessionMinutes,
+      allowCheckoutWithoutCheckin: dto.allowCheckoutWithoutCheckin ?? false,
       updatedById: actorId,
     };
     const row = await this.prisma.attendanceGeofenceConfig.upsert({
@@ -121,6 +154,10 @@ export class GeofenceConfigService {
       longitude: row.longitude,
       radiusM: row.radiusM,
       maxAccuracyM: row.maxAccuracyM,
+      checkoutEnabled: row.checkoutEnabled,
+      checkoutAutoSwitchAt: row.checkoutAutoSwitchAt,
+      minSessionMinutes: row.minSessionMinutes,
+      allowCheckoutWithoutCheckin: row.allowCheckoutWithoutCheckin,
       updatedAt: row.updatedAt.toISOString(),
     };
   }

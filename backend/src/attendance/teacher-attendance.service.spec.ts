@@ -29,7 +29,12 @@ function makeService(flag: 'true' | 'false' | undefined) {
   const config = {
     get: jest.fn((k: string) => (k === 'TEACHER_MANUAL_MARK_ENABLED' ? flag : undefined)),
   };
-  const geofence = { getPublic: jest.fn().mockResolvedValue({ enabled: false, maxAccuracyM: 75 }) };
+  const geofence = {
+    getPublic: jest.fn().mockResolvedValue({ enabled: false, maxAccuracyM: 75 }),
+    getCheckoutPublic: jest
+      .fn()
+      .mockResolvedValue({ enabled: false, minSessionMinutes: 30, autoSwitchAt: null }),
+  };
   const service = new TeacherAttendanceService(
     prisma as never,
     audit as never,
@@ -48,6 +53,7 @@ describe('TeacherAttendanceService — Phase 5 manual-mark switch', () => {
     await expect(makeService(undefined).service.getSelfServeConfig()).resolves.toEqual({
       manualMarkEnabled: true,
       geofence: { enabled: false, maxAccuracyM: 75 },
+      checkout: { enabled: false, minSessionMinutes: 30, autoSwitchAt: null },
     });
     await expect(makeService('true').service.getSelfServeConfig()).resolves.toMatchObject({
       manualMarkEnabled: true,

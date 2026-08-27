@@ -10,9 +10,14 @@ import { AuditLogService } from '../audit/audit-log.service';
 import { AuthenticatedUser } from '../auth/auth.types';
 import { TEACHER_ROLE } from '../auth/roles.constants';
 import { PrismaService } from '../prisma/prisma.service';
+import { CorrectTeacherAttendanceDto } from './dto/correct-teacher-attendance.dto';
 import { ListTeacherAttendanceQueryDto } from './dto/list-teacher-attendance.query.dto';
 import { MarkTeacherAttendanceDto } from './dto/mark-teacher-attendance.dto';
-import { GeofenceConfigService, type GeofencePublicView } from './geofence-config.service';
+import {
+  GeofenceConfigService,
+  type CheckoutPublicView,
+  type GeofencePublicView,
+} from './geofence-config.service';
 
 export interface TeacherAttendanceView {
   id: number;
@@ -23,6 +28,10 @@ export interface TeacherAttendanceView {
   method: string;
   /** Wall-clock instant the row was set; null for pre-QR historical rows. */
   markedAt: string | null;
+  /** QR check-in / check-out times, and the whole-minute gap between them. */
+  checkInAt: string | null;
+  checkOutAt: string | null;
+  workedMinutes: number | null;
   markedBy: { id: number; name: string };
   createdAt: Date;
   updatedAt: Date;
@@ -56,10 +65,12 @@ export class TeacherAttendanceService {
   async getSelfServeConfig(): Promise<{
     manualMarkEnabled: boolean;
     geofence: GeofencePublicView;
+    checkout: CheckoutPublicView;
   }> {
     return {
       manualMarkEnabled: this.manualMarkEnabled(),
       geofence: await this.geofence.getPublic(),
+      checkout: await this.geofence.getCheckoutPublic(),
     };
   }
 
@@ -108,6 +119,63 @@ export class TeacherAttendanceService {
       entityType: 'TeacherAttendance',
       entityId: row.id,
       action: existing ? 'UPDATE' : 'CREATE',
+      userId: actor.id,
+      oldValues: existing,
+      newValues: row,
+    });
+    return this.toView(row);
+  }
+
+  /** Admin-only. Corrects the check-in / check-out timestamps on one row for a
+   * missed or wrong scan. Teachers can't reach this — they only ever scan. */
+  async correct(
+    id: number,
+    dto: CorrectTeacherAttendanceDto,
+    actor: AuthenticatedUser,
+  ): Promise<TeacherAttendanceView> {
+    if (actor.roleName === TEACHER_ROLE) {
+      throw new ForbiddenException('Only an administrator can correct attendance times.');
+    }
+    const existing = await this.prisma.teacherAttendance.findUnique({
+      where: { id },
+      include: TEACHER_ATTENDANCE_INCLUDE,
+    });
+    if (!existing) throw new NotFoundException('Attendance record not found');
+
+    const data: Prisma.TeacherAttendanceUpdateInput = {};
+    if (dto.checkInAt !== undefined)
+      data.checkInAt = dto.checkInAt ? new Date(dto.checkInAt) : null;
+    if (dto.checkOutAt !== undefined)
+      data.checkOutAt = dto.checkOutAt ? new Date(dto.checkOutAt) : null;
+    if (Object.keys(data).length === 0) {
+      throw new BadRequestException('Nothing to update — provide checkInAt and/or checkOutAt');
+    }
+
+    const nextCheckIn =
+      dto.checkInAt !== undefined
+        ? dto.checkInAt
+          ? new Date(dto.checkInAt)
+          : null
+        : existing.checkInAt;
+    const nextCheckOut =
+      dto.checkOutAt !== undefined
+        ? dto.checkOutAt
+          ? new Date(dto.checkOutAt)
+          : null
+        : existing.checkOutAt;
+    if (nextCheckIn && nextCheckOut && nextCheckOut.getTime() <= nextCheckIn.getTime()) {
+      throw new BadRequestException('Check-out must be after check-in.');
+    }
+
+    const row = await this.prisma.teacherAttendance.update({
+      where: { id },
+      data,
+      include: TEACHER_ATTENDANCE_INCLUDE,
+    });
+    await this.audit.record({
+      entityType: 'TeacherAttendance',
+      entityId: row.id,
+      action: 'UPDATE',
       userId: actor.id,
       oldValues: existing,
       newValues: row,
@@ -173,6 +241,10 @@ export class TeacherAttendanceService {
   }
 
   private toView(row: TeacherAttendanceWithRefs): TeacherAttendanceView {
+    const workedMinutes =
+      row.checkInAt && row.checkOutAt
+        ? Math.round((row.checkOutAt.getTime() - row.checkInAt.getTime()) / 60_000)
+        : null;
     return {
       id: row.id,
       teacher: { id: row.teacher.id, name: row.teacher.user.name },
@@ -180,6 +252,9 @@ export class TeacherAttendanceService {
       status: row.status,
       method: row.method,
       markedAt: row.markedAt ? row.markedAt.toISOString() : null,
+      checkInAt: row.checkInAt ? row.checkInAt.toISOString() : null,
+      checkOutAt: row.checkOutAt ? row.checkOutAt.toISOString() : null,
+      workedMinutes,
       markedBy: { id: row.markedBy.id, name: row.markedBy.name },
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,

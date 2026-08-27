@@ -124,4 +124,26 @@ describe('GeofenceConfigService.update', () => {
     expect(res).toMatchObject({ enabled: true, latitude: LAT, longitude: LNG, radiusM: 200 });
     expect(prisma.attendanceGeofenceConfig.upsert).toHaveBeenCalled();
   });
+
+  it('persists the check-out settings and exposes them via getCheckoutPublic', async () => {
+    const { service, prisma } = makeService(null);
+    const res = await service.update(
+      {
+        enabled: false,
+        radiusM: 150,
+        maxAccuracyM: 75,
+        checkoutEnabled: true,
+        checkoutAutoSwitchAt: '13:00',
+        minSessionMinutes: 45,
+      },
+      9,
+    );
+    expect(res).toMatchObject({
+      checkoutEnabled: true,
+      checkoutAutoSwitchAt: '13:00',
+      minSessionMinutes: 45,
+    });
+    const written = prisma.attendanceGeofenceConfig.upsert.mock.calls[0][0].update;
+    expect(written).toMatchObject({ checkoutEnabled: true, minSessionMinutes: 45 });
+  });
 });

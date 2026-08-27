@@ -361,10 +361,23 @@ model TeacherAttendance {
   /// never re-validated. Null for MANUAL/ADMIN.
   sourceJti  String?
   /// Optional geofence capture from the scanning device (Phase 6). Null until
-  /// the mobile app starts sending coordinates.
+  /// the mobile app starts sending coordinates. These hold the *check-in*
+  /// location; the check-out counterparts are below.
   markedLat       Float?
   markedLng       Float?
   markedAccuracyM Float?
+  /// First QR check-in of the day (POST /attendance/teachers/scan, dir=in).
+  /// Backfilled to markedAt for every pre-check-out QR row.
+  checkInAt         DateTime?
+  /// Last QR check-out of the day (dir=out). Null until the teacher scans out.
+  /// Worked hours are computed as checkOutAt - checkInAt, never stored.
+  checkOutAt        DateTime?
+  /// Geofence capture for the check-out scan (mirrors markedLat/Lng/AccuracyM).
+  checkOutLat        Float?
+  checkOutLng        Float?
+  checkOutAccuracyM  Float?
+  /// jti of the check-out token — traceability only (mirrors sourceJti).
+  checkOutSourceJti String?
   markedById Int
   markedBy   User             @relation("TeacherAttendanceMarkedBy", fields: [markedById], references: [id], onDelete: Restrict)
   createdAt  DateTime         @default(now())
@@ -391,11 +404,10 @@ model AttendanceQrConsumption {
   @@map("attendance_qr_consumption")
 }
 
-/// Singleton (id is always 1) — the DB-editable geofence for QR check-in.
-/// Admins set this from the web; the mobile app sends coordinates on scan and
-/// the backend rejects a scan that is outside `radiusM`, has a GPS accuracy
-/// worse than `maxAccuracyM`, or is flagged as a mock location. `enabled`
-/// gates the whole check, so leaving it off keeps QR check-in location-free.
+/// Singleton (id is always 1) — the DB-editable settings for QR check-in:
+/// the campus geofence and the check-out behaviour. Admins set this from the
+/// web. `enabled` gates the geofence, `checkoutEnabled` gates the check-out QR;
+/// leaving both off keeps QR check-in exactly as it shipped.
 model AttendanceGeofenceConfig {
   id           Int      @id @default(1)
   enabled      Boolean  @default(false)
@@ -407,6 +419,16 @@ model AttendanceGeofenceConfig {
   radiusM      Int      @default(150)
   /// Worst GPS accuracy radius (metres) a scan may report and still be trusted.
   maxAccuracyM Int      @default(75)
+  /// Master switch for the second (check-out) QR. Off = kiosk only shows the
+  /// check-in QR, identical to the pre-check-out system.
+  checkoutEnabled             Boolean @default(false)
+  /// "HH:mm" in SCHOOL_TZ — the kiosk auto-switches its QR to check-out at or
+  /// after this local time. Null = the kiosk switches only on a manual toggle.
+  checkoutAutoSwitchAt        String?
+  /// Reject a check-out scanned sooner than this many minutes after check-in.
+  minSessionMinutes           Int     @default(30)
+  /// When false (default) a check-out with no check-in that day is rejected.
+  allowCheckoutWithoutCheckin Boolean @default(false)
   /// Plain column, no FK — mirrors AttendanceQrConsumption.teacherId. Just the
   /// last admin to save, for the audit trail.
   updatedById  Int?

@@ -18,9 +18,14 @@ import type { KioskTokenClaims } from './guards/kiosk-token.guard';
 import { ScanTeacherAttendanceDto } from './dto/scan-teacher-attendance.dto';
 import { GeofenceConfigService } from './geofence-config.service';
 
+export type ScanDirection = 'in' | 'out';
+
 /** Claims inside the rotating QR token. */
 interface AttendanceTokenClaims {
   typ: 'teacher-att';
+  /** Which QR the kiosk was showing. Absent ⇒ 'in', so a kiosk build from
+   * before check-out existed keeps working as a check-in. */
+  dir?: ScanDirection;
   /** Unique per token — the half of the per-teacher replay key. */
   jti: string;
   /** Display/location id, copied from the kiosk session that issued it. */
@@ -37,6 +42,8 @@ export interface KioskSessionResult {
 export interface CurrentQrResult {
   /** The compact JWT to render as a QR. */
   token: string;
+  /** Which QR this is — the kiosk shows the matching label. */
+  dir: ScanDirection;
   issuedAt: string;
   expiresAt: string;
   ttlSec: number;
@@ -52,9 +59,15 @@ export interface ScanResult {
   date: string;
   status: string;
   method: string;
+  /** What this scan did. */
+  event: 'CHECK_IN' | 'CHECK_OUT';
+  checkInAt: string | null;
+  checkOutAt: string | null;
+  /** checkOutAt − checkInAt in whole minutes, when both are known. */
+  workedMinutes: number | null;
   markedAt: string | null;
   markedBy: { id: number; name: string };
-  /** True when a row for today already existed — the scan was a no-op confirmation. */
+  /** True when this exact event was already recorded — the scan was a no-op. */
   alreadyMarked: boolean;
 }
 
@@ -64,6 +77,17 @@ const ATTENDANCE_INCLUDE = {
 } as const;
 
 type AttendanceRow = Prisma.TeacherAttendanceGetPayload<{ include: typeof ATTENDANCE_INCLUDE }>;
+
+interface ApplyContext {
+  existing: AttendanceRow | null;
+  teacher: { id: number };
+  actor: AuthenticatedUser;
+  dto: ScanTeacherAttendanceDto;
+  jti: string;
+  now: Date;
+  date: Date;
+  alreadyScannedToken: boolean;
+}
 
 @Injectable()
 export class TeacherQrService {
@@ -101,17 +125,29 @@ export class TeacherQrService {
 
   /** Kiosk pulls the token it should be showing right now. Stateless — nothing
    * is persisted here; the replay guard lives entirely on the scan side. */
-  async getCurrentToken(kiosk: KioskTokenClaims): Promise<CurrentQrResult> {
+  async getCurrentToken(
+    kiosk: KioskTokenClaims,
+    mode: ScanDirection = 'in',
+  ): Promise<CurrentQrResult> {
     const secret = this.requireSecret();
+    if (mode === 'out' && !(await this.geofence.get()).checkoutEnabled) {
+      throw new BadRequestException('Check-out is not enabled for this school.');
+    }
     const ttlSec = this.config.get<number>('ATT_QR_TOKEN_TTL_SEC') ?? 25;
     const rotateSec = this.config.get<number>('ATT_QR_ROTATE_SEC') ?? 12;
 
     const now = Date.now();
-    const claims: AttendanceTokenClaims = { typ: 'teacher-att', jti: randomUUID(), sid: kiosk.sid };
+    const claims: AttendanceTokenClaims = {
+      typ: 'teacher-att',
+      dir: mode,
+      jti: randomUUID(),
+      sid: kiosk.sid,
+    };
     const token = await this.jwt.signAsync(claims, { secret, expiresIn: ttlSec });
 
     return {
       token,
+      dir: mode,
       issuedAt: new Date(now).toISOString(),
       expiresAt: new Date(now + ttlSec * 1000).toISOString(),
       ttlSec,
@@ -141,6 +177,7 @@ export class TeacherQrService {
     if (claims.typ !== 'teacher-att' || !claims.jti) {
       throw new UnauthorizedException('This QR code is not valid.');
     }
+    const dir: ScanDirection = claims.dir === 'out' ? 'out' : 'in';
 
     // 2. The caller must be an active teacher.
     if (actor.roleName !== TEACHER_ROLE) {
@@ -157,9 +194,9 @@ export class TeacherQrService {
       throw new ForbiddenException('This teacher account is inactive.');
     }
 
-    // 2b. Geofence (no-op unless an admin has enabled it). Checked before the
-    //     replay guard so a teacher standing at the wrong spot doesn't burn the
-    //     token and then have to wait for the next one.
+    // 3. Geofence (no-op unless an admin has enabled it). Checked before the
+    //    replay guard so a teacher standing at the wrong spot doesn't burn the
+    //    token and then have to wait for the next one.
     const geo = await this.geofence.check({
       lat: dto.lat,
       lng: dto.lng,
@@ -171,9 +208,34 @@ export class TeacherQrService {
       throw new BadRequestException(geo.message);
     }
 
-    // 3. Replay guard: one token, one check-in per teacher. A P2002 here means
-    //    this teacher already scanned this token — fall through to return the
-    //    existing row so a double-tap reads as an idempotent success.
+    // 4. Load today's row and pre-validate the direction *before* consuming the
+    //    token, so a rejected check-out doesn't burn it.
+    const now = new Date();
+    const date = this.schoolToday();
+    const existing = await this.prisma.teacherAttendance.findUnique({
+      where: { teacherId_date: { teacherId: teacher.id, date } },
+      include: ATTENDANCE_INCLUDE,
+    });
+
+    if (dir === 'out') {
+      const settings = await this.geofence.get();
+      if (!existing || existing.checkInAt == null) {
+        if (!settings.allowCheckoutWithoutCheckin) {
+          throw new BadRequestException('Check in first before checking out.');
+        }
+      } else {
+        const minsSinceCheckIn = Math.round(
+          (now.getTime() - existing.checkInAt.getTime()) / 60_000,
+        );
+        if (minsSinceCheckIn < settings.minSessionMinutes) {
+          throw new BadRequestException(
+            `You checked in ${minsSinceCheckIn} min ago — you can check out after ${settings.minSessionMinutes} min.`,
+          );
+        }
+      }
+    }
+
+    // 5. Replay guard: one token, one action per teacher.
     let alreadyScannedToken = false;
     try {
       await this.prisma.attendanceQrConsumption.create({
@@ -188,23 +250,62 @@ export class TeacherQrService {
     }
     this.pruneConsumed();
 
-    // 4. Upsert-or-return today's attendance row. An existing row (manual mark,
-    //    admin correction, earlier scan) is never overwritten.
-    const date = this.schoolToday();
-    const existing = await this.prisma.teacherAttendance.findUnique({
-      where: { teacherId_date: { teacherId: teacher.id, date } },
-      include: ATTENDANCE_INCLUDE,
-    });
+    // 6. Write.
+    const ctx: ApplyContext = {
+      existing,
+      teacher,
+      actor,
+      dto,
+      jti: claims.jti,
+      now,
+      date,
+      alreadyScannedToken,
+    };
+    return dir === 'out' ? this.applyCheckOut(ctx) : this.applyCheckIn(ctx);
+  }
+
+  // --- write paths -------------------------------------------------------
+
+  private async applyCheckIn(ctx: ApplyContext): Promise<ScanResult> {
+    const { existing, teacher, actor, dto, jti, now, date, alreadyScannedToken } = ctx;
+
     if (existing) {
-      return this.toResult(existing, true);
-    }
-    if (alreadyScannedToken) {
-      // Consumed but somehow no row — recreate below rather than 409.
-      this.logger.warn(
-        `QR token ${claims.jti} was consumed by teacher ${teacher.id} but no attendance row exists; recreating`,
-      );
+      if (existing.checkInAt != null) {
+        return this.toResult(existing, 'CHECK_IN', true); // idempotent — already checked in
+      }
+      // Row exists (manual/admin mark, or ABSENT/LEAVE) with no check-in yet — fill it.
+      const flipStatus = existing.status === 'ABSENT' || existing.status === 'LEAVE';
+      const row = await this.prisma.teacherAttendance.update({
+        where: { id: existing.id },
+        data: {
+          checkInAt: now,
+          method: 'QR',
+          markedAt: now,
+          sourceJti: jti,
+          markedLat: dto.lat ?? null,
+          markedLng: dto.lng ?? null,
+          markedAccuracyM: dto.accuracy ?? null,
+          markedById: actor.id,
+          ...(flipStatus ? { status: this.isLateNow() ? 'LATE' : 'PRESENT' } : {}),
+        },
+        include: ATTENDANCE_INCLUDE,
+      });
+      await this.audit.record({
+        entityType: 'TeacherAttendance',
+        entityId: row.id,
+        action: 'UPDATE',
+        userId: actor.id,
+        oldValues: existing,
+        newValues: row,
+      });
+      return this.toResult(row, 'CHECK_IN', false);
     }
 
+    if (alreadyScannedToken) {
+      this.logger.warn(
+        `QR token ${jti} was consumed by teacher ${teacher.id} but no attendance row exists; recreating`,
+      );
+    }
     const status = this.isLateNow() ? 'LATE' : 'PRESENT';
     const row = await this.prisma.teacherAttendance.create({
       data: {
@@ -212,8 +313,9 @@ export class TeacherQrService {
         date,
         status,
         method: 'QR',
-        markedAt: new Date(),
-        sourceJti: claims.jti,
+        markedAt: now,
+        checkInAt: now,
+        sourceJti: jti,
         markedLat: dto.lat ?? null,
         markedLng: dto.lng ?? null,
         markedAccuracyM: dto.accuracy ?? null,
@@ -221,7 +323,6 @@ export class TeacherQrService {
       },
       include: ATTENDANCE_INCLUDE,
     });
-
     await this.audit.record({
       entityType: 'TeacherAttendance',
       entityId: row.id,
@@ -229,8 +330,66 @@ export class TeacherQrService {
       userId: actor.id,
       newValues: row,
     });
+    return this.toResult(row, 'CHECK_IN', false);
+  }
 
-    return this.toResult(row, false);
+  private async applyCheckOut(ctx: ApplyContext): Promise<ScanResult> {
+    const { existing, teacher, actor, dto, jti, now, date, alreadyScannedToken } = ctx;
+
+    if (alreadyScannedToken && existing?.checkOutAt != null) {
+      return this.toResult(existing, 'CHECK_OUT', true); // replay of the same out-token
+    }
+
+    if (!existing) {
+      // Only reachable with allowCheckoutWithoutCheckin — record a bare check-out.
+      const status = this.isLateNow() ? 'LATE' : 'PRESENT';
+      const row = await this.prisma.teacherAttendance.create({
+        data: {
+          teacherId: teacher.id,
+          date,
+          status,
+          method: 'QR',
+          markedAt: now,
+          checkOutAt: now,
+          checkOutSourceJti: jti,
+          checkOutLat: dto.lat ?? null,
+          checkOutLng: dto.lng ?? null,
+          checkOutAccuracyM: dto.accuracy ?? null,
+          markedById: actor.id,
+        },
+        include: ATTENDANCE_INCLUDE,
+      });
+      await this.audit.record({
+        entityType: 'TeacherAttendance',
+        entityId: row.id,
+        action: 'CREATE',
+        userId: actor.id,
+        newValues: row,
+      });
+      return this.toResult(row, 'CHECK_OUT', false);
+    }
+
+    // Last-out-wins: overwrite checkOutAt even if it was already set.
+    const row = await this.prisma.teacherAttendance.update({
+      where: { id: existing.id },
+      data: {
+        checkOutAt: now,
+        checkOutSourceJti: jti,
+        checkOutLat: dto.lat ?? null,
+        checkOutLng: dto.lng ?? null,
+        checkOutAccuracyM: dto.accuracy ?? null,
+      },
+      include: ATTENDANCE_INCLUDE,
+    });
+    await this.audit.record({
+      entityType: 'TeacherAttendance',
+      entityId: row.id,
+      action: 'UPDATE',
+      userId: actor.id,
+      oldValues: existing,
+      newValues: row,
+    });
+    return this.toResult(row, 'CHECK_OUT', false);
   }
 
   // --- helpers --------------------------------------------------------------
@@ -279,13 +438,25 @@ export class TeacherQrService {
       );
   }
 
-  private toResult(row: AttendanceRow, alreadyMarked: boolean): ScanResult {
+  private toResult(
+    row: AttendanceRow,
+    event: 'CHECK_IN' | 'CHECK_OUT',
+    alreadyMarked: boolean,
+  ): ScanResult {
+    const workedMinutes =
+      row.checkInAt && row.checkOutAt
+        ? Math.round((row.checkOutAt.getTime() - row.checkInAt.getTime()) / 60_000)
+        : null;
     return {
       id: row.id,
       teacher: { id: row.teacher.id, name: row.teacher.user.name },
       date: row.date.toISOString().slice(0, 10),
       status: row.status,
       method: row.method,
+      event,
+      checkInAt: row.checkInAt ? row.checkInAt.toISOString() : null,
+      checkOutAt: row.checkOutAt ? row.checkOutAt.toISOString() : null,
+      workedMinutes,
       markedAt: row.markedAt ? row.markedAt.toISOString() : null,
       markedBy: { id: row.markedBy.id, name: row.markedBy.name },
       alreadyMarked,

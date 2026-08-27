@@ -16,9 +16,10 @@ function makeService(
   overrides: {
     config?: ConfigMap;
     teacher?: unknown;
-    existingRow?: unknown;
+    existingRow?: Record<string, unknown> | null;
     consumptionCreate?: () => Promise<unknown>;
     geofenceCheck?: unknown;
+    geofenceConfig?: Record<string, unknown>;
   } = {},
 ) {
   const config = {
@@ -59,6 +60,18 @@ function makeService(
           markedBy: { id: 42, name: 'Ananya' },
         }),
       ),
+      update: jest
+        .fn()
+        .mockImplementation(
+          ({ where, data }: { where: { id: number }; data: Record<string, unknown> }) =>
+            Promise.resolve({
+              ...(overrides.existingRow ?? {}),
+              id: where.id,
+              ...data,
+              teacher: { id: 7, user: { name: 'Ananya' } },
+              markedBy: { id: 42, name: 'Ananya' },
+            }),
+        ),
     },
   };
 
@@ -67,6 +80,14 @@ function makeService(
   const configService = { get: jest.fn((k: string) => config[k]) };
   const geofence = {
     check: jest.fn().mockResolvedValue(overrides.geofenceCheck ?? { ok: true }),
+    get: jest.fn().mockResolvedValue({
+      enabled: false,
+      checkoutEnabled: true,
+      checkoutAutoSwitchAt: null,
+      minSessionMinutes: 30,
+      allowCheckoutWithoutCheckin: false,
+      ...(overrides.geofenceConfig ?? {}),
+    }),
   };
 
   const service = new TeacherQrService(
@@ -221,12 +242,14 @@ describe('TeacherQrService.scan', () => {
     expect(prisma.attendanceQrConsumption.create).not.toHaveBeenCalled();
   });
 
-  it('is idempotent when a row for today already exists — no overwrite', async () => {
+  it('is idempotent when the teacher has already checked in today — no write', async () => {
     const existingRow = {
       id: 55,
       status: 'PRESENT',
-      method: 'MANUAL',
+      method: 'QR',
       markedAt: new Date('2026-08-27T03:30:00.000Z'),
+      checkInAt: new Date('2026-08-27T03:30:00.000Z'),
+      checkOutAt: null,
       date: new Date('2026-08-27T00:00:00.000Z'),
       teacher: { id: 7, user: { name: 'Ananya' } },
       markedBy: { id: 1, name: 'Admin' },
@@ -234,7 +257,29 @@ describe('TeacherQrService.scan', () => {
     const { service, prisma, jwt } = makeService({ existingRow });
     const res = await service.scan({ token: attToken(jwt, {}) }, actor);
     expect(prisma.teacherAttendance.create).not.toHaveBeenCalled();
-    expect(res).toMatchObject({ id: 55, alreadyMarked: true, method: 'MANUAL' });
+    expect(prisma.teacherAttendance.update).not.toHaveBeenCalled();
+    expect(res).toMatchObject({ id: 55, event: 'CHECK_IN', alreadyMarked: true });
+  });
+
+  it('a check-in on a manual row with no checkInAt fills it and flips method to QR', async () => {
+    const existingRow = {
+      id: 55,
+      status: 'ABSENT',
+      method: 'MANUAL',
+      markedAt: new Date('2026-08-27T02:00:00.000Z'),
+      checkInAt: null,
+      checkOutAt: null,
+      date: new Date('2026-08-27T00:00:00.000Z'),
+      teacher: { id: 7, user: { name: 'Ananya' } },
+      markedBy: { id: 1, name: 'Admin' },
+    };
+    const { service, prisma, jwt } = makeService({ existingRow, config: { ATT_CUTOFF: '23:59' } });
+    const res = await service.scan({ token: attToken(jwt, {}) }, actor);
+    expect(prisma.teacherAttendance.create).not.toHaveBeenCalled();
+    const patch = prisma.teacherAttendance.update.mock.calls[0][0].data;
+    expect(patch).toMatchObject({ method: 'QR', status: 'PRESENT' });
+    expect(patch.checkInAt).toBeInstanceOf(Date);
+    expect(res).toMatchObject({ event: 'CHECK_IN', alreadyMarked: false });
   });
 
   it('treats a replayed token (P2002 on consumption) as an idempotent confirmation', async () => {
@@ -243,6 +288,8 @@ describe('TeacherQrService.scan', () => {
       status: 'PRESENT',
       method: 'QR',
       markedAt: new Date(),
+      checkInAt: new Date(),
+      checkOutAt: null,
       date: new Date('2026-08-27T00:00:00.000Z'),
       teacher: { id: 7, user: { name: 'Ananya' } },
       markedBy: { id: 42, name: 'Ananya' },
@@ -261,18 +308,96 @@ describe('TeacherQrService.scan', () => {
   });
 });
 
+const OUT_TOKEN = { dir: 'out' as const };
+
+describe('TeacherQrService.scan — check-out', () => {
+  const checkedInRow = {
+    id: 55,
+    status: 'PRESENT',
+    method: 'QR',
+    markedAt: new Date(Date.now() - 4 * 60 * 60 * 1000),
+    checkInAt: new Date(Date.now() - 4 * 60 * 60 * 1000),
+    checkOutAt: null,
+    date: new Date('2026-08-27T00:00:00.000Z'),
+    teacher: { id: 7, user: { name: 'Ananya' } },
+    markedBy: { id: 42, name: 'Ananya' },
+  };
+
+  it('rejects a check-out when the teacher has not checked in', async () => {
+    const { service, prisma, jwt } = makeService({ existingRow: null });
+    await expect(service.scan({ token: attToken(jwt, OUT_TOKEN) }, actor)).rejects.toBeInstanceOf(
+      BadRequestException,
+    );
+    expect(prisma.attendanceQrConsumption.create).not.toHaveBeenCalled();
+  });
+
+  it('rejects a check-out inside the minimum session window', async () => {
+    const freshRow = { ...checkedInRow, checkInAt: new Date(Date.now() - 5 * 60 * 1000) };
+    const { service, prisma, jwt } = makeService({
+      existingRow: freshRow,
+      geofenceConfig: { checkoutEnabled: true, minSessionMinutes: 30 },
+    });
+    await expect(service.scan({ token: attToken(jwt, OUT_TOKEN) }, actor)).rejects.toBeInstanceOf(
+      BadRequestException,
+    );
+    expect(prisma.attendanceQrConsumption.create).not.toHaveBeenCalled();
+  });
+
+  it('records the check-out and returns worked minutes', async () => {
+    const { service, prisma, jwt } = makeService({ existingRow: checkedInRow });
+    const res = await service.scan({ token: attToken(jwt, OUT_TOKEN) }, actor);
+    const patch = prisma.teacherAttendance.update.mock.calls[0][0].data;
+    expect(patch.checkOutAt).toBeInstanceOf(Date);
+    expect(patch.checkOutSourceJti).toBe('jti-1');
+    expect(res.event).toBe('CHECK_OUT');
+    expect(res.workedMinutes).toBeGreaterThanOrEqual(239); // ~4h
+    expect(res.alreadyMarked).toBe(false);
+  });
+
+  it('a replayed check-out token is an idempotent confirmation', async () => {
+    const alreadyOut = { ...checkedInRow, checkOutAt: new Date() };
+    const p2002 = new Prisma.PrismaClientKnownRequestError('dup', {
+      code: 'P2002',
+      clientVersion: 'test',
+    });
+    const { service, prisma, jwt } = makeService({
+      existingRow: alreadyOut,
+      consumptionCreate: () => Promise.reject(p2002),
+    });
+    const res = await service.scan({ token: attToken(jwt, OUT_TOKEN) }, actor);
+    expect(prisma.teacherAttendance.update).not.toHaveBeenCalled();
+    expect(res).toMatchObject({ event: 'CHECK_OUT', alreadyMarked: true });
+  });
+});
+
 describe('TeacherQrService token issuance', () => {
   it('getCurrentToken issues a teacher-att token that verifies and carries the kiosk sid', async () => {
     const { service, jwt } = makeService();
     const res = await service.getCurrentToken({ typ: 'kiosk', sid: 'kiosk-9', by: 1 });
-    const decoded = jwt.verify<{ typ: string; sid: string; jti: string }>(res.token, {
+    const decoded = jwt.verify<{ typ: string; sid: string; jti: string; dir: string }>(res.token, {
       secret: SECRET,
     });
     expect(decoded.typ).toBe('teacher-att');
     expect(decoded.sid).toBe('kiosk-9');
+    expect(decoded.dir).toBe('in');
+    expect(res.dir).toBe('in');
     expect(decoded.jti).toEqual(expect.any(String));
     expect(new Date(res.expiresAt).getTime()).toBeGreaterThan(Date.now());
     expect(res.rotateSec).toBeLessThan(res.ttlSec);
+  });
+
+  it('getCurrentToken(mode="out") signs a dir=out token when check-out is enabled', async () => {
+    const { service, jwt } = makeService({ geofenceConfig: { checkoutEnabled: true } });
+    const res = await service.getCurrentToken({ typ: 'kiosk', sid: 'k', by: 1 }, 'out');
+    expect(res.dir).toBe('out');
+    expect(jwt.verify<{ dir: string }>(res.token, { secret: SECRET }).dir).toBe('out');
+  });
+
+  it('getCurrentToken(mode="out") is rejected when check-out is disabled', async () => {
+    const { service } = makeService({ geofenceConfig: { checkoutEnabled: false } });
+    await expect(
+      service.getCurrentToken({ typ: 'kiosk', sid: 'k', by: 1 }, 'out'),
+    ).rejects.toBeInstanceOf(BadRequestException);
   });
 
   it('createKioskSession issues a verifiable kiosk token and audits it', async () => {
