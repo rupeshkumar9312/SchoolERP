@@ -19,6 +19,8 @@ import { ExamMarksEntryPage } from './pages/ExamMarksEntryPage';
 import { ExamReportCardPage } from './pages/ExamReportCardPage';
 import { ExamSchedulePage } from './pages/ExamSchedulePage';
 import { ExamsListPage } from './pages/ExamsListPage';
+import { GeofenceSettingsPage } from './pages/GeofenceSettingsPage';
+import { KioskPage } from './kiosk/KioskPage';
 import { LoginHistoryPage } from './pages/LoginHistoryPage';
 import { LoginPage } from './pages/LoginPage';
 import { MarkAttendancePage } from './pages/MarkAttendancePage';
@@ -51,6 +53,9 @@ function App() {
           <ConfirmDialogProvider>
             <Routes>
           <Route path="/login" element={<LoginPage />} />
+          {/* Standalone, full-screen. Runs on a shared display device with its
+              own kiosk-session token — no user session on this device. */}
+          <Route path="/kiosk" element={<KioskPage />} />
           <Route element={<ProtectedRoute />}>
             <Route path="/change-password" element={<ChangePasswordPage />} />
           </Route>
@@ -110,6 +115,9 @@ function App() {
               <Route path="/my-attendance" element={<MyAttendancePage />} />
               <Route element={<ProtectedRoute permission="teacher.view" />}>
                 <Route path="/staff-attendance" element={<StaffAttendancePage />} />
+              </Route>
+              <Route element={<ProtectedRoute permission="attendance.teacher.qr.manage" />}>
+                <Route path="/attendance/qr-geofence" element={<GeofenceSettingsPage />} />
               </Route>
 
               <Route element={<ProtectedRoute permission="academic.view" />}>

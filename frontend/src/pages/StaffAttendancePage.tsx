@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import type { AttendanceStatus } from '../api/attendance';
 import { ApiError } from '../api/client';
+import { useAuth } from '../auth/useAuth';
 import { MAX_ROSTER_PAGE_SIZE } from '../api/pagination';
 import type { Teacher } from '../api/teachers';
 import { listTeachers } from '../api/teachers';
@@ -12,6 +14,7 @@ import { EmptyState } from '../components/EmptyState';
 import { TableSkeleton } from '../components/Skeleton';
 
 export function StaffAttendancePage() {
+  const { hasPermission } = useAuth();
   const [date, setDate] = useState(todayUtcDate());
   const [teachers, setTeachers] = useState<Teacher[]>([]);
   const [records, setRecords] = useState<TeacherAttendanceRecord[]>([]);
@@ -59,6 +62,17 @@ export function StaffAttendancePage() {
     <>
       <h1>Staff Attendance</h1>
       <p className="subtitle">Filter by date and mark or correct any teacher's attendance.</p>
+
+      {hasPermission('attendance.teacher.qr.manage') && (
+        <p className="subtitle">
+          <Link to="/kiosk" target="_blank" rel="noopener">
+            Open the QR check-in kiosk ↗
+          </Link>{' '}
+          — run this on a screen at the staff entrance so teachers scan to mark themselves present.
+          {' · '}
+          <Link to="/attendance/qr-geofence">Geofence settings</Link>
+        </p>
+      )}
 
       <div className="filter-bar">
         <label className="field">
