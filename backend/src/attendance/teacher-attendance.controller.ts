@@ -19,6 +19,14 @@ export class TeacherAttendanceController {
     return this.attendance.findAll(query, actor);
   }
 
+  /** Lets the teacher self-mark UIs (web /my-attendance, mobile) hide the manual
+   * controls when Phase 5 has switched the app to QR-only check-in. */
+  @Get('self-serve-config')
+  @RequirePermission('attendance.teacher.mark')
+  selfServeConfig() {
+    return this.attendance.getSelfServeConfig();
+  }
+
   @Post()
   @RequirePermission('attendance.teacher.mark')
   mark(@Body() dto: MarkTeacherAttendanceDto, @CurrentUser() actor: AuthenticatedUser) {
