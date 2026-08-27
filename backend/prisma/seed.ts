@@ -28,6 +28,7 @@ const PERMISSIONS: Array<{ key: string; description: string }> = [
   { key: 'attendance.student.edit', description: 'Edit an existing student attendance record' },
   { key: 'attendance.teacher.view', description: 'View staff attendance records' },
   { key: 'attendance.teacher.mark', description: 'Mark staff attendance (own, or any staff member for admins)' },
+  { key: 'attendance.teacher.qr.manage', description: 'Provision and revoke QR-attendance kiosk display sessions' },
   { key: 'assignment.view', description: 'View class assignments (own for a teacher, all for admin roles)' },
   { key: 'assignment.create', description: 'Create a class assignment' },
   { key: 'assignment.edit', description: 'Edit a class assignment (teacher may only edit their own)' },
