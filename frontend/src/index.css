@@ -7,7 +7,11 @@
 :root {
   color-scheme: light dark;
 
-  /* Dark theme is the default palette; the light media query below overrides it. */
+  /* Dark theme is the default/base palette. The @media query below
+     applies light tokens when the OS prefers light — but only until the
+     user makes an explicit choice via the topbar toggle (ThemeProvider),
+     which stamps [data-theme] on <html> and is handled in its own block
+     further down so it always wins over the OS setting. */
   --color-bg: #0a0e1a;
   --color-surface: #131a2b;
   --color-surface-hover: #182140;
@@ -139,6 +143,21 @@ select {
   color-scheme: light dark;
 }
 
+/* Without this, native chrome (date-picker popups, scrollbars) keeps
+   following the OS scheme even after an explicit in-app toggle, since
+   color-scheme otherwise only ever says "either is fine, you pick." */
+:root[data-theme='light'],
+:root[data-theme='light'] input,
+:root[data-theme='light'] select {
+  color-scheme: light;
+}
+
+:root[data-theme='dark'],
+:root[data-theme='dark'] input,
+:root[data-theme='dark'] select {
+  color-scheme: dark;
+}
+
 input[type='checkbox'] {
   accent-color: var(--color-primary);
   width: 1.05rem;
@@ -175,16 +194,21 @@ code {
   display: none;
 }
 
+/* System preference — applies only until the user picks a theme explicitly
+   via the topbar toggle. :not([data-theme="dark"]) is what lets an
+   explicit dark choice override an OS "light" setting; explicit light is
+   handled below, outside the media query, so it overrides an OS "dark"
+   setting too. */
 @media (prefers-color-scheme: light) {
-  .theme-dark-only {
+  :root:not([data-theme='dark']) .theme-dark-only {
     display: none;
   }
 
-  .theme-light-only {
+  :root:not([data-theme='dark']) .theme-light-only {
     display: block;
   }
 
-  :root {
+  :root:not([data-theme='dark']) {
     --color-bg: #f6f7fb;
     --color-surface: #ffffff;
     --color-surface-hover: #f1f2fa;
@@ -213,11 +237,59 @@ code {
     --surface-glass: rgba(255, 255, 255, 0.72);
   }
 
-  body {
+  :root:not([data-theme='dark']) body {
     background:
       radial-gradient(1100px circle at 8% -10%, rgba(0, 76, 151, 0.06), transparent 42%),
       radial-gradient(900px circle at 92% 0%, rgba(0, 122, 83, 0.05), transparent 40%),
       var(--color-bg);
     background-attachment: fixed;
   }
+}
+
+/* Explicit light — set by ThemeProvider regardless of OS preference, so
+   it wins even when the system is set to dark. Same tokens as the system
+   ("prefers-color-scheme: light") branch above, just unconditional. */
+:root[data-theme='light'] {
+  --color-bg: #f6f7fb;
+  --color-surface: #ffffff;
+  --color-surface-hover: #f1f2fa;
+  --color-border: rgba(15, 23, 42, 0.09);
+  --color-text: #171b2e;
+  --color-text-muted: #64748b;
+
+  --color-primary: #004c97;
+  --color-primary-hover: #003d7a;
+  --color-primary-contrast: #ffffff;
+  --color-primary-tint: rgba(0, 76, 151, 0.08);
+
+  --color-success: #007a53;
+  --color-success-tint: rgba(0, 122, 83, 0.1);
+  --color-danger: #dc2626;
+  --color-danger-tint: rgba(220, 38, 38, 0.1);
+  --color-warning: #d97706;
+  --color-warning-tint: rgba(217, 119, 6, 0.1);
+  --color-info: #1d6fb8;
+  --color-info-tint: rgba(29, 111, 184, 0.09);
+
+  --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.06);
+  --shadow-md: 0 16px 32px rgba(15, 23, 42, 0.08);
+  --shadow-lg: 0 32px 64px rgba(15, 23, 42, 0.16);
+
+  --surface-glass: rgba(255, 255, 255, 0.72);
+}
+
+:root[data-theme='light'] body {
+  background:
+    radial-gradient(1100px circle at 8% -10%, rgba(0, 76, 151, 0.06), transparent 42%),
+    radial-gradient(900px circle at 92% 0%, rgba(0, 122, 83, 0.05), transparent 40%),
+    var(--color-bg);
+  background-attachment: fixed;
+}
+
+:root[data-theme='light'] .theme-dark-only {
+  display: none;
+}
+
+:root[data-theme='light'] .theme-light-only {
+  display: block;
 }

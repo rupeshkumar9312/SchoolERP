@@ -10,6 +10,7 @@ import { AuditLogsPage } from './pages/AuditLogsPage';
 import { AuthProvider } from './auth/AuthContext';
 import { ProtectedRoute } from './auth/ProtectedRoute';
 import { ConfirmDialogProvider } from './components/ConfirmDialogProvider';
+import { ThemeProvider } from './components/ThemeProvider';
 import { ToastProvider } from './components/ToastProvider';
 import { ChangePasswordPage } from './pages/ChangePasswordPage';
 import { DashboardHome } from './pages/DashboardHome';
@@ -47,6 +48,7 @@ import { AppShell } from './shell/AppShell';
 
 function App() {
   return (
+    <ThemeProvider>
     <BrowserRouter>
       <AuthProvider>
         <ToastProvider>
@@ -177,6 +179,7 @@ function App() {
         </ToastProvider>
       </AuthProvider>
     </BrowserRouter>
+    </ThemeProvider>
   );
 }
 

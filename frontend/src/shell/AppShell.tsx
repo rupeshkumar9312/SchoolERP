@@ -15,13 +15,16 @@ import {
   IconHistory,
   IconHome,
   IconMegaphone,
+  IconMoon,
   IconNotebookPen,
   IconRibbon,
   IconSettings,
   IconShieldCheck,
+  IconSun,
   IconUserCheck,
   IconUsersGroup,
 } from "../components/NavIcons";
+import { useTheme } from "../components/useTheme";
 import { navItems } from "./navConfig";
 
 const NAV_ICONS: Record<
@@ -53,6 +56,7 @@ const NAV_ICONS: Record<
 export function AppShell() {
   const { state, logout, hasPermission } = useAuth();
   const user = state.status === "authenticated" ? state.user : null;
+  const { theme, toggleTheme } = useTheme();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const location = useLocation();
 
@@ -96,6 +100,15 @@ export function AppShell() {
         </div>
         {user && (
           <div className="topbar-user">
+            <button
+              type="button"
+              className="theme-toggle"
+              title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+              aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+              onClick={toggleTheme}
+            >
+              {theme === "dark" ? <IconSun /> : <IconMoon />}
+            </button>
             <span>
               {user.name} <span className="role-chip">{user.role.name}</span>
             </span>
