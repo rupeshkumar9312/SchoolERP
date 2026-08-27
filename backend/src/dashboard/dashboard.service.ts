@@ -11,6 +11,19 @@ interface AttendanceBreakdown {
   presentPercent: number | null;
 }
 
+export interface AttendanceTrendPoint {
+  date: string;
+  presentPercent: number | null;
+  totalMarked: number;
+}
+
+export interface ClassAttendanceToday {
+  classId: number;
+  className: string;
+  presentPercent: number | null;
+  totalMarked: number;
+}
+
 export interface AdminSummaryView {
   academicYear: { id: number; name: string } | null;
   totals: { students: number; teachers: number; classes: number; sections: number };
@@ -21,6 +34,16 @@ export interface AdminSummaryView {
     totalSections: number;
   };
   teacherAttendanceToday: AttendanceBreakdown & { date: string; totalTeachers: number };
+  /** Oldest-first, org-wide student attendance % across the requested
+   * `trendFrom`/`trendTo` range (query params; defaults to the 14 days
+   * ending today; clamped to a 180-day span). A day with nothing marked yet reports
+   * `presentPercent: null` rather than 0, so the chart can render it as a
+   * gap instead of a misleading dip to zero. */
+  studentAttendanceTrend: AttendanceTrendPoint[];
+  /** Today's present % per class, classes with nothing marked yet omitted
+   * — an all-zero bar next to real ones reads as "attendance crashed,"
+   * not "not marked yet." */
+  classAttendanceToday: ClassAttendanceToday[];
 }
 
 export interface TeacherClassView {
@@ -72,21 +95,24 @@ const EMPTY_BREAKDOWN: AttendanceBreakdown = {
 export class DashboardService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async getAdminSummary(): Promise<AdminSummaryView> {
+  async getAdminSummary(trendFrom?: string, trendTo?: string): Promise<AdminSummaryView> {
     const today = this.todayUtcDate();
     const currentYear = await this.prisma.academicYear.findFirst({ where: { isCurrent: true } });
 
     // Scope headline counts to the current academic year when one is set —
     // otherwise every year's history would inflate "how big is the school right now."
     const classWhere = currentYear ? { academicYearId: currentYear.id } : {};
-    const [totalStudents, totalTeachers, totalClasses, totalSections] = await Promise.all([
+    const { from: trendStart, to: trendEnd } = this.resolveTrendRange(trendFrom, trendTo);
+
+    const [totalStudents, totalTeachers, totalClasses, totalSections, classList] = await Promise.all([
       this.prisma.student.count({ where: { isActive: true, class: classWhere } }),
       this.prisma.teacher.count({ where: { user: { isActive: true } } }),
       this.prisma.class.count({ where: classWhere }),
       this.prisma.section.count({ where: { class: classWhere } }),
+      this.prisma.class.findMany({ where: classWhere, select: { id: true, name: true } }),
     ]);
 
-    const [studentRows, sectionsMarkedRows, teacherRows] = await Promise.all([
+    const [studentRows, sectionsMarkedRows, teacherRows, trendRows, classTodayRows] = await Promise.all([
       this.prisma.studentAttendance.groupBy({
         by: ['status'],
         where: { date: new Date(today), student: { class: classWhere } },
@@ -100,6 +126,16 @@ export class DashboardService {
       this.prisma.teacherAttendance.groupBy({
         by: ['status'],
         where: { date: new Date(today), teacher: { user: { isActive: true } } },
+        _count: { _all: true },
+      }),
+      this.prisma.studentAttendance.groupBy({
+        by: ['date', 'status'],
+        where: { date: { gte: new Date(trendStart), lte: new Date(trendEnd) }, student: { class: classWhere } },
+        _count: { _all: true },
+      }),
+      this.prisma.studentAttendance.groupBy({
+        by: ['classId', 'status'],
+        where: { date: new Date(today), student: { class: classWhere } },
         _count: { _all: true },
       }),
     ]);
@@ -120,6 +156,8 @@ export class DashboardService {
         totalSections,
       },
       teacherAttendanceToday: { ...this.toBreakdown(teacherRows), date: today, totalTeachers },
+      studentAttendanceTrend: this.toTrend(trendRows, trendStart, trendEnd),
+      classAttendanceToday: this.toClassBreakdown(classTodayRows, classList),
     };
   }
 
@@ -265,5 +303,95 @@ export class DashboardService {
 
   private todayUtcDate(): string {
     return new Date().toISOString().slice(0, 10);
+  }
+
+  private daysAgoUtcDate(days: number, from?: string): string {
+    const d = from ? new Date(`${from}T00:00:00.000Z`) : new Date();
+    d.setUTCDate(d.getUTCDate() - days);
+    return d.toISOString().slice(0, 10);
+  }
+
+  private isValidDateStr(value: string | undefined): value is string {
+    return !!value && /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(Date.parse(value));
+  }
+
+  /** Turns the caller-supplied `from`/`to` into a safe, real date window:
+   * defaults to the 14 days ending today when either end is missing or
+   * malformed, clamps `to` so it can't reach into the future, swaps the
+   * ends if they arrived backwards, and caps the span at 180 days so an
+   * unbounded range can't turn into an unbounded groupBy. */
+  private resolveTrendRange(from?: string, to?: string): { from: string; to: string } {
+    const today = this.todayUtcDate();
+    let end = this.isValidDateStr(to) && to <= today ? to : today;
+    let start = this.isValidDateStr(from) ? from : this.daysAgoUtcDate(13, end);
+    if (start > end) [start, end] = [end, start];
+    const earliestAllowed = this.daysAgoUtcDate(179, end);
+    if (start < earliestAllowed) start = earliestAllowed;
+    return { from: start, to: end };
+  }
+
+  /** Every date string from `start` to `end` inclusive, so a day with zero
+   * rows still gets a `null`-percent point instead of vanishing from the
+   * x-axis. */
+  private dateRange(start: string, end: string): string[] {
+    const dates: string[] = [];
+    const cursor = new Date(`${start}T00:00:00.000Z`);
+    const last = new Date(`${end}T00:00:00.000Z`);
+    while (cursor <= last) {
+      dates.push(cursor.toISOString().slice(0, 10));
+      cursor.setUTCDate(cursor.getUTCDate() + 1);
+    }
+    return dates;
+  }
+
+  private toTrend(
+    rows: Array<{ date: Date; status: AttendanceStatus; _count: { _all: number } }>,
+    start: string,
+    end: string,
+  ): AttendanceTrendPoint[] {
+    const buckets = new Map<string, { present: number; totalMarked: number }>();
+    for (const row of rows) {
+      const key = row.date.toISOString().slice(0, 10);
+      const bucket = buckets.get(key) ?? { present: 0, totalMarked: 0 };
+      const count = row._count._all;
+      bucket.totalMarked += count;
+      if (row.status === 'PRESENT') bucket.present += count;
+      buckets.set(key, bucket);
+    }
+    return this.dateRange(start, end).map((date) => {
+      const bucket = buckets.get(date);
+      const totalMarked = bucket?.totalMarked ?? 0;
+      return {
+        date,
+        totalMarked,
+        presentPercent: totalMarked === 0 ? null : Math.round(((bucket?.present ?? 0) / totalMarked) * 100),
+      };
+    });
+  }
+
+  private toClassBreakdown(
+    rows: Array<{ classId: number; status: AttendanceStatus; _count: { _all: number } }>,
+    classes: Array<{ id: number; name: string }>,
+  ): ClassAttendanceToday[] {
+    const buckets = new Map<number, { present: number; totalMarked: number }>();
+    for (const row of rows) {
+      const bucket = buckets.get(row.classId) ?? { present: 0, totalMarked: 0 };
+      const count = row._count._all;
+      bucket.totalMarked += count;
+      if (row.status === 'PRESENT') bucket.present += count;
+      buckets.set(row.classId, bucket);
+    }
+    return classes
+      .map((c) => {
+        const bucket = buckets.get(c.id);
+        const totalMarked = bucket?.totalMarked ?? 0;
+        return {
+          classId: c.id,
+          className: c.name,
+          totalMarked,
+          presentPercent: totalMarked === 0 ? null : Math.round(((bucket?.present ?? 0) / totalMarked) * 100),
+        };
+      })
+      .filter((c) => c.totalMarked > 0);
   }
 }

@@ -1,4 +1,5 @@
 import type { CSSProperties } from 'react';
+import { RadialProgress } from '../../components/charts/RadialProgress';
 
 interface AttendanceBreakdownProps {
   present: number;
@@ -13,8 +14,10 @@ function dotStyle(color: string): CSSProperties {
   return { '--dot-color': color } as CSSProperties;
 }
 
-/** Shared present/absent/late/leave breakdown + progress bar, used by both
- * the student- and staff-attendance cards on the admin dashboard. */
+/** Shared present/absent/late/leave breakdown, used by both the student-
+ * and staff-attendance cards on the admin dashboard. The ring replaces
+ * what used to be a flat progress bar — same number, reads more like an
+ * instrument than a loading bar. */
 export function AttendanceBreakdown({
   present,
   absent,
@@ -28,11 +31,8 @@ export function AttendanceBreakdown({
   }
 
   return (
-    <>
-      <div className="stat-value">{presentPercent}% present</div>
-      <div className="progress-bar">
-        <div className="progress-bar-fill" style={{ width: `${presentPercent ?? 0}%` }} />
-      </div>
+    <div className="attendance-breakdown-layout">
+      <RadialProgress percent={presentPercent ?? 0} color="var(--color-success)" label="present" />
       <div className="attendance-breakdown">
         <span className="attendance-chip">
           <span className="attendance-chip-dot" style={dotStyle('var(--color-success)')} />
@@ -51,6 +51,6 @@ export function AttendanceBreakdown({
           {leave} leave
         </span>
       </div>
-    </>
+    </div>
   );
 }
