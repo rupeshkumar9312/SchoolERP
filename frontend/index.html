@@ -5,6 +5,23 @@
     <link rel="icon" type="image/x-icon" href="/favicon.ico" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content="EDVANCE — Effortless Management" />
+    <script>
+      // Applies a stored explicit theme choice before first paint, so a
+      // dark/light preference that disagrees with the OS setting doesn't
+      // flash the wrong theme for a frame. Mirrors ThemeProvider's own
+      // storage key/values — kept in sync manually since this has to run
+      // before any React code exists to import from.
+      (function () {
+        try {
+          var stored = localStorage.getItem('edvance-theme');
+          if (stored === 'light' || stored === 'dark') {
+            document.documentElement.setAttribute('data-theme', stored);
+          }
+        } catch (e) {
+          /* localStorage unavailable (private mode, etc.) — fall back to prefers-color-scheme */
+        }
+      })();
+    </script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link

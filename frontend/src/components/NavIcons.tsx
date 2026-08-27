@@ -166,3 +166,20 @@ export function IconRibbon(props: IconProps) {
     </svg>
   );
 }
+
+export function IconSun(props: IconProps) {
+  return (
+    <svg {...common} {...props}>
+      <circle cx="12" cy="12" r="4" />
+      <path d="M12 3v2.2M12 18.8V21M4.9 4.9l1.6 1.6M17.5 17.5l1.6 1.6M3 12h2.2M18.8 12H21M4.9 19.1l1.6-1.6M17.5 6.5l1.6-1.6" />
+    </svg>
+  );
+}
+
+export function IconMoon(props: IconProps) {
+  return (
+    <svg {...common} {...props}>
+      <path d="M20 14.2A8.5 8.5 0 1 1 9.8 4 6.6 6.6 0 0 0 20 14.2Z" />
+    </svg>
+  );
+}
