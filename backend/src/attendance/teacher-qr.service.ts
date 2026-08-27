@@ -51,6 +51,10 @@ export interface CurrentQrResult {
   rotateSec: number;
   /** So the kiosk can render a countdown without trusting its own clock. */
   serverTime: string;
+  /** Lets the kiosk show/hide its check-in / check-out toggle. */
+  checkoutEnabled: boolean;
+  /** "HH:mm" local — the kiosk auto-switches to check-out at/after this. */
+  checkoutAutoSwitchAt: string | null;
 }
 
 export interface ScanResult {
@@ -130,7 +134,8 @@ export class TeacherQrService {
     mode: ScanDirection = 'in',
   ): Promise<CurrentQrResult> {
     const secret = this.requireSecret();
-    if (mode === 'out' && !(await this.geofence.get()).checkoutEnabled) {
+    const settings = await this.geofence.get();
+    if (mode === 'out' && !settings.checkoutEnabled) {
       throw new BadRequestException('Check-out is not enabled for this school.');
     }
     const ttlSec = this.config.get<number>('ATT_QR_TOKEN_TTL_SEC') ?? 25;
@@ -153,6 +158,8 @@ export class TeacherQrService {
       ttlSec,
       rotateSec,
       serverTime: new Date(now).toISOString(),
+      checkoutEnabled: settings.checkoutEnabled,
+      checkoutAutoSwitchAt: settings.checkoutAutoSwitchAt,
     };
   }
 

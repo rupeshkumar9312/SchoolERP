@@ -8,9 +8,13 @@ export interface KioskSession {
   expiresIn: string;
 }
 
+export type ScanDirection = 'in' | 'out';
+
 export interface CurrentQr {
   /** The compact JWT to render as a QR code. */
   token: string;
+  /** Which QR this is — check-in or check-out. */
+  dir: ScanDirection;
   issuedAt: string;
   expiresAt: string;
   ttlSec: number;
@@ -19,6 +23,10 @@ export interface CurrentQr {
   /** Server clock at issue time — lets the kiosk run a countdown without
    * trusting its own (possibly wrong) clock. */
   serverTime: string;
+  /** Whether the check-out QR is available at all. */
+  checkoutEnabled: boolean;
+  /** "HH:mm" local — auto-switch the kiosk to check-out at/after this time. */
+  checkoutAutoSwitchAt: string | null;
 }
 
 /** Admin-only. Mints a session for whichever device is calling. */
@@ -57,10 +65,13 @@ export function updateGeofenceConfig(input: GeofenceConfigInput): Promise<Geofen
  * kiosk session token, never a user token — so this deliberately bypasses the
  * shared api client (which injects the logged-in user's access token).
  */
-export async function fetchCurrentQr(kioskToken: string): Promise<CurrentQr> {
+export async function fetchCurrentQr(
+  kioskToken: string,
+  mode: ScanDirection = 'in',
+): Promise<CurrentQr> {
   let res: Response;
   try {
-    res = await fetch(`${API_URL}/attendance/teacher-qr/current`, {
+    res = await fetch(`${API_URL}/attendance/teacher-qr/current?mode=${mode}`, {
       headers: { Accept: 'application/json', Authorization: `Bearer ${kioskToken}` },
     });
   } catch {

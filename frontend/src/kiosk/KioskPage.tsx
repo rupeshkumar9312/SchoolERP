@@ -2,11 +2,18 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { QRCodeSVG } from 'qrcode.react';
 import { ApiError } from '../api/client';
-import { fetchCurrentQr, provisionKioskSession, type CurrentQr } from '../api/teacherQr';
+import {
+  fetchCurrentQr,
+  provisionKioskSession,
+  type CurrentQr,
+  type ScanDirection,
+} from '../api/teacherQr';
 import { useAuth } from '../auth/useAuth';
 import {
   clearKioskSession,
+  loadKioskModeOverride,
   loadKioskSession,
+  saveKioskModeOverride,
   saveKioskSession,
   type StoredKioskSession,
 } from './kioskStorage';
@@ -64,7 +71,7 @@ function KioskSetup({ onProvisioned }: { onProvisioned: (s: StoredKioskSession) 
 
         {state.status === 'loading' && <p className="kiosk-muted">Checking your session…</p>}
 
-        {state.status !== 'loading' && (!hasPermission(MANAGE_PERMISSION)) && (
+        {state.status !== 'loading' && !hasPermission(MANAGE_PERMISSION) && (
           <>
             <p className="kiosk-muted">
               This device isn&rsquo;t set up yet. Open this page while signed in as an
@@ -98,6 +105,13 @@ interface Snapshot {
   receivedAt: number;
 }
 
+/** 'out' when the local wall-clock has reached HH:mm, else 'in'. */
+function autoModeFor(hhmm: string): ScanDirection {
+  const [h, m] = hhmm.split(':').map(Number);
+  const now = new Date();
+  return now.getHours() * 60 + now.getMinutes() >= h * 60 + m ? 'out' : 'in';
+}
+
 function KioskDisplay({
   session,
   onInvalidSession,
@@ -109,23 +123,42 @@ function KioskDisplay({
   const [connection, setConnection] = useState<'connecting' | 'live' | 'offline'>('connecting');
   const [now, setNow] = useState(() => Date.now());
   const [qrSize, setQrSize] = useState(() => computeQrSize());
+  const [mode, setMode] = useState<ScanDirection>(() => loadKioskModeOverride() ?? 'in');
 
   const pullTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const invalidRef = useRef(onInvalidSession);
   invalidRef.current = onInvalidSession;
+  // Once an operator toggles, stop honouring the auto-switch schedule for today.
+  const manualOverrideRef = useRef(loadKioskModeOverride() !== null);
 
   const schedulePull = useCallback((delayMs: number, run: () => void) => {
     if (pullTimer.current) clearTimeout(pullTimer.current);
     pullTimer.current = setTimeout(run, delayMs);
   }, []);
 
+  const chooseMode = (m: ScanDirection) => {
+    manualOverrideRef.current = true;
+    saveKioskModeOverride(m);
+    setMode(m);
+  };
+
   useEffect(() => {
     let cancelled = false;
 
     const pull = async () => {
       try {
-        const qr = await fetchCurrentQr(session.token);
+        const qr = await fetchCurrentQr(session.token, mode);
         if (cancelled) return;
+
+        // Follow the auto-switch schedule until an operator overrides it.
+        if (!manualOverrideRef.current && qr.checkoutEnabled && qr.checkoutAutoSwitchAt) {
+          const auto = autoModeFor(qr.checkoutAutoSwitchAt);
+          if (auto !== mode) {
+            setMode(auto); // re-runs this effect, which re-pulls in the new mode
+            return;
+          }
+        }
+
         setSnapshot({ qr, receivedAt: Date.now() });
         setConnection('live');
         schedulePull(Math.max(1000, qr.rotateSec * 1000), pull);
@@ -145,17 +178,14 @@ function KioskDisplay({
       cancelled = true;
       if (pullTimer.current) clearTimeout(pullTimer.current);
     };
-  }, [session.token, schedulePull]);
+  }, [session.token, mode, schedulePull]);
 
-  // Countdown tick. A plain interval is enough for a clock; slow it right down
-  // for anyone who asked for reduced motion.
   useEffect(() => {
     const reduced = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
     const id = setInterval(() => setNow(Date.now()), reduced ? 1000 : 200);
     return () => clearInterval(id);
   }, []);
 
-  // Guard against a kiosk left running for days.
   useEffect(() => {
     const id = setTimeout(() => window.location.reload(), DAILY_RELOAD_MS);
     return () => clearTimeout(id);
@@ -171,18 +201,35 @@ function KioskDisplay({
     if (!snapshot) return 0;
     const { qr, receivedAt } = snapshot;
     const serverRemaining = new Date(qr.expiresAt).getTime() - new Date(qr.serverTime).getTime();
-    const elapsed = now - receivedAt;
-    return Math.max(0, serverRemaining - elapsed);
+    return Math.max(0, serverRemaining - (now - receivedAt));
   }, [snapshot, now]);
 
   const fraction = snapshot ? Math.min(1, remainingMs / (snapshot.qr.ttlSec * 1000)) : 0;
   const seconds = Math.ceil(remainingMs / 1000);
+  const isOut = mode === 'out';
+  const showToggle = snapshot?.qr.checkoutEnabled ?? false;
 
   return (
-    <div className="kiosk-screen">
+    <div className={`kiosk-screen${isOut ? ' kiosk-screen--out' : ''}`}>
       <header className="kiosk-head">
         <p className="kiosk-wordmark">EDVANCE</p>
-        <p className="kiosk-head-title">Staff check-in</p>
+        <p className="kiosk-head-title">{isOut ? 'Staff check-out' : 'Staff check-in'}</p>
+        {showToggle && (
+          <div className="kiosk-modeswitch" role="group" aria-label="Kiosk mode">
+            <button
+              className={`kiosk-modeswitch-btn${!isOut ? ' is-on' : ''}`}
+              onClick={() => chooseMode('in')}
+            >
+              Check in
+            </button>
+            <button
+              className={`kiosk-modeswitch-btn${isOut ? ' is-on' : ''}`}
+              onClick={() => chooseMode('out')}
+            >
+              Check out
+            </button>
+          </div>
+        )}
       </header>
 
       <main className="kiosk-stage">
@@ -206,7 +253,7 @@ function KioskDisplay({
         </div>
 
         <p className="kiosk-caption">
-          Scan with the <strong>EDVANCE app</strong> to mark your attendance
+          Scan with the <strong>EDVANCE app</strong> to {isOut ? 'check out' : 'mark your attendance'}
         </p>
 
         {connection === 'offline' && (
