@@ -4,6 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { Prisma } from '@prisma/client';
 import { AuditLogService } from '../audit/audit-log.service';
 import { AuthenticatedUser } from '../auth/auth.types';
@@ -11,12 +12,17 @@ import { TEACHER_ROLE } from '../auth/roles.constants';
 import { PrismaService } from '../prisma/prisma.service';
 import { ListTeacherAttendanceQueryDto } from './dto/list-teacher-attendance.query.dto';
 import { MarkTeacherAttendanceDto } from './dto/mark-teacher-attendance.dto';
+import { GeofenceConfigService, type GeofencePublicView } from './geofence-config.service';
 
 export interface TeacherAttendanceView {
   id: number;
   teacher: { id: number; name: string };
   date: string;
   status: string;
+  /** MANUAL | QR | ADMIN — how the row was recorded. */
+  method: string;
+  /** Wall-clock instant the row was set; null for pre-QR historical rows. */
+  markedAt: string | null;
   markedBy: { id: number; name: string };
   createdAt: Date;
   updatedAt: Date;
@@ -36,7 +42,26 @@ export class TeacherAttendanceService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditLogService,
+    private readonly config: ConfigService,
+    private readonly geofence: GeofenceConfigService,
   ) {}
+
+  /** Phase 5 switch. When off, a plain TEACHER must use the QR scan
+   * (POST /attendance/teachers/scan) instead of self-marking here. Admins are
+   * never affected — they mark/correct other teachers' rows through this route. */
+  private manualMarkEnabled(): boolean {
+    return this.config.get<string>('TEACHER_MANUAL_MARK_ENABLED') !== 'false';
+  }
+
+  async getSelfServeConfig(): Promise<{
+    manualMarkEnabled: boolean;
+    geofence: GeofencePublicView;
+  }> {
+    return {
+      manualMarkEnabled: this.manualMarkEnabled(),
+      geofence: await this.geofence.getPublic(),
+    };
+  }
 
   async mark(
     dto: MarkTeacherAttendanceDto,
@@ -45,11 +70,15 @@ export class TeacherAttendanceService {
     const teacherId = await this.resolveTargetTeacherId(dto.teacherId, actor, true);
     if (teacherId === undefined) throw new BadRequestException('teacherId is required');
 
-    if (
-      actor.roleName === TEACHER_ROLE &&
-      this.toDateOnly(new Date(dto.date)) !== this.toDateOnly(new Date())
-    ) {
-      throw new ForbiddenException('Teachers can only mark their own attendance for today');
+    if (actor.roleName === TEACHER_ROLE) {
+      if (!this.manualMarkEnabled()) {
+        throw new ForbiddenException(
+          'Manual check-in is disabled. Scan the QR on the staff display with the EDVANCE app.',
+        );
+      }
+      if (this.toDateOnly(new Date(dto.date)) !== this.toDateOnly(new Date())) {
+        throw new ForbiddenException('Teachers can only mark their own attendance for today');
+      }
     }
 
     const date = new Date(dto.date);
@@ -59,10 +88,20 @@ export class TeacherAttendanceService {
       where: { teacherId_date: { teacherId, date } },
     });
 
+    // method/markedAt let Reports and the mobile app tell a manual mark apart
+    // from a QR scan (POST /attendance/teachers/scan). This route is always the
+    // manual path, whether it's a teacher self-marking or an admin correcting.
     const row = await this.prisma.teacherAttendance.upsert({
       where: { teacherId_date: { teacherId, date } },
-      update: { status: dto.status, markedById: actor.id },
-      create: { teacherId, date, status: dto.status, markedById: actor.id },
+      update: { status: dto.status, markedById: actor.id, method: 'MANUAL', markedAt: new Date() },
+      create: {
+        teacherId,
+        date,
+        status: dto.status,
+        markedById: actor.id,
+        method: 'MANUAL',
+        markedAt: new Date(),
+      },
       include: TEACHER_ATTENDANCE_INCLUDE,
     });
     await this.audit.record({
@@ -139,6 +178,8 @@ export class TeacherAttendanceService {
       teacher: { id: row.teacher.id, name: row.teacher.user.name },
       date: row.date.toISOString().slice(0, 10),
       status: row.status,
+      method: row.method,
+      markedAt: row.markedAt ? row.markedAt.toISOString() : null,
       markedBy: { id: row.markedBy.id, name: row.markedBy.name },
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,
