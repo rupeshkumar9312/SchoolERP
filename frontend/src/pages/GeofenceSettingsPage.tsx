@@ -10,6 +10,10 @@ interface FormState {
   longitude: string;
   radiusM: string;
   maxAccuracyM: string;
+  checkoutEnabled: boolean;
+  checkoutAutoSwitchAt: string;
+  minSessionMinutes: string;
+  allowCheckoutWithoutCheckin: boolean;
 }
 
 const EMPTY: FormState = {
@@ -18,6 +22,10 @@ const EMPTY: FormState = {
   longitude: '',
   radiusM: '150',
   maxAccuracyM: '75',
+  checkoutEnabled: false,
+  checkoutAutoSwitchAt: '',
+  minSessionMinutes: '30',
+  allowCheckoutWithoutCheckin: false,
 };
 
 export function GeofenceSettingsPage() {
@@ -40,6 +48,10 @@ export function GeofenceSettingsPage() {
         longitude: cfg.longitude?.toString() ?? '',
         radiusM: cfg.radiusM.toString(),
         maxAccuracyM: cfg.maxAccuracyM.toString(),
+        checkoutEnabled: cfg.checkoutEnabled,
+        checkoutAutoSwitchAt: cfg.checkoutAutoSwitchAt ?? '',
+        minSessionMinutes: cfg.minSessionMinutes.toString(),
+        allowCheckoutWithoutCheckin: cfg.allowCheckoutWithoutCheckin,
       });
       setUpdatedAt(cfg.updatedAt);
     } catch (err) {
@@ -90,10 +102,14 @@ export function GeofenceSettingsPage() {
         longitude: hasCoords ? Number(form.longitude) : null,
         radiusM: Number(form.radiusM),
         maxAccuracyM: Number(form.maxAccuracyM),
+        checkoutEnabled: form.checkoutEnabled,
+        checkoutAutoSwitchAt: form.checkoutAutoSwitchAt.trim() || null,
+        minSessionMinutes: Number(form.minSessionMinutes),
+        allowCheckoutWithoutCheckin: form.allowCheckoutWithoutCheckin,
       });
       setUpdatedAt(saved.updatedAt);
-      setForm((prev) => ({ ...prev, enabled: saved.enabled }));
-      toast('Geofence settings saved.');
+      setForm((prev) => ({ ...prev, enabled: saved.enabled, checkoutEnabled: saved.checkoutEnabled }));
+      toast('Settings saved.');
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Failed to save the geofence settings');
     } finally {
@@ -103,10 +119,10 @@ export function GeofenceSettingsPage() {
 
   return (
     <>
-      <h1>QR check-in geofence</h1>
+      <h1>QR check-in settings</h1>
       <p className="subtitle">
-        When enabled, a teacher’s app must report a location within the radius below (and a
-        good GPS fix) for the QR scan to mark attendance. Enforcement is server-side.
+        The campus geofence for the QR scan, and the optional check-out QR. Enforcement is
+        server-side.
       </p>
 
       {error && (
@@ -189,6 +205,43 @@ export function GeofenceSettingsPage() {
             Indoors, phones often only get a 20–50 m fix; too strict a radius or accuracy
             ceiling causes false rejections. Start loose (150–250 m) and tighten after a pilot.
           </p>
+
+          <hr />
+          <h2>Check-out QR</h2>
+          <label className="field field-checkbox">
+            <input
+              type="checkbox"
+              checked={form.checkoutEnabled}
+              onChange={(e) => set('checkoutEnabled', e.target.checked)}
+            />
+            <span>Show a second QR so teachers can scan out at the end of the day</span>
+          </label>
+          <label className="field">
+            <span>Kiosk auto-switches to check-out at (local time, optional)</span>
+            <input
+              type="time"
+              value={form.checkoutAutoSwitchAt}
+              onChange={(e) => set('checkoutAutoSwitchAt', e.target.value)}
+            />
+          </label>
+          <label className="field">
+            <span>Minimum minutes between check-in and check-out</span>
+            <input
+              type="number"
+              min={0}
+              max={720}
+              value={form.minSessionMinutes}
+              onChange={(e) => set('minSessionMinutes', e.target.value)}
+            />
+          </label>
+          <label className="field field-checkbox">
+            <input
+              type="checkbox"
+              checked={form.allowCheckoutWithoutCheckin}
+              onChange={(e) => set('allowCheckoutWithoutCheckin', e.target.checked)}
+            />
+            <span>Allow a check-out even if the teacher never checked in</span>
+          </label>
 
           <div className="form-actions">
             <button type="submit" disabled={saving || (form.enabled && !hasCoords)}>

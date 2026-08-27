@@ -42,12 +42,28 @@ export interface GeofenceConfig {
   radiusM: number;
   /** Worst GPS accuracy radius a scan may report and still be trusted, in metres. */
   maxAccuracyM: number;
+  /** Master switch for the second (check-out) QR. */
+  checkoutEnabled: boolean;
+  /** "HH:mm" local — kiosk auto-switches to check-out at/after this; null = manual only. */
+  checkoutAutoSwitchAt: string | null;
+  /** Reject a check-out scanned sooner than this many minutes after check-in. */
+  minSessionMinutes: number;
+  /** When false a check-out with no check-in that day is rejected. */
+  allowCheckoutWithoutCheckin: boolean;
   updatedAt: string | null;
 }
 
 export type GeofenceConfigInput = Pick<
   GeofenceConfig,
-  'enabled' | 'latitude' | 'longitude' | 'radiusM' | 'maxAccuracyM'
+  | 'enabled'
+  | 'latitude'
+  | 'longitude'
+  | 'radiusM'
+  | 'maxAccuracyM'
+  | 'checkoutEnabled'
+  | 'checkoutAutoSwitchAt'
+  | 'minSessionMinutes'
+  | 'allowCheckoutWithoutCheckin'
 >;
 
 /** Admin-only. Reads the DB-stored QR check-in geofence. */

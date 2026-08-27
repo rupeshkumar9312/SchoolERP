@@ -12,6 +12,17 @@ import type { AttendanceStatus } from '../api/attendance';
 import { EmptyState } from '../components/EmptyState';
 import { Skeleton } from '../components/Skeleton';
 
+function fmtTime(iso?: string | null): string {
+  return iso ? new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—';
+}
+
+function fmtWorked(mins?: number | null): string {
+  if (mins == null || mins <= 0) return '—';
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  return h ? `${h}h ${m}m` : `${m}m`;
+}
+
 export function MyAttendancePage() {
   const today = todayUtcDate();
   const [history, setHistory] = useState<TeacherAttendanceRecord[]>([]);
@@ -106,6 +117,9 @@ export function MyAttendancePage() {
               <tr>
                 <th>Date</th>
                 <th>Status</th>
+                <th>Check in</th>
+                <th>Check out</th>
+                <th>Hours</th>
                 <th>Marked by</th>
               </tr>
             </thead>
@@ -116,6 +130,9 @@ export function MyAttendancePage() {
                   <td data-label="Status">
                     <span className={`badge status-badge-${record.status.toLowerCase()}`}>{record.status}</span>
                   </td>
+                  <td data-label="Check in">{fmtTime(record.checkInAt)}</td>
+                  <td data-label="Check out">{fmtTime(record.checkOutAt)}</td>
+                  <td data-label="Hours">{fmtWorked(record.workedMinutes)}</td>
                   <td data-label="Marked by">{record.markedBy.name}</td>
                 </tr>
               ))}
