@@ -1,4 +1,4 @@
-import { Controller, Get, UseGuards } from '@nestjs/common';
+import { Controller, Get, Query, UseGuards } from '@nestjs/common';
 import type { AuthenticatedUser } from '../auth/auth.types';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { RequirePermission } from '../auth/decorators/require-permission.decorator';
@@ -13,8 +13,8 @@ export class DashboardController {
 
   @Get('admin-summary')
   @RequirePermission('academic.view')
-  getAdminSummary() {
-    return this.dashboard.getAdminSummary();
+  getAdminSummary(@Query('trendFrom') trendFrom?: string, @Query('trendTo') trendTo?: string) {
+    return this.dashboard.getAdminSummary(trendFrom, trendTo);
   }
 
   // No @RequirePermission — a bare TEACHER has no permissions at all here, this

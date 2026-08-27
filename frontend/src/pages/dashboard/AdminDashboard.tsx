@@ -12,6 +12,8 @@ import {
   IconStudents,
   IconTeachers,
 } from '../../components/DashboardIcons';
+import { AttendanceTrendChart } from '../../components/charts/TrendChart';
+import { ClassBarChart } from '../../components/charts/ClassBarChart';
 import { AttendanceBreakdown } from './AttendanceBreakdown';
 import { DashboardSkeleton } from '../../components/Skeleton';
 
@@ -38,24 +40,34 @@ function accentStyle(key: keyof typeof STAT_ACCENTS): CSSProperties {
   } as CSSProperties;
 }
 
+function isoDaysAgo(days: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() - days);
+  return d.toISOString().slice(0, 10);
+}
+
+const TODAY_ISO = new Date().toISOString().slice(0, 10);
+
 export function AdminDashboard() {
   const { hasPermission } = useAuth();
   const navigate = useNavigate();
   const [summary, setSummary] = useState<AdminSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [trendFrom, setTrendFrom] = useState(() => isoDaysAgo(13));
+  const [trendTo, setTrendTo] = useState(TODAY_ISO);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      setSummary(await getAdminSummary());
+      setSummary(await getAdminSummary(trendFrom, trendTo));
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Failed to load dashboard');
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [trendFrom, trendTo]);
 
   useEffect(() => {
     void load();
@@ -121,29 +133,56 @@ export function AdminDashboard() {
         </div>
       </div>
 
-      <section className="card">
+      <section className="card trend-chart-card">
         <div className="card-head">
-          <h2>Student attendance today</h2>
-          <span className="muted">{sa.date}</span>
+          <h2>Attendance trend</h2>
+          <div className="trend-range-picker">
+            <label className="field field-inline">
+              <span>From</span>
+              <input type="date" value={trendFrom} max={trendTo} onChange={(e) => setTrendFrom(e.target.value)} />
+            </label>
+            <label className="field field-inline">
+              <span>To</span>
+              <input type="date" value={trendTo} min={trendFrom} max={TODAY_ISO} onChange={(e) => setTrendTo(e.target.value)} />
+            </label>
+          </div>
         </div>
-        <AttendanceBreakdown {...sa} />
-        <p className="stat-sub">
-          <IconCalendarCheck className="inline-icon" /> {sa.sectionsMarked} of {sa.totalSections} section
-          {sa.totalSections === 1 ? '' : 's'} have marked attendance today.
-        </p>
+        <AttendanceTrendChart points={summary.studentAttendanceTrend} />
       </section>
+
+      <div className="dashboard-split">
+        <section className="card">
+          <div className="card-head">
+            <h2>Student attendance today</h2>
+            <span className="muted">{sa.date}</span>
+          </div>
+          <AttendanceBreakdown {...sa} />
+          <p className="stat-sub">
+            <IconCalendarCheck className="inline-icon" /> {sa.sectionsMarked} of {sa.totalSections} section
+            {sa.totalSections === 1 ? '' : 's'} have marked attendance today.
+          </p>
+        </section>
+
+        <section className="card">
+          <div className="card-head">
+            <h2>Staff attendance today</h2>
+            <span className="muted">{ta.date}</span>
+          </div>
+          <AttendanceBreakdown {...ta} />
+          {ta.totalMarked > 0 && (
+            <p className="stat-sub">
+              of {ta.totalTeachers} teacher{ta.totalTeachers === 1 ? '' : 's'}
+            </p>
+          )}
+        </section>
+      </div>
 
       <section className="card">
         <div className="card-head">
-          <h2>Staff attendance today</h2>
-          <span className="muted">{ta.date}</span>
+          <h2>Attendance by class</h2>
+          <span className="muted">Today, lowest first</span>
         </div>
-        <AttendanceBreakdown {...ta} />
-        {ta.totalMarked > 0 && (
-          <p className="stat-sub">
-            of {ta.totalTeachers} teacher{ta.totalTeachers === 1 ? '' : 's'}
-          </p>
-        )}
+        <ClassBarChart classes={summary.classAttendanceToday} />
       </section>
 
       <section className="card">
