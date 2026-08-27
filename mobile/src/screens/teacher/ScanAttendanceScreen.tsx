@@ -36,6 +36,13 @@ function formatTime(iso: string | null): string {
   return new Date(iso).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
 }
 
+function formatWorked(mins: number | null): string {
+  if (mins == null || mins <= 0) return '';
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  return h ? `${h}h ${m}m` : `${m}m`;
+}
+
 function withTimeout<T>(p: Promise<T>, ms: number, message: string): Promise<T> {
   return Promise.race([
     p,
@@ -185,22 +192,36 @@ export function ScanAttendanceScreen({ navigation }: Props): React.JSX.Element {
 
   // --- result --------------------------------------------------------
   if (phase === 'done' && result) {
+    const isOut = result.event === 'CHECK_OUT';
     const meta = ATTENDANCE_STATUS_META[result.status];
-    const tone = TONE_COLORS[meta.tone];
+    const tone = isOut ? TONE_COLORS.info : TONE_COLORS[meta.tone];
+    const worked = formatWorked(result.workedMinutes);
+
+    let title: string;
+    let sub: string;
+    if (isOut) {
+      title = 'You’re checked out';
+      sub = result.alreadyMarked
+        ? `You had already checked out${
+            result.checkOutAt ? ` at ${formatTime(result.checkOutAt)}` : ''
+          }.`
+        : `Checked out at ${formatTime(result.checkOutAt)}.${worked ? ` ${worked} today.` : ''}`;
+    } else {
+      title = `You’re marked ${meta.label.toLowerCase()}`;
+      const at = formatTime(result.checkInAt ?? result.markedAt);
+      sub = result.alreadyMarked
+        ? `You were already checked in today${at ? ` at ${at}` : ''}.`
+        : `Checked in at ${at}.`;
+    }
+
     return (
       <Screen>
         <Card style={styles.resultCard}>
           <View style={[styles.resultIcon, { backgroundColor: tone.bg }]}>
-            <Ionicons name="checkmark" size={36} color={tone.fg} />
+            <Ionicons name={isOut ? 'log-out-outline' : 'checkmark'} size={36} color={tone.fg} />
           </View>
-          <Text style={styles.resultTitle}>You&rsquo;re marked {meta.label.toLowerCase()}</Text>
-          <Text style={styles.resultSub}>
-            {result.alreadyMarked
-              ? `You were already checked in today${
-                  result.markedAt ? ` at ${formatTime(result.markedAt)}` : ''
-                }.`
-              : `Checked in at ${formatTime(result.markedAt)}.`}
-          </Text>
+          <Text style={styles.resultTitle}>{title}</Text>
+          <Text style={styles.resultSub}>{sub}</Text>
           <Button label="Done" onPress={() => navigation.goBack()} />
         </Card>
       </Screen>
@@ -214,7 +235,7 @@ export function ScanAttendanceScreen({ navigation }: Props): React.JSX.Element {
           <View style={[styles.resultIcon, { backgroundColor: colors.dangerTint }]}>
             <Ionicons name="alert" size={36} color={colors.danger} />
           </View>
-          <Text style={styles.resultTitle}>Couldn&rsquo;t check you in</Text>
+          <Text style={styles.resultTitle}>That didn&rsquo;t work</Text>
           <Text style={styles.resultSub}>{error}</Text>
           <Button label="Scan again" onPress={scanAgain} />
           <Button label="Close" variant="secondary" onPress={() => navigation.goBack()} />
@@ -238,7 +259,7 @@ export function ScanAttendanceScreen({ navigation }: Props): React.JSX.Element {
           {phase === 'submitting'
             ? geofenceEnabled
               ? 'Checking your location…'
-              : 'Checking you in…'
+              : 'Recording your scan…'
             : 'Point at the QR on the staff display'}
         </Text>
         {phase === 'submitting' && (

@@ -12,6 +12,10 @@ export interface TeacherAttendanceRecord {
   method?: AttendanceMethod;
   /** Wall-clock instant the row was set; null for pre-QR historical rows. */
   markedAt?: string | null;
+  /** QR check-in / check-out times and the whole-minute gap between them. */
+  checkInAt?: string | null;
+  checkOutAt?: string | null;
+  workedMinutes?: number | null;
   markedBy: { id: number; name: string };
   createdAt: string;
   updatedAt: string;
@@ -39,6 +43,8 @@ export interface TeacherSelfServeConfig {
   manualMarkEnabled: boolean;
   /** Non-secret geofence hints for the scan screen; enforcement is server-side. */
   geofence: { enabled: boolean; maxAccuracyM: number };
+  /** Whether a second (check-out) QR exists, and the minimum session length. */
+  checkout: { enabled: boolean; minSessionMinutes: number; autoSwitchAt: string | null };
 }
 
 export function getTeacherSelfServeConfig(): Promise<TeacherSelfServeConfig> {
@@ -51,9 +57,15 @@ export interface ScanResult {
   date: string;
   status: AttendanceStatus;
   method: AttendanceMethod;
+  /** What this scan did. */
+  event: 'CHECK_IN' | 'CHECK_OUT';
+  checkInAt: string | null;
+  checkOutAt: string | null;
+  /** checkOutAt − checkInAt in whole minutes, when both are known. */
+  workedMinutes: number | null;
   markedAt: string | null;
   markedBy: { id: number; name: string };
-  /** True when a row for today already existed — the scan just confirmed it. */
+  /** True when this exact event was already recorded — the scan was a no-op. */
   alreadyMarked: boolean;
 }
 

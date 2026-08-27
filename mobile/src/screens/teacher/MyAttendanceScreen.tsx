@@ -30,6 +30,25 @@ function formatTime(iso?: string | null): string {
   if (!iso) return '';
   return new Date(iso).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
 }
+
+function formatWorked(mins?: number | null): string {
+  if (mins == null || mins <= 0) return '';
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  return h ? `${h}h ${m}m` : `${m}m`;
+}
+
+/** "in 08:03 · out 17:12 · 9h 9m" — or the pre-check-out fallback. */
+function sessionLine(r: TeacherAttendanceRecord): string {
+  if (r.method !== 'QR') return `Marked by ${r.markedBy.name}`;
+  const parts: string[] = [];
+  if (r.checkInAt) parts.push(`in ${formatTime(r.checkInAt)}`);
+  else if (r.markedAt) parts.push(`in ${formatTime(r.markedAt)}`);
+  if (r.checkOutAt) parts.push(`out ${formatTime(r.checkOutAt)}`);
+  const worked = formatWorked(r.workedMinutes);
+  if (worked) parts.push(worked);
+  return parts.length ? parts.join(' · ') : 'QR check-in';
+}
 const TONE_COLORS = {
   success: { bg: colors.successTint, fg: colors.success },
   danger: { bg: colors.dangerTint, fg: colors.danger },
@@ -41,6 +60,7 @@ export function MyAttendanceScreen({ navigation }: Props): React.JSX.Element {
   const today = todayIsoDate();
   const [history, setHistory] = useState<TeacherAttendanceRecord[] | null>(null);
   const [manualMarkEnabled, setManualMarkEnabled] = useState(true);
+  const [checkoutEnabled, setCheckoutEnabled] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -56,6 +76,7 @@ export function MyAttendanceScreen({ navigation }: Props): React.JSX.Element {
       data.sort((a, b) => b.date.localeCompare(a.date));
       setHistory(data);
       setManualMarkEnabled(config.manualMarkEnabled);
+      setCheckoutEnabled(config.checkout.enabled);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not load your attendance');
     } finally {
@@ -88,6 +109,14 @@ export function MyAttendanceScreen({ navigation }: Props): React.JSX.Element {
   const todayRecord = history.find((r) => r.date === today) ?? null;
   const todayStatus = todayRecord?.status ?? null;
   const todayMeta = todayStatus ? ATTENDANCE_STATUS_META[todayStatus] : null;
+  const checkedIn = !!todayRecord?.checkInAt;
+  const checkedOut = !!todayRecord?.checkOutAt;
+  const scanLabel =
+    checkoutEnabled && checkedIn && !checkedOut
+      ? 'Scan to check out'
+      : checkedIn
+        ? 'Scan again'
+        : 'Scan to check in';
 
   return (
     <Screen refreshing={loading} onRefresh={load}>
@@ -96,16 +125,12 @@ export function MyAttendanceScreen({ navigation }: Props): React.JSX.Element {
         {todayMeta ? (
           <View style={styles.todayLine}>
             <Badge label={todayMeta.label} tone={todayMeta.tone} />
-            <Text style={styles.muted}>
-              {todayRecord?.method === 'QR'
-                ? `QR check-in${todayRecord.markedAt ? ` · ${formatTime(todayRecord.markedAt)}` : ''}`
-                : `Marked by ${todayRecord?.markedBy.name ?? '—'}`}
-            </Text>
+            <Text style={styles.muted}>{sessionLine(todayRecord!)}</Text>
           </View>
         ) : (
           <Text style={styles.muted}>Not checked in yet.</Text>
         )}
-        <Button label="Scan to check in" onPress={() => navigation.navigate('ScanAttendance')} />
+        <Button label={scanLabel} onPress={() => navigation.navigate('ScanAttendance')} />
         {manualMarkEnabled && <Text style={styles.orLabel}>or set it manually</Text>}
         {manualMarkEnabled && (
         <View style={styles.statusRow}>
@@ -140,11 +165,7 @@ export function MyAttendanceScreen({ navigation }: Props): React.JSX.Element {
             <Card key={r.id} style={styles.row}>
               <View>
                 <Text style={styles.date}>{formatDate(r.date)}</Text>
-                <Text style={styles.muted}>
-                  {r.method === 'QR'
-                    ? `QR check-in${r.markedAt ? ` · ${formatTime(r.markedAt)}` : ''}`
-                    : `Marked by ${r.markedBy.name}`}
-                </Text>
+                <Text style={styles.muted}>{sessionLine(r)}</Text>
               </View>
               <Badge label={meta.label} tone={meta.tone} />
             </Card>
