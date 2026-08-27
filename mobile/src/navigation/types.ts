@@ -72,6 +72,7 @@ export type TeacherExamsStackParamList = {
 export type TeacherDashboardStackParamList = {
   DashboardHome: undefined;
   MyAttendance: undefined;
+  ScanAttendance: undefined;
 };
 
 export type TeacherTabsParamList = {

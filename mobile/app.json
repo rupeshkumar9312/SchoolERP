@@ -37,6 +37,18 @@
           "icon": "./assets/notification-icon.png",
           "color": "#004c97"
         }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "EDVANCE uses the camera to scan the staff check-in QR code."
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "EDVANCE checks your location when you scan the staff QR, to confirm you are on campus."
+        }
       ]
     ],
     "extra": {

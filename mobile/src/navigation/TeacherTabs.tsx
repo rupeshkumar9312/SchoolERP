@@ -14,6 +14,7 @@ import { MyExamsListScreen } from '../screens/teacher/MyExamsListScreen';
 import { NewAssignmentScreen } from '../screens/teacher/NewAssignmentScreen';
 import { NewClassTestScreen } from '../screens/teacher/NewClassTestScreen';
 import { RosterScreen } from '../screens/teacher/RosterScreen';
+import { ScanAttendanceScreen } from '../screens/teacher/ScanAttendanceScreen';
 import { StudentAttendanceHistoryScreen } from '../screens/teacher/StudentAttendanceHistoryScreen';
 import { StudentSearchScreen } from '../screens/teacher/StudentSearchScreen';
 import { TeacherAssignmentDetailScreen } from '../screens/teacher/TeacherAssignmentDetailScreen';
@@ -39,6 +40,11 @@ function DashboardStackNavigator(): React.JSX.Element {
     <DashboardStack.Navigator screenOptions={brandedHeaderOptions}>
       <DashboardStack.Screen name="DashboardHome" component={TeacherDashboardScreen} />
       <DashboardStack.Screen name="MyAttendance" component={MyAttendanceScreen} />
+      <DashboardStack.Screen
+        name="ScanAttendance"
+        component={ScanAttendanceScreen}
+        options={{ title: 'Scan to check in', presentation: 'modal' }}
+      />
     </DashboardStack.Navigator>
   );
 }
