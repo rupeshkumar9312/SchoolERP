@@ -59,7 +59,7 @@ export function TeacherDashboardScreen({ navigation }: Props): React.JSX.Element
         <View style={styles.cardHead}>
           <Text style={styles.cardTitle}>Your attendance today</Text>
           <Button
-            label={myStatus ? 'View / update' : 'Mark now'}
+            label="History"
             variant="secondary"
             onPress={() => navigation.navigate('MyAttendance')}
           />
@@ -67,8 +67,12 @@ export function TeacherDashboardScreen({ navigation }: Props): React.JSX.Element
         {myStatus ? (
           <Badge label={myStatus.label} tone={myStatus.tone} />
         ) : (
-          <Text style={styles.muted}>You haven't marked your attendance for today yet.</Text>
+          <Text style={styles.muted}>You haven't checked in for today yet.</Text>
         )}
+        <Button
+          label={myStatus ? 'Scan again' : 'Scan to check in'}
+          onPress={() => navigation.navigate('ScanAttendance')}
+        />
       </Card>
 
       <Card style={styles.card}>

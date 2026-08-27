@@ -1,16 +1,32 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ApiError } from '../api/client';
 import type { TeacherAttendanceRecord } from '../api/teacherAttendance';
-import { listTeacherAttendance, markTeacherAttendance } from '../api/teacherAttendance';
+import {
+  getTeacherSelfServeConfig,
+  listTeacherAttendance,
+  markTeacherAttendance,
+} from '../api/teacherAttendance';
 import { AttendanceStatusToggle } from './attendance/AttendanceStatusToggle';
 import { todayUtcDate } from './attendance/todayUtc';
 import type { AttendanceStatus } from '../api/attendance';
 import { EmptyState } from '../components/EmptyState';
 import { Skeleton } from '../components/Skeleton';
 
+function fmtTime(iso?: string | null): string {
+  return iso ? new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—';
+}
+
+function fmtWorked(mins?: number | null): string {
+  if (mins == null || mins <= 0) return '—';
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  return h ? `${h}h ${m}m` : `${m}m`;
+}
+
 export function MyAttendancePage() {
   const today = todayUtcDate();
   const [history, setHistory] = useState<TeacherAttendanceRecord[]>([]);
+  const [manualMarkEnabled, setManualMarkEnabled] = useState(true);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -19,7 +35,12 @@ export function MyAttendancePage() {
     setLoading(true);
     setError(null);
     try {
-      setHistory(await listTeacherAttendance());
+      const [records, config] = await Promise.all([
+        listTeacherAttendance(),
+        getTeacherSelfServeConfig(),
+      ]);
+      setHistory(records);
+      setManualMarkEnabled(config.manualMarkEnabled);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Failed to load your attendance');
     } finally {
@@ -50,7 +71,11 @@ export function MyAttendancePage() {
   return (
     <>
       <h1>My Attendance</h1>
-      <p className="subtitle">Mark your own attendance for today.</p>
+      <p className="subtitle">
+        {manualMarkEnabled
+          ? 'Mark your own attendance for today.'
+          : 'Check in by scanning the QR on the staff display with the EDVANCE app.'}
+      </p>
 
       {error && (
         <div className="status down">
@@ -63,7 +88,15 @@ export function MyAttendancePage() {
         <div className="card-head">
           <h2>Today ({today})</h2>
         </div>
-        <AttendanceStatusToggle value={status} onChange={(next) => void onMark(next)} disabled={saving} />
+        {manualMarkEnabled ? (
+          <AttendanceStatusToggle value={status} onChange={(next) => void onMark(next)} disabled={saving} />
+        ) : status ? (
+          <span className={`badge status-badge-${status.toLowerCase()}`}>{status}</span>
+        ) : (
+          <p className="muted">
+            Not checked in yet — scan the QR on the staff display with the EDVANCE app.
+          </p>
+        )}
       </section>
 
       <section className="card">
@@ -84,6 +117,9 @@ export function MyAttendancePage() {
               <tr>
                 <th>Date</th>
                 <th>Status</th>
+                <th>Check in</th>
+                <th>Check out</th>
+                <th>Hours</th>
                 <th>Marked by</th>
               </tr>
             </thead>
@@ -94,6 +130,9 @@ export function MyAttendancePage() {
                   <td data-label="Status">
                     <span className={`badge status-badge-${record.status.toLowerCase()}`}>{record.status}</span>
                   </td>
+                  <td data-label="Check in">{fmtTime(record.checkInAt)}</td>
+                  <td data-label="Check out">{fmtTime(record.checkOutAt)}</td>
+                  <td data-label="Hours">{fmtWorked(record.workedMinutes)}</td>
                   <td data-label="Marked by">{record.markedBy.name}</td>
                 </tr>
               ))}

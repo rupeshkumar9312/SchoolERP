@@ -310,6 +310,16 @@ enum AttendanceStatus {
   LEAVE
 }
 
+/// How a TeacherAttendance row was produced. MANUAL = the legacy self-mark or
+/// admin mark via POST /attendance/teachers; QR = a teacher scanned a
+/// short-lived kiosk QR (POST /attendance/teachers/scan); ADMIN is reserved
+/// for future admin-tool bulk corrections that want to read distinctly here.
+enum AttendanceMethod {
+  MANUAL
+  QR
+  ADMIN
+}
+
 model StudentAttendance {
   id         Int              @id @default(autoincrement())
   studentId  Int
@@ -341,6 +351,33 @@ model TeacherAttendance {
   teacher    Teacher          @relation(fields: [teacherId], references: [id], onDelete: Cascade)
   date       DateTime         @db.Date
   status     AttendanceStatus
+  /// Defaults to MANUAL so every pre-QR row (and every future admin mark)
+  /// keeps its meaning without a backfill.
+  method     AttendanceMethod @default(MANUAL)
+  /// Wall-clock instant the row was created/last set. `date` stays a pure
+  /// calendar date; this is what "scanned at 08:03" reads from.
+  markedAt   DateTime?
+  /// The `jti` of the QR token that produced a QR row — traceability only,
+  /// never re-validated. Null for MANUAL/ADMIN.
+  sourceJti  String?
+  /// Optional geofence capture from the scanning device (Phase 6). Null until
+  /// the mobile app starts sending coordinates. These hold the *check-in*
+  /// location; the check-out counterparts are below.
+  markedLat       Float?
+  markedLng       Float?
+  markedAccuracyM Float?
+  /// First QR check-in of the day (POST /attendance/teachers/scan, dir=in).
+  /// Backfilled to markedAt for every pre-check-out QR row.
+  checkInAt         DateTime?
+  /// Last QR check-out of the day (dir=out). Null until the teacher scans out.
+  /// Worked hours are computed as checkOutAt - checkInAt, never stored.
+  checkOutAt        DateTime?
+  /// Geofence capture for the check-out scan (mirrors markedLat/Lng/AccuracyM).
+  checkOutLat        Float?
+  checkOutLng        Float?
+  checkOutAccuracyM  Float?
+  /// jti of the check-out token — traceability only (mirrors sourceJti).
+  checkOutSourceJti String?
   markedById Int
   markedBy   User             @relation("TeacherAttendanceMarkedBy", fields: [markedById], references: [id], onDelete: Restrict)
   createdAt  DateTime         @default(now())
@@ -349,6 +386,55 @@ model TeacherAttendance {
   @@unique([teacherId, date])
   @@index([date])
   @@map("teacher_attendance")
+}
+
+/// Per-teacher single-use record of a consumed QR attendance token. The
+/// unique [jti, teacherId] pair is the replay guard: one short-lived token
+/// may be scanned by many teachers in its ~25s life, but each teacher only
+/// once. No FK to teachers — the row is ephemeral and pruned on write (older
+/// than a day), so it never needs to participate in cascades.
+model AttendanceQrConsumption {
+  id         Int      @id @default(autoincrement())
+  jti        String
+  teacherId  Int
+  consumedAt DateTime @default(now())
+
+  @@unique([jti, teacherId])
+  @@index([consumedAt])
+  @@map("attendance_qr_consumption")
+}
+
+/// Singleton (id is always 1) — the DB-editable settings for QR check-in:
+/// the campus geofence and the check-out behaviour. Admins set this from the
+/// web. `enabled` gates the geofence, `checkoutEnabled` gates the check-out QR;
+/// leaving both off keeps QR check-in exactly as it shipped.
+model AttendanceGeofenceConfig {
+  id           Int      @id @default(1)
+  enabled      Boolean  @default(false)
+  /// Campus centre. Nullable so a row can exist before coordinates are set;
+  /// `enabled` may only be turned on once both are present (enforced in code).
+  latitude     Float?
+  longitude    Float?
+  /// Accepted distance from the centre, in metres.
+  radiusM      Int      @default(150)
+  /// Worst GPS accuracy radius (metres) a scan may report and still be trusted.
+  maxAccuracyM Int      @default(75)
+  /// Master switch for the second (check-out) QR. Off = kiosk only shows the
+  /// check-in QR, identical to the pre-check-out system.
+  checkoutEnabled             Boolean @default(false)
+  /// "HH:mm" in SCHOOL_TZ — the kiosk auto-switches its QR to check-out at or
+  /// after this local time. Null = the kiosk switches only on a manual toggle.
+  checkoutAutoSwitchAt        String?
+  /// Reject a check-out scanned sooner than this many minutes after check-in.
+  minSessionMinutes           Int     @default(30)
+  /// When false (default) a check-out with no check-in that day is rejected.
+  allowCheckoutWithoutCheckin Boolean @default(false)
+  /// Plain column, no FK — mirrors AttendanceQrConsumption.teacherId. Just the
+  /// last admin to save, for the audit trail.
+  updatedById  Int?
+  updatedAt    DateTime @updatedAt
+
+  @@map("attendance_geofence_config")
 }
 
 /// A non-teaching day, excluded from attendance % calculations in Reports.
