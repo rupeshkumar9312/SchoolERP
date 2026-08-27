@@ -12,6 +12,7 @@ import { Button } from '../../components/Button';
 import { Card } from '../../components/Card';
 import { DataRowText } from '../../components/DataRow';
 import { ErrorView } from '../../components/ErrorView';
+import { IconButton } from '../../components/IconButton';
 import { LoadingView } from '../../components/LoadingView';
 import { Screen } from '../../components/Screen';
 import { SearchInput } from '../../components/SearchInput';
@@ -40,7 +41,6 @@ export function StudentsListScreen({ navigation }: Props): React.JSX.Element {
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [deletingId, setDeletingId] = useState<number | null>(null);
 
   useEffect(() => {
     void academic.listAcademicYears().then(setYears);
@@ -117,14 +117,11 @@ export function StudentsListScreen({ navigation }: Props): React.JSX.Element {
         text: 'Delete',
         style: 'destructive',
         onPress: async () => {
-          setDeletingId(s.id);
           try {
             await deleteStudent(s.id);
             setStudents((prev) => (prev ?? []).filter((x) => x.id !== s.id));
           } catch (err) {
             setError(err instanceof ApiError ? err.message : 'Could not delete student');
-          } finally {
-            setDeletingId(null);
           }
         },
       },
@@ -189,27 +186,35 @@ export function StudentsListScreen({ navigation }: Props): React.JSX.Element {
       {students?.map((s) => (
         <Card key={s.id} style={styles.card}>
           <View style={styles.cardHead}>
-            <Text style={styles.name}>{s.name}</Text>
-            <Badge label={s.isActive ? 'Active' : 'Inactive'} tone={s.isActive ? 'success' : 'muted'} />
+            <View style={styles.cardHeadMain}>
+              <Text style={styles.name} numberOfLines={1}>
+                {s.name}
+              </Text>
+              <Badge label={s.isActive ? 'Active' : 'Inactive'} tone={s.isActive ? 'success' : 'muted'} />
+            </View>
+            {(canEdit || canDelete) && (
+              <View style={styles.iconRow}>
+                {canEdit && (
+                  <IconButton
+                    name="create-outline"
+                    variant="compact"
+                    onPress={() => navigation.navigate('StudentForm', { student: s })}
+                  />
+                )}
+                {canDelete && (
+                  <IconButton
+                    name="trash-outline"
+                    variant="compact"
+                    color={colors.danger}
+                    onPress={() => handleDelete(s)}
+                  />
+                )}
+              </View>
+            )}
           </View>
           <DataRowText label="Admission No." value={s.admissionNo ?? '—'} />
           <DataRowText label="Class" value={`${s.class.name}-${s.section.name}`} />
           <DataRowText label="Guardian" value={s.guardianName ?? '—'} />
-
-          {(canEdit || canDelete) && (
-            <View style={styles.actions}>
-              {canEdit && (
-                <View style={styles.actionHalf}>
-                  <Button label="Edit" variant="secondary" onPress={() => navigation.navigate('StudentForm', { student: s })} />
-                </View>
-              )}
-              {canDelete && (
-                <View style={styles.actionHalf}>
-                  <Button label="Delete" variant="danger" onPress={() => handleDelete(s)} loading={deletingId === s.id} />
-                </View>
-              )}
-            </View>
-          )}
         </Card>
       ))}
 
@@ -228,7 +233,7 @@ const styles = StyleSheet.create({
   error: { color: colors.danger, fontSize: 13, fontFamily: fonts.body },
   card: { gap: spacing.xs },
   cardHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm },
-  name: { fontSize: 16, fontFamily: fonts.headingBold, color: colors.text },
-  actions: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.xs },
-  actionHalf: { flex: 1 },
+  cardHeadMain: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: spacing.sm, flexShrink: 1 },
+  name: { fontSize: 16, fontFamily: fonts.headingBold, color: colors.text, flexShrink: 1 },
+  iconRow: { flexDirection: 'row', gap: spacing.xs },
 });

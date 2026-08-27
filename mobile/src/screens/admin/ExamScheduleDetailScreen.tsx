@@ -23,6 +23,7 @@ import { Button } from '../../components/Button';
 import { Card } from '../../components/Card';
 import { DateField } from '../../components/DateField';
 import { ErrorView } from '../../components/ErrorView';
+import { IconButton } from '../../components/IconButton';
 import { LoadingView } from '../../components/LoadingView';
 import { Screen } from '../../components/Screen';
 import { SelectField } from '../../components/SelectField';
@@ -65,7 +66,6 @@ export function ExamScheduleDetailScreen({ route, navigation }: Props): React.JS
   const [rowMaxMarks, setRowMaxMarks] = useState('');
   const [rowPassMarks, setRowPassMarks] = useState('');
   const [savingRowId, setSavingRowId] = useState<number | null>(null);
-  const [removingRowId, setRemovingRowId] = useState<number | null>(null);
 
   const load = useCallback(async () => {
     setError(null);
@@ -205,7 +205,6 @@ export function ExamScheduleDetailScreen({ route, navigation }: Props): React.JS
         text: 'Remove',
         style: 'destructive',
         onPress: async () => {
-          setRemovingRowId(row.id);
           setError(null);
           try {
             const updated = await removeExamSubject(examId, scheduleId, row.id);
@@ -213,8 +212,6 @@ export function ExamScheduleDetailScreen({ route, navigation }: Props): React.JS
             setProgress(await getExamProgress(examId, scheduleId));
           } catch (err) {
             setError(err instanceof ApiError ? err.message : 'Could not remove subject');
-          } finally {
-            setRemovingRowId(null);
           }
         },
       },
@@ -264,7 +261,7 @@ export function ExamScheduleDetailScreen({ route, navigation }: Props): React.JS
         <View style={styles.cardHead}>
           <Text style={styles.cardTitle}>Dates</Text>
           {canEdit && !editingDates && (
-            <Button label="Edit" variant="secondary" onPress={() => setEditingDates(true)} />
+            <IconButton name="create-outline" variant="compact" onPress={() => setEditingDates(true)} />
           )}
         </View>
 
@@ -342,13 +339,9 @@ export function ExamScheduleDetailScreen({ route, navigation }: Props): React.JS
                   {row.passMarks !== null ? ` · Pass ${row.passMarks}` : ''}
                 </Text>
                 {canEdit && (
-                  <View style={styles.actionsRow}>
-                    <View style={styles.actionHalf}>
-                      <Button label="Edit" variant="secondary" onPress={() => startEditRow(row)} />
-                    </View>
-                    <View style={styles.actionHalf}>
-                      <Button label="Remove" variant="danger" onPress={() => onRemoveRow(row)} loading={removingRowId === row.id} />
-                    </View>
+                  <View style={styles.iconRow}>
+                    <IconButton name="create-outline" variant="compact" onPress={() => startEditRow(row)} />
+                    <IconButton name="trash-outline" variant="compact" color={colors.danger} onPress={() => onRemoveRow(row)} />
                   </View>
                 )}
               </>
@@ -416,6 +409,7 @@ const styles = StyleSheet.create({
   cardTitle: { fontSize: 15, fontFamily: fonts.bodySemiBold, color: colors.text, flexShrink: 1 },
   actionsRow: { flexDirection: 'row', gap: spacing.sm },
   actionHalf: { flex: 1 },
+  iconRow: { flexDirection: 'row', gap: spacing.xs, justifyContent: 'flex-end' },
   rowFields: { flexDirection: 'row', gap: spacing.sm },
   rowFieldHalf: { flex: 1 },
   label: { fontSize: 13, fontFamily: fonts.bodySemiBold, color: colors.textMuted, marginBottom: spacing.xs },

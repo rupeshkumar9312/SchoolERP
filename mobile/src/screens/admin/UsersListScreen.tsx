@@ -7,11 +7,13 @@ import { PAGE_SIZE } from '../../api/pagination';
 import { Role, listRoles } from '../../api/roles';
 import { UserListItem, deleteUser, listUsers, resetUserPassword } from '../../api/users';
 import { useAuth } from '../../auth/AuthContext';
+import { ActionSheet, ActionSheetItem } from '../../components/ActionSheet';
 import { Badge } from '../../components/Badge';
 import { Button } from '../../components/Button';
 import { Card } from '../../components/Card';
 import { DataRow, DataRowText } from '../../components/DataRow';
 import { ErrorView } from '../../components/ErrorView';
+import { IconButton } from '../../components/IconButton';
 import { LoadingView } from '../../components/LoadingView';
 import { Screen } from '../../components/Screen';
 import { SearchInput } from '../../components/SearchInput';
@@ -37,11 +39,10 @@ export function UsersListScreen({ navigation }: Props): React.JSX.Element {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
-  const [deletingId, setDeletingId] = useState<number | null>(null);
-  const [resettingId, setResettingId] = useState<number | null>(null);
   const [resetResult, setResetResult] = useState<
     { name: string; email: string; edvanceId: string; temporaryPassword: string } | null
   >(null);
+  const [menuUser, setMenuUser] = useState<UserListItem | null>(null);
 
   const load = useCallback(async (filter: number | null, searchText: string) => {
     setError(null);
@@ -96,15 +97,12 @@ export function UsersListScreen({ navigation }: Props): React.JSX.Element {
         text: 'Delete',
         style: 'destructive',
         onPress: async () => {
-          setDeletingId(u.id);
           try {
             await deleteUser(u.id);
             setUsers((prev) => (prev ?? []).filter((x) => x.id !== u.id));
             setTotal((prev) => prev - 1);
           } catch (err) {
             setError(err instanceof ApiError ? err.message : 'Could not delete user');
-          } finally {
-            setDeletingId(null);
           }
         },
       },
@@ -120,14 +118,11 @@ export function UsersListScreen({ navigation }: Props): React.JSX.Element {
         {
           text: 'Reset password',
           onPress: async () => {
-            setResettingId(u.id);
             try {
               const { temporaryPassword } = await resetUserPassword(u.id);
               setResetResult({ name: u.name, email: u.email, edvanceId: u.edvanceId, temporaryPassword });
             } catch (err) {
               setError(err instanceof ApiError ? err.message : 'Could not reset password');
-            } finally {
-              setResettingId(null);
             }
           },
         },
@@ -171,39 +166,21 @@ export function UsersListScreen({ navigation }: Props): React.JSX.Element {
       {users?.map((u) => (
         <Card key={u.id} style={styles.card}>
           <View style={styles.cardHead}>
-            <Text style={styles.name}>{u.name}</Text>
-            <Badge label={u.isActive ? 'Active' : 'Inactive'} tone={u.isActive ? 'success' : 'muted'} />
+            <View style={styles.cardHeadMain}>
+              <Text style={styles.name} numberOfLines={1}>
+                {u.name}
+              </Text>
+              <Badge label={u.isActive ? 'Active' : 'Inactive'} tone={u.isActive ? 'success' : 'muted'} />
+            </View>
+            {(canEdit || canDelete || isSuperAdmin) && (
+              <IconButton name="ellipsis-vertical" onPress={() => setMenuUser(u)} />
+            )}
           </View>
           <DataRowText label="Login ID" value={u.email} />
           <DataRowText label="Phone" value={u.phone ?? '—'} />
           <DataRow label="Role">
             <Badge label={u.role.name} tone="primary" />
           </DataRow>
-
-          {(canEdit || canDelete || isSuperAdmin) && (
-            <View style={styles.actions}>
-              {canEdit && (
-                <View style={styles.actionThird}>
-                  <Button label="Edit" variant="secondary" onPress={() => navigation.navigate('UserForm', { user: u })} />
-                </View>
-              )}
-              {isSuperAdmin && (
-                <View style={styles.actionThird}>
-                  <Button
-                    label="Reset pw"
-                    variant="secondary"
-                    onPress={() => handleResetPassword(u)}
-                    loading={resettingId === u.id}
-                  />
-                </View>
-              )}
-              {canDelete && (
-                <View style={styles.actionThird}>
-                  <Button label="Delete" variant="danger" onPress={() => handleDelete(u)} loading={deletingId === u.id} />
-                </View>
-              )}
-            </View>
-          )}
         </Card>
       ))}
 
@@ -246,6 +223,37 @@ export function UsersListScreen({ navigation }: Props): React.JSX.Element {
           </Card>
         </View>
       </Modal>
+
+      <ActionSheet
+        visible={!!menuUser}
+        onClose={() => setMenuUser(null)}
+        title={menuUser?.name}
+        items={
+          menuUser
+            ? ([
+                canEdit && {
+                  key: 'edit',
+                  label: 'Edit',
+                  icon: 'create-outline',
+                  onPress: () => navigation.navigate('UserForm', { user: menuUser }),
+                },
+                isSuperAdmin && {
+                  key: 'reset',
+                  label: 'Reset password',
+                  icon: 'key-outline',
+                  onPress: () => handleResetPassword(menuUser),
+                },
+                canDelete && {
+                  key: 'delete',
+                  label: 'Delete',
+                  icon: 'trash-outline',
+                  destructive: true,
+                  onPress: () => handleDelete(menuUser),
+                },
+              ].filter(Boolean) as ActionSheetItem[])
+            : []
+        }
+      />
     </Screen>
   );
 }
@@ -259,9 +267,8 @@ const styles = StyleSheet.create({
   error: { color: colors.danger, fontSize: 13, fontFamily: fonts.body },
   card: { gap: spacing.xs },
   cardHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm },
-  name: { fontSize: 16, fontFamily: fonts.headingBold, color: colors.text },
-  actions: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.xs },
-  actionThird: { flex: 1 },
+  cardHeadMain: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: spacing.sm, flexShrink: 1 },
+  name: { fontSize: 16, fontFamily: fonts.headingBold, color: colors.text, flexShrink: 1 },
   modalBackdrop: {
     flex: 1,
     backgroundColor: 'rgba(15, 23, 42, 0.5)',

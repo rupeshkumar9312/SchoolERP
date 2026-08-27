@@ -16,6 +16,7 @@ import {
 import { Badge } from '../../components/Badge';
 import { Button } from '../../components/Button';
 import { Card } from '../../components/Card';
+import { IconButton } from '../../components/IconButton';
 import { LoadingView } from '../../components/LoadingView';
 import { Screen } from '../../components/Screen';
 import { SelectField } from '../../components/SelectField';
@@ -45,8 +46,6 @@ export function TeacherAssignmentsScreen({ route, navigation }: Props): React.JS
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [removingId, setRemovingId] = useState<number | null>(null);
-  const [removingSectionId, setRemovingSectionId] = useState<number | null>(null);
 
   const loadAssignments = useCallback(async () => {
     setAssignments(await listAssignments(teacherId));
@@ -128,15 +127,12 @@ export function TeacherAssignmentsScreen({ route, navigation }: Props): React.JS
         text: 'Remove',
         style: 'destructive',
         onPress: async () => {
-          setRemovingId(assignment.id);
           setError(null);
           try {
             await deleteAssignment(teacherId, assignment.id);
             await Promise.all([loadAssignments(), loadClassTeacherOf()]);
           } catch (err) {
             setError(err instanceof ApiError ? err.message : 'Failed to remove assignment');
-          } finally {
-            setRemovingId(null);
           }
         },
       },
@@ -150,15 +146,12 @@ export function TeacherAssignmentsScreen({ route, navigation }: Props): React.JS
         text: 'Remove',
         style: 'destructive',
         onPress: async () => {
-          setRemovingSectionId(targetSectionId);
           setError(null);
           try {
             await unsetClassTeacher(teacherId, targetSectionId);
             await Promise.all([loadAssignments(), loadClassTeacherOf()]);
           } catch (err) {
             setError(err instanceof ApiError ? err.message : 'Failed to remove class teacher status');
-          } finally {
-            setRemovingSectionId(null);
           }
         },
       },
@@ -185,7 +178,7 @@ export function TeacherAssignmentsScreen({ route, navigation }: Props): React.JS
               </Text>
               {a.isClassTeacher && <Badge label="Class teacher" tone="primary" />}
             </View>
-            <Button label={removingId === a.id ? 'Removing…' : 'Remove'} variant="danger" onPress={() => onRemove(a)} loading={removingId === a.id} />
+            <IconButton name="trash-outline" variant="compact" color={colors.danger} onPress={() => onRemove(a)} />
           </View>
         ))}
       </Card>
@@ -199,11 +192,11 @@ export function TeacherAssignmentsScreen({ route, navigation }: Props): React.JS
             <Text style={styles.assignmentTitle}>
               {c.class.name}-{c.section.name}
             </Text>
-            <Button
-              label={removingSectionId === c.section.id ? 'Removing…' : 'Remove'}
-              variant="danger"
+            <IconButton
+              name="trash-outline"
+              variant="compact"
+              color={colors.danger}
               onPress={() => onRemoveClassTeacher(c.section.id, `${c.class.name}-${c.section.name}`)}
-              loading={removingSectionId === c.section.id}
             />
           </View>
         ))}

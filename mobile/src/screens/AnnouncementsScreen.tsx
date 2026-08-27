@@ -10,6 +10,7 @@ import { Badge } from '../components/Badge';
 import { Button } from '../components/Button';
 import { Card } from '../components/Card';
 import { ErrorView } from '../components/ErrorView';
+import { IconButton } from '../components/IconButton';
 import { ImageViewerModal } from '../components/ImageViewerModal';
 import { LoadingView } from '../components/LoadingView';
 import { Screen } from '../components/Screen';
@@ -38,7 +39,6 @@ export function AnnouncementsScreen({ navigation }: Props): React.JSX.Element {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
-  const [deletingId, setDeletingId] = useState<number | null>(null);
   const [viewerUri, setViewerUri] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -82,14 +82,11 @@ export function AnnouncementsScreen({ navigation }: Props): React.JSX.Element {
         text: 'Delete',
         style: 'destructive',
         onPress: async () => {
-          setDeletingId(a.id);
           try {
             await deleteAnnouncement(a.id);
             setAnnouncements((prev) => (prev ?? []).filter((x) => x.id !== a.id));
           } catch (err) {
             setError(err instanceof ApiError ? err.message : 'Could not delete announcement');
-          } finally {
-            setDeletingId(null);
           }
         },
       },
@@ -134,25 +131,21 @@ export function AnnouncementsScreen({ navigation }: Props): React.JSX.Element {
           </Text>
 
           {canManage && canModify(a) && (
-            <View style={styles.actions}>
+            <View style={styles.iconRow}>
               {canEdit && (
-                <View style={styles.actionHalf}>
-                  <Button
-                    label="Edit"
-                    variant="secondary"
-                    onPress={() => navigation.navigate('AnnouncementForm', { announcement: a })}
-                  />
-                </View>
+                <IconButton
+                  name="create-outline"
+                  variant="compact"
+                  onPress={() => navigation.navigate('AnnouncementForm', { announcement: a })}
+                />
               )}
               {canDelete && (
-                <View style={styles.actionHalf}>
-                  <Button
-                    label="Delete"
-                    variant="danger"
-                    onPress={() => handleDelete(a)}
-                    loading={deletingId === a.id}
-                  />
-                </View>
+                <IconButton
+                  name="trash-outline"
+                  variant="compact"
+                  color={colors.danger}
+                  onPress={() => handleDelete(a)}
+                />
               )}
             </View>
           )}
@@ -178,6 +171,5 @@ const styles = StyleSheet.create({
   body: { fontSize: 14, fontFamily: fonts.body, color: colors.text, lineHeight: 20 },
   image: { width: '100%', height: 180, borderRadius: radius.md, backgroundColor: colors.surfaceHover },
   badgeRow: { flexDirection: 'row', gap: spacing.xs, flexWrap: 'wrap', justifyContent: 'flex-end' },
-  actions: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.xs },
-  actionHalf: { flex: 1 },
+  iconRow: { flexDirection: 'row', gap: spacing.xs, justifyContent: 'flex-end', marginTop: spacing.xs },
 });

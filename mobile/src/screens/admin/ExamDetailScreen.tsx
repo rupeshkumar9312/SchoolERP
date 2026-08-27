@@ -9,9 +9,11 @@ import { Badge } from '../../components/Badge';
 import { Button } from '../../components/Button';
 import { Card } from '../../components/Card';
 import { ErrorView } from '../../components/ErrorView';
+import { IconButton } from '../../components/IconButton';
 import { LoadingView } from '../../components/LoadingView';
 import { Screen } from '../../components/Screen';
-import { colors, fonts, spacing } from '../../theme';
+import { Touchable } from '../../components/Touchable';
+import { colors, fonts, radius, spacing } from '../../theme';
 import type { ManageStackParamList } from '../../navigation/types';
 
 type Props = NativeStackScreenProps<ManageStackParamList, 'ExamDetail'>;
@@ -34,7 +36,6 @@ export function ExamDetailScreen({ route, navigation }: Props): React.JSX.Elemen
   const [exam, setExam] = useState<Exam | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [removingScheduleId, setRemovingScheduleId] = useState<number | null>(null);
 
   const load = useCallback(async () => {
     setError(null);
@@ -65,14 +66,11 @@ export function ExamDetailScreen({ route, navigation }: Props): React.JSX.Elemen
           text: 'Remove',
           style: 'destructive',
           onPress: async () => {
-            setRemovingScheduleId(schedule.id);
             try {
               const updated = await deleteExamSchedule(examId, schedule.id);
               setExam(updated);
             } catch (err) {
               setError(err instanceof ApiError ? err.message : 'Could not remove class');
-            } finally {
-              setRemovingScheduleId(null);
             }
           },
         },
@@ -115,38 +113,34 @@ export function ExamDetailScreen({ route, navigation }: Props): React.JSX.Elemen
       )}
 
       {exam.schedules.map((s) => (
-        <Card key={s.id} style={styles.card}>
-          <View style={styles.cardHead}>
-            <Text style={styles.className}>
-              {s.class.name} · {s.academicYear.name}
-            </Text>
-            <Badge label={s.status === 'PUBLISHED' ? 'Published' : 'Draft'} tone={s.status === 'PUBLISHED' ? 'success' : 'muted'} />
-          </View>
-          <Text style={styles.muted}>
-            {toDateInputValue(s.startDate)} – {toDateInputValue(s.endDate)} · {s.subjects.length} subject
-            {s.subjects.length === 1 ? '' : 's'}
-          </Text>
-
-          <View style={styles.actions}>
-            <View style={styles.actionHalf}>
-              <Button
-                label="Manage"
-                variant="secondary"
-                onPress={() => navigation.navigate('ExamScheduleDetail', { examId, scheduleId: s.id })}
-              />
-            </View>
-            {canDelete && (
-              <View style={styles.actionHalf}>
-                <Button
-                  label="Remove"
-                  variant="danger"
-                  onPress={() => handleRemoveSchedule(s)}
-                  loading={removingScheduleId === s.id}
-                />
+        <Touchable
+          key={s.id}
+          onPress={() => navigation.navigate('ExamScheduleDetail', { examId, scheduleId: s.id })}
+          style={styles.touchable}
+        >
+          <Card style={styles.card}>
+            <View style={styles.cardHead}>
+              <View style={styles.cardHeadMain}>
+                <Text style={styles.className} numberOfLines={1}>
+                  {s.class.name} · {s.academicYear.name}
+                </Text>
+                <Badge label={s.status === 'PUBLISHED' ? 'Published' : 'Draft'} tone={s.status === 'PUBLISHED' ? 'success' : 'muted'} />
               </View>
-            )}
-          </View>
-        </Card>
+              {canDelete && (
+                <IconButton
+                  name="trash-outline"
+                  variant="compact"
+                  color={colors.danger}
+                  onPress={() => handleRemoveSchedule(s)}
+                />
+              )}
+            </View>
+            <Text style={styles.muted}>
+              {toDateInputValue(s.startDate)} – {toDateInputValue(s.endDate)} · {s.subjects.length} subject
+              {s.subjects.length === 1 ? '' : 's'}
+            </Text>
+          </Card>
+        </Touchable>
       ))}
     </Screen>
   );
@@ -160,9 +154,9 @@ const styles = StyleSheet.create({
   sectionTitle: { fontSize: 16, fontFamily: fonts.headingBold, color: colors.text },
   muted: { fontSize: 13, fontFamily: fonts.body, color: colors.textMuted },
   error: { color: colors.danger, fontSize: 13, fontFamily: fonts.body },
+  touchable: { borderRadius: radius.lg, overflow: 'hidden' },
   card: { gap: spacing.xs },
   cardHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm },
+  cardHeadMain: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: spacing.sm, flexShrink: 1 },
   className: { fontSize: 15, fontFamily: fonts.bodySemiBold, color: colors.text, flexShrink: 1 },
-  actions: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.xs },
-  actionHalf: { flex: 1 },
 });

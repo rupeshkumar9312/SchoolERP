@@ -11,6 +11,7 @@ import { Button } from '../../components/Button';
 import { Card } from '../../components/Card';
 import { DataRowText } from '../../components/DataRow';
 import { ErrorView } from '../../components/ErrorView';
+import { IconButton } from '../../components/IconButton';
 import { LoadingView } from '../../components/LoadingView';
 import { Screen } from '../../components/Screen';
 import { colors, fonts, spacing } from '../../theme';
@@ -32,7 +33,6 @@ export function TeachersListScreen({ navigation }: Props): React.JSX.Element {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
-  const [deletingId, setDeletingId] = useState<number | null>(null);
 
   const load = useCallback(async () => {
     setError(null);
@@ -75,14 +75,11 @@ export function TeachersListScreen({ navigation }: Props): React.JSX.Element {
         text: 'Delete',
         style: 'destructive',
         onPress: async () => {
-          setDeletingId(t.id);
           try {
             await deleteTeacher(t.id);
             setTeachers((prev) => (prev ?? []).filter((x) => x.id !== t.id));
           } catch (err) {
             setError(err instanceof ApiError ? err.message : 'Could not delete teacher');
-          } finally {
-            setDeletingId(null);
           }
         },
       },
@@ -108,37 +105,43 @@ export function TeachersListScreen({ navigation }: Props): React.JSX.Element {
       {teachers?.map((t) => (
         <Card key={t.id} style={styles.card}>
           <View style={styles.cardHead}>
-            <Text style={styles.name}>{t.name}</Text>
-            <Badge label={t.isActive ? 'Active' : 'Inactive'} tone={t.isActive ? 'success' : 'muted'} />
+            <View style={styles.cardHeadMain}>
+              <Text style={styles.name} numberOfLines={1}>
+                {t.name}
+              </Text>
+              <Badge label={t.isActive ? 'Active' : 'Inactive'} tone={t.isActive ? 'success' : 'muted'} />
+            </View>
+            {showActions && (
+              <View style={styles.iconRow}>
+                {canAssign && (
+                  <IconButton
+                    name="layers-outline"
+                    variant="compact"
+                    onPress={() => navigation.navigate('TeacherAssignments', { teacherId: t.id, teacherName: t.name })}
+                  />
+                )}
+                {canEdit && (
+                  <IconButton
+                    name="create-outline"
+                    variant="compact"
+                    onPress={() => navigation.navigate('TeacherForm', { teacher: t })}
+                  />
+                )}
+                {canDelete && (
+                  <IconButton
+                    name="trash-outline"
+                    variant="compact"
+                    color={colors.danger}
+                    onPress={() => handleDelete(t)}
+                  />
+                )}
+              </View>
+            )}
           </View>
           <DataRowText label="Login ID" value={t.email} />
           <DataRowText label="Phone" value={t.phone ?? '—'} />
           <DataRowText label="Qualification" value={t.qualification ?? '—'} />
           <DataRowText label="Joined" value={formatDate(t.joiningDate)} />
-
-          {showActions && (
-            <View style={styles.actions}>
-              {canAssign && (
-                <View style={styles.actionThird}>
-                  <Button
-                    label="Assignments"
-                    variant="secondary"
-                    onPress={() => navigation.navigate('TeacherAssignments', { teacherId: t.id, teacherName: t.name })}
-                  />
-                </View>
-              )}
-              {canEdit && (
-                <View style={styles.actionThird}>
-                  <Button label="Edit" variant="secondary" onPress={() => navigation.navigate('TeacherForm', { teacher: t })} />
-                </View>
-              )}
-              {canDelete && (
-                <View style={styles.actionThird}>
-                  <Button label="Delete" variant="danger" onPress={() => handleDelete(t)} loading={deletingId === t.id} />
-                </View>
-              )}
-            </View>
-          )}
         </Card>
       ))}
 
@@ -156,7 +159,7 @@ const styles = StyleSheet.create({
   error: { color: colors.danger, fontSize: 13, fontFamily: fonts.body },
   card: { gap: spacing.xs },
   cardHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm },
-  name: { fontSize: 16, fontFamily: fonts.headingBold, color: colors.text },
-  actions: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.xs },
-  actionThird: { flex: 1 },
+  cardHeadMain: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: spacing.sm, flexShrink: 1 },
+  name: { fontSize: 16, fontFamily: fonts.headingBold, color: colors.text, flexShrink: 1 },
+  iconRow: { flexDirection: 'row', gap: spacing.xs },
 });

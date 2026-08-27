@@ -11,10 +11,12 @@ import { Badge } from '../../components/Badge';
 import { Button } from '../../components/Button';
 import { Card } from '../../components/Card';
 import { ErrorView } from '../../components/ErrorView';
+import { IconButton } from '../../components/IconButton';
 import { LoadingView } from '../../components/LoadingView';
 import { Screen } from '../../components/Screen';
 import { SelectField } from '../../components/SelectField';
-import { colors, fonts, spacing } from '../../theme';
+import { Touchable } from '../../components/Touchable';
+import { colors, fonts, radius, spacing } from '../../theme';
 import type { ManageStackParamList } from '../../navigation/types';
 
 type Props = NativeStackScreenProps<ManageStackParamList, 'ExamsList'>;
@@ -32,7 +34,6 @@ export function ExamsListScreen({ navigation }: Props): React.JSX.Element {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
-  const [deletingId, setDeletingId] = useState<number | null>(null);
 
   const [years, setYears] = useState<academic.AcademicYear[]>([]);
   const [classes, setClasses] = useState<academic.SchoolClass[]>([]);
@@ -109,14 +110,11 @@ export function ExamsListScreen({ navigation }: Props): React.JSX.Element {
         text: 'Delete',
         style: 'destructive',
         onPress: async () => {
-          setDeletingId(exam.id);
           try {
             await deleteExam(exam.id);
             setExams((prev) => (prev ?? []).filter((e) => e.id !== exam.id));
           } catch (err) {
             setError(err instanceof ApiError ? err.message : 'Could not delete exam');
-          } finally {
-            setDeletingId(null);
           }
         },
       },
@@ -174,33 +172,40 @@ export function ExamsListScreen({ navigation }: Props): React.JSX.Element {
       )}
 
       {exams?.map((e) => (
-        <Card key={e.id} style={styles.card}>
-          <View style={styles.cardHead}>
-            <Text style={styles.name}>{e.name}</Text>
-            <Badge label={EXAM_TYPE_LABELS[e.type]} tone="muted" />
-          </View>
-
-          {e.schedules.length === 0 ? (
-            <Text style={styles.muted}>No classes scheduled yet.</Text>
-          ) : (
-            <View style={styles.classChips}>
-              {e.schedules.map((s) => (
-                <Badge key={s.id} label={s.class.name} tone={s.status === 'PUBLISHED' ? 'success' : 'muted'} />
-              ))}
+        <Touchable
+          key={e.id}
+          onPress={() => navigation.navigate('ExamDetail', { examId: e.id })}
+          style={styles.touchable}
+        >
+          <Card style={styles.card}>
+            <View style={styles.cardHead}>
+              <View style={styles.cardHeadMain}>
+                <Text style={styles.name} numberOfLines={1}>
+                  {e.name}
+                </Text>
+                <Badge label={EXAM_TYPE_LABELS[e.type]} tone="muted" />
+              </View>
+              {canDelete && (
+                <IconButton
+                  name="trash-outline"
+                  variant="compact"
+                  color={colors.danger}
+                  onPress={() => handleDelete(e)}
+                />
+              )}
             </View>
-          )}
 
-          <View style={styles.actions}>
-            <View style={styles.actionHalf}>
-              <Button label="Manage" variant="secondary" onPress={() => navigation.navigate('ExamDetail', { examId: e.id })} />
-            </View>
-            {canDelete && (
-              <View style={styles.actionHalf}>
-                <Button label="Delete" variant="danger" onPress={() => handleDelete(e)} loading={deletingId === e.id} />
+            {e.schedules.length === 0 ? (
+              <Text style={styles.muted}>No classes scheduled yet.</Text>
+            ) : (
+              <View style={styles.classChips}>
+                {e.schedules.map((s) => (
+                  <Badge key={s.id} label={s.class.name} tone={s.status === 'PUBLISHED' ? 'success' : 'muted'} />
+                ))}
               </View>
             )}
-          </View>
-        </Card>
+          </Card>
+        </Touchable>
       ))}
 
       {exams && exams.length > 0 && exams.length < total && (
@@ -217,10 +222,10 @@ const styles = StyleSheet.create({
   filtersCard: { gap: spacing.sm },
   muted: { fontSize: 13, fontFamily: fonts.body, color: colors.textMuted },
   error: { color: colors.danger, fontSize: 13, fontFamily: fonts.body },
+  touchable: { borderRadius: radius.lg, overflow: 'hidden' },
   card: { gap: spacing.sm },
   cardHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm },
+  cardHeadMain: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: spacing.sm, flexShrink: 1 },
   name: { fontSize: 16, fontFamily: fonts.headingBold, color: colors.text, flexShrink: 1 },
   classChips: { flexDirection: 'row', flexWrap: 'wrap', marginRight: -spacing.xs, marginBottom: -spacing.xs, gap: spacing.xs },
-  actions: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.xs },
-  actionHalf: { flex: 1 },
 });
