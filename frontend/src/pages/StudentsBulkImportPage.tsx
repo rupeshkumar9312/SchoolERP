@@ -1,4 +1,4 @@
-import { useRef, useState, type ChangeEvent } from 'react';
+import { useEffect, useRef, useState, type ChangeEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   base64ToBlob,
@@ -10,6 +10,27 @@ import {
 import { ApiError } from '../api/client';
 import { useToast } from '../components/useToast';
 
+// A large file can legitimately take a while (each row is its own DB
+// round trip server-side) — past this, a failure is more likely a
+// timed-out request than "the API is unreachable," even though the
+// browser reports both identically. Surfacing that distinction is the
+// difference between a useless error and an actionable one.
+const SLOW_IMPORT_HINT_SECONDS = 15;
+
+function buildUploadErrorMessage(err: unknown, elapsedSec: number): string {
+  if (err instanceof ApiError) {
+    // A response came back (even an error one) — its message is already
+    // specific, no need to guess further.
+    if (err.status !== undefined) return err.message;
+    const hint =
+      elapsedSec > SLOW_IMPORT_HINT_SECONDS
+        ? ` The request ran for ${elapsedSec}s before failing — that usually means the file is too large for one import (each row is its own database write) and the request timed out, not that the server is down. Try splitting it into smaller batches, e.g. 100 rows at a time.`
+        : '';
+    return `${err.message}${hint}`;
+  }
+  return 'Failed to import students — an unexpected error occurred. Check the server logs for details.';
+}
+
 export function StudentsBulkImportPage() {
   const navigate = useNavigate();
   const toast = useToast();
@@ -17,9 +38,21 @@ export function StudentsBulkImportPage() {
 
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [elapsedSec, setElapsedSec] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<BulkImportResult | null>(null);
   const [downloadingTemplate, setDownloadingTemplate] = useState(false);
+
+  // Ticks a visible "Importing… 23s elapsed" while the request is in
+  // flight — a large import can take a genuinely long time server-side,
+  // and a static "Importing…" with no movement for a minute-plus reads as
+  // frozen even when it's still working.
+  useEffect(() => {
+    if (!uploading) return;
+    const startedAt = Date.now();
+    const timer = setInterval(() => setElapsedSec(Math.round((Date.now() - startedAt) / 1000)), 1000);
+    return () => clearInterval(timer);
+  }, [uploading]);
 
   const onFileChange = (e: ChangeEvent<HTMLInputElement>) => {
     setFile(e.target.files?.[0] ?? null);
@@ -30,7 +63,9 @@ export function StudentsBulkImportPage() {
   const onUpload = async () => {
     if (!file) return;
     setUploading(true);
+    setElapsedSec(0);
     setError(null);
+    const startedAt = Date.now();
     try {
       const res = await bulkImportStudents(file);
       setResult(res);
@@ -40,7 +75,7 @@ export function StudentsBulkImportPage() {
       setFile(null);
       if (fileInputRef.current) fileInputRef.current.value = '';
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Failed to import students');
+      setError(buildUploadErrorMessage(err, Math.round((Date.now() - startedAt) / 1000)));
     } finally {
       setUploading(false);
     }
@@ -110,9 +145,14 @@ export function StudentsBulkImportPage() {
 
         <div className="form-actions">
           <button type="button" onClick={() => void onUpload()} disabled={!file || uploading}>
-            {uploading ? 'Importing…' : 'Import students'}
+            {uploading ? `Importing… ${elapsedSec}s elapsed` : 'Import students'}
           </button>
         </div>
+        {uploading && elapsedSec > SLOW_IMPORT_HINT_SECONDS && (
+          <p className="muted">
+            Still going — large files take longer since each row is its own database write. Keep this tab open.
+          </p>
+        )}
       </section>
 
       {result && (

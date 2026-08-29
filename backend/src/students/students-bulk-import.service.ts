@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
 import ExcelJS from 'exceljs';
@@ -98,8 +98,27 @@ function cellToString(value: unknown): string | undefined {
   return str === '' ? undefined : str;
 }
 
+const PROGRESS_LOG_EVERY = 50;
+/** Each row is a separate DB round trip today (this doesn't touch
+ * StudentsService.create() — that stays exactly as every other caller
+ * relies on it), so the win here is running several rows' worth of that
+ * I/O concurrently instead of fully sequentially, one row finishing before
+ * the next starts. Kept modest rather than maximal: the production DB is a
+ * remote, unpooled host (no `connection_limit` set), so this isn't tuned
+ * to saturate a connection pool that may not exist — just to stop wasting
+ * the wall-clock time each row spends waiting on the network. */
+const IMPORT_CONCURRENCY = 8;
+
+function chunk<T>(items: T[], size: number): T[][] {
+  const chunks: T[][] = [];
+  for (let i = 0; i < items.length; i += size) chunks.push(items.slice(i, i + size));
+  return chunks;
+}
+
 @Injectable()
 export class StudentsBulkImportService {
+  private readonly logger = new Logger(StudentsBulkImportService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly students: StudentsService,
@@ -132,19 +151,53 @@ export class StudentsBulkImportService {
   }
 
   async bulkImport(fileBuffer: Buffer, actorId?: number): Promise<BulkImportResult> {
+    const startedAt = Date.now();
+    const elapsed = () => `${Date.now() - startedAt}ms`;
+    this.logger.log(
+      `Bulk import started — ${fileBuffer.length} byte file, actor ${actorId ?? 'unknown'}`,
+    );
+
+    try {
+      return await this.runImport(fileBuffer, actorId, elapsed);
+    } catch (error) {
+      // Covers anything the per-row handling below doesn't already catch
+      // and convert into a row failure — a bad workbook is its own
+      // BadRequestException path above and logs there instead. The point
+      // here is specifically the case this whole feature was missing:
+      // a crash that used to reach the client (if it reached it at all)
+      // as a bare, unexplained failure now leaves one clear line saying
+      // what happened and how far the import got before it did.
+      const message = error instanceof Error ? error.message : String(error);
+      const stack = error instanceof Error ? error.stack : undefined;
+      this.logger.error(`Bulk import crashed after ${elapsed()}: ${message}`, stack);
+      throw error;
+    }
+  }
+
+  private async runImport(
+    fileBuffer: Buffer,
+    actorId: number | undefined,
+    elapsed: () => string,
+  ): Promise<BulkImportResult> {
     const workbook = new ExcelJS.Workbook();
     try {
       // exceljs's bundled Buffer type predates @types/node's generic Buffer<T>,
       // so TS sees a structural mismatch here even though it's the same Buffer at runtime.
       await workbook.xlsx.load(fileBuffer as unknown as Parameters<typeof workbook.xlsx.load>[0]);
-    } catch {
+    } catch (error) {
+      this.logger.warn(
+        `Bulk import rejected — unreadable workbook: ${error instanceof Error ? error.message : error}`,
+      );
       throw new BadRequestException(
         'Could not read that file — please upload a valid .xlsx workbook.',
       );
     }
 
     const sheet = workbook.worksheets[0];
-    if (!sheet) throw new BadRequestException('The workbook has no sheets.');
+    if (!sheet) {
+      this.logger.warn('Bulk import rejected — workbook has no sheets');
+      throw new BadRequestException('The workbook has no sheets.');
+    }
 
     const headerRow = sheet.getRow(1);
     const columnIndexByKey = new Map<ColumnKey, number>();
@@ -157,6 +210,7 @@ export class StudentsBulkImportService {
     const missing = REQUIRED_KEYS.filter((k) => !columnIndexByKey.has(k));
     if (missing.length > 0) {
       const missingHeaders = missing.map((k) => COLUMNS.find((c) => c.key === k)!.header);
+      this.logger.warn(`Bulk import rejected — missing column(s): ${missingHeaders.join(', ')}`);
       throw new BadRequestException(
         `The uploaded file is missing required column(s): ${missingHeaders.join(', ')}. Download the template to see the expected format.`,
       );
@@ -164,6 +218,7 @@ export class StudentsBulkImportService {
 
     const currentYear = await this.prisma.academicYear.findFirst({ where: { isCurrent: true } });
     if (!currentYear) {
+      this.logger.warn('Bulk import rejected — no current academic year set');
       throw new BadRequestException(
         'No current academic year is set. Set one under Academic Setup before importing students.',
       );
@@ -175,11 +230,25 @@ export class StudentsBulkImportService {
     });
     const classByName = new Map(classes.map((c) => [c.name.trim().toLowerCase(), c]));
 
-    const failures: BulkImportFailure[] = [];
     let successCount = 0;
     let totalRows = 0;
 
-    const rawRowsForFailures: unknown[][] = [];
+    // Rows within a concurrent batch (below) can finish in a different
+    // order than they started, so failures are collected paired with their
+    // row number and sorted back into order afterward — otherwise the
+    // returned list, and the exported failures workbook, could jump
+    // around row-number-wise depending on which row happened to finish
+    // first.
+    const collectedFailures: Array<{ failure: BulkImportFailure; rawRow: unknown[] }> = [];
+    // Everything above and in this parsing pass is synchronous/local (no
+    // DB, no bcrypt) — the actual per-row cost lives entirely in the
+    // validate()+create() step below, which is why only that step needs
+    // to be chunked for concurrency; parsing is already effectively free.
+    const candidates: Array<{ dto: CreateStudentDto; recordFailure: (error: string) => void }> = [];
+
+    this.logger.log(
+      `Bulk import processing up to ${sheet.rowCount - 1} row(s) against academic year "${currentYear.name}"`,
+    );
 
     for (let rowNumber = 2; rowNumber <= sheet.rowCount; rowNumber++) {
       const row = sheet.getRow(rowNumber);
@@ -199,21 +268,26 @@ export class StudentsBulkImportService {
       const sectionName = cellToString(cellValues.get('section')) ?? '';
 
       const recordFailure = (error: string) => {
-        failures.push({ row: rowNumber, admissionNo, name, error });
-        rawRowsForFailures.push([
-          admissionNo,
-          name,
-          cellToString(cellValues.get('dateOfBirth')) ?? '',
-          cellToString(cellValues.get('gender')) ?? '',
-          className,
-          sectionName,
-          cellToString(cellValues.get('guardianName')) ?? '',
-          cellToString(cellValues.get('guardianPhone')) ?? '',
-          cellToString(cellValues.get('guardianEmail')) ?? '',
-          cellToString(cellValues.get('address')) ?? '',
-          cellToString(cellValues.get('admissionDate')) ?? '',
-          error,
-        ]);
+        collectedFailures.push({
+          failure: { row: rowNumber, admissionNo, name, error },
+          rawRow: [
+            admissionNo,
+            name,
+            cellToString(cellValues.get('dateOfBirth')) ?? '',
+            cellToString(cellValues.get('gender')) ?? '',
+            className,
+            sectionName,
+            cellToString(cellValues.get('guardianName')) ?? '',
+            cellToString(cellValues.get('guardianPhone')) ?? '',
+            cellToString(cellValues.get('guardianEmail')) ?? '',
+            cellToString(cellValues.get('address')) ?? '',
+            cellToString(cellValues.get('admissionDate')) ?? '',
+            error,
+          ],
+        });
+        this.logger.warn(
+          `Row ${rowNumber} failed — "${name || admissionNo || 'unnamed'}": ${error}`,
+        );
       };
 
       const klass = classByName.get(className.trim().toLowerCase());
@@ -247,37 +321,74 @@ export class StudentsBulkImportService {
         admissionDate: cellToDateString(cellValues.get('admissionDate')),
       });
 
-      const validationErrors = await validate(dto);
-      if (validationErrors.length > 0) {
-        const message = validationErrors
-          .map((e) => Object.values(e.constraints ?? {}).join(', '))
-          .filter(Boolean)
-          .join('; ');
-        recordFailure(message || 'Invalid row data');
-        continue;
-      }
+      candidates.push({ dto, recordFailure });
+    }
 
-      try {
-        await this.students.create(dto, actorId);
-        successCount++;
-      } catch (error) {
-        recordFailure(error instanceof Error ? error.message : 'Failed to create student');
+    this.logger.log(
+      `Bulk import validating/creating ${candidates.length} candidate row(s), ${IMPORT_CONCURRENCY} at a time`,
+    );
+
+    let processed = 0;
+    let lastLoggedAt = 0;
+    for (const batch of chunk(candidates, IMPORT_CONCURRENCY)) {
+      await Promise.all(
+        batch.map(async ({ dto, recordFailure }) => {
+          const validationErrors = await validate(dto);
+          if (validationErrors.length > 0) {
+            const message = validationErrors
+              .map((e) => Object.values(e.constraints ?? {}).join(', '))
+              .filter(Boolean)
+              .join('; ');
+            recordFailure(message || 'Invalid row data');
+            return;
+          }
+
+          try {
+            await this.students.create(dto, actorId);
+            successCount++;
+          } catch (error) {
+            recordFailure(error instanceof Error ? error.message : 'Failed to create student');
+          }
+        }),
+      );
+
+      // The single highest-value line in this whole method: if the process
+      // gets killed mid-import (a platform execution-time ceiling is the
+      // usual suspect for "large file, no error"), this is the last thing
+      // that made it to the log — so it says exactly how far the import
+      // got and how long that took, instead of nothing at all.
+      processed += batch.length;
+      if (processed - lastLoggedAt >= PROGRESS_LOG_EVERY || processed === candidates.length) {
+        lastLoggedAt = processed;
+        this.logger.log(
+          `Bulk import progress — ${processed}/${candidates.length} candidate row(s) processed (${successCount} ok, ${collectedFailures.length} failed), ${elapsed()} elapsed`,
+        );
       }
     }
 
+    // Concurrent rows can resolve out of order — sorted back into row order
+    // so the returned list (and the exported workbook below) reads top to
+    // bottom the same way the source file did.
+    collectedFailures.sort((a, b) => a.failure.row - b.failure.row);
+    const failures = collectedFailures.map((f) => f.failure);
+
     let failuresWorkbookBase64: string | null = null;
-    if (failures.length > 0) {
+    if (collectedFailures.length > 0) {
       const failureWorkbook = new ExcelJS.Workbook();
       const failureSheet = failureWorkbook.addWorksheet('Failed rows');
       failureSheet.addRow([...COLUMNS.map((c) => c.header), 'Error']);
       failureSheet.getRow(1).font = { bold: true };
-      for (const row of rawRowsForFailures) failureSheet.addRow(row);
+      for (const { rawRow } of collectedFailures) failureSheet.addRow(rawRow);
       failureSheet.columns.forEach((col) => {
         col.width = 20;
       });
       const buffer = await failureWorkbook.xlsx.writeBuffer();
       failuresWorkbookBase64 = Buffer.from(buffer).toString('base64');
     }
+
+    this.logger.log(
+      `Bulk import finished — ${totalRows} row(s), ${successCount} succeeded, ${failures.length} failed, ${elapsed()} elapsed`,
+    );
 
     return {
       totalRows,
