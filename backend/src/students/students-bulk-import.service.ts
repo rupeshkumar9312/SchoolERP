@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
 import ExcelJS from 'exceljs';
+import { reserveEdvanceIdBlock } from '../common/generate-edvance-id';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateStudentDto } from './dto/create-student.dto';
 import { StudentsService } from './students.service';
@@ -324,15 +325,30 @@ export class StudentsBulkImportService {
       candidates.push({ dto, recordFailure });
     }
 
+    // Reserved once, up front, for the whole file — not per row and not
+    // per batch. This is what actually fixes the concurrency: before this,
+    // every one of the concurrent rows below called nextEdvanceId() itself
+    // and they all serialized on the same id_sequences row lock, which is
+    // what was queuing transactions long enough for the DB to drop the
+    // connection. A row whose id ends up unused (failed validation, a
+    // duplicate admission number) just leaves a gap in the sequence.
+    const reservedIds =
+      candidates.length > 0
+        ? await reserveEdvanceIdBlock(this.prisma, 'STU', candidates.length)
+        : [];
+
     this.logger.log(
       `Bulk import validating/creating ${candidates.length} candidate row(s), ${IMPORT_CONCURRENCY} at a time`,
     );
 
     let processed = 0;
     let lastLoggedAt = 0;
-    for (const batch of chunk(candidates, IMPORT_CONCURRENCY)) {
+    for (const batch of chunk(
+      candidates.map((c, i) => ({ ...c, reservedEdvanceId: reservedIds[i] })),
+      IMPORT_CONCURRENCY,
+    )) {
       await Promise.all(
-        batch.map(async ({ dto, recordFailure }) => {
+        batch.map(async ({ dto, recordFailure, reservedEdvanceId }) => {
           const validationErrors = await validate(dto);
           if (validationErrors.length > 0) {
             const message = validationErrors
@@ -344,7 +360,7 @@ export class StudentsBulkImportService {
           }
 
           try {
-            await this.students.create(dto, actorId);
+            await this.students.create(dto, actorId, reservedEdvanceId);
             successCount++;
           } catch (error) {
             recordFailure(error instanceof Error ? error.message : 'Failed to create student');

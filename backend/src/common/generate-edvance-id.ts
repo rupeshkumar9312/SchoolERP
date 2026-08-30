@@ -27,6 +27,33 @@ export async function nextEdvanceId(
   return `EDV-${prefix}-${String(seq.lastValue).padStart(ID_WIDTH[prefix], '0')}`;
 }
 
+/** Reserves `count` consecutive Edvance IDs in a single round trip, for
+ * bulk creation — the whole point is to touch `id_sequences` once instead
+ * of once per row. Deliberately a standalone call, not run inside the
+ * caller's per-row transaction the way nextEdvanceId() is: if a reserved ID
+ * ends up unused (its row fails validation, a duplicate admission number,
+ * etc.) that's just a gap in the sequence, same as any other serial-number
+ * scheme — an acceptable trade for not serializing every row on one lock. */
+export async function reserveEdvanceIdBlock(
+  prisma: Prisma.TransactionClient,
+  prefix: EdvanceIdPrefix,
+  count: number,
+): Promise<string[]> {
+  if (count <= 0) return [];
+  const seq = await prisma.idSequence.upsert({
+    where: { prefix },
+    create: { prefix, lastValue: count },
+    update: { lastValue: { increment: count } },
+  });
+  const last = seq.lastValue;
+  const first = last - count + 1;
+  const ids: string[] = [];
+  for (let n = first; n <= last; n++) {
+    ids.push(`EDV-${prefix}-${String(n).padStart(ID_WIDTH[prefix], '0')}`);
+  }
+  return ids;
+}
+
 /** Short login alias derived from an edvanceId: 'EDV-TCH-000123' -> 'tch000123'.
  * Not stored — computed from `edvanceId` both for display (so an admin has
  * something short to hand a teacher/student) and for login resolution (see

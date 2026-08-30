@@ -118,8 +118,19 @@ export class StudentsService {
    * in one transaction, at admission time — mirrors TeachersService.create()'s
    * "user + profile together" flow. The generated password is returned once,
    * in plaintext, for the admin to hand to the student/guardian; it is never
-   * stored or retrievable again. */
-  async create(dto: CreateStudentDto, actorId?: number): Promise<StudentCreateResult> {
+   * stored or retrievable again.
+   *
+   * `reservedEdvanceId` is for bulk import only — every other caller omits
+   * it and gets the normal one-at-a-time nextEdvanceId() behavior
+   * unchanged. Bulk import reserves a whole block up front (see
+   * reserveEdvanceIdBlock()) so N concurrent rows aren't all fighting over
+   * the same id_sequences row lock — that contention is what was closing
+   * connections under load before this existed. */
+  async create(
+    dto: CreateStudentDto,
+    actorId?: number,
+    reservedEdvanceId?: string,
+  ): Promise<StudentCreateResult> {
     await this.assertSectionBelongsToClass(dto.sectionId, dto.classId);
 
     const role = await this.prisma.role.findUnique({ where: { name: STUDENT_ROLE } });
@@ -135,10 +146,39 @@ export class StudentsService {
       // connect }` for every field once one relation is nested, which would
       // mean rewriting classId/sectionId too. A transaction keeps the same
       // atomicity with the plain scalar-FK style used everywhere else here.
-      const { student, loginEmail } = await withTransactionRetry(() =>
+      const { student, loginEmail, alreadyExisted } = await withTransactionRetry(() =>
         this.prisma.$transaction(
           async (tx) => {
-            const edvanceId = await nextEdvanceId(tx, 'STU');
+            // withTransactionRetry re-runs this whole callback on a dropped
+            // connection (P2028) — if the DB actually committed the previous
+            // attempt and only the acknowledgment was lost (a real risk on
+            // a remote host with no pooler in front of it), blindly
+            // redoing the inserts creates a genuine duplicate. Blank
+            // admission numbers have no constraint to catch that. Only
+            // reservedEdvanceId callers (bulk import) hit this, since only
+            // they can retry with the *same* id twice — a fresh
+            // nextEdvanceId() call would never collide with itself.
+            if (reservedEdvanceId) {
+              const existingUser = await tx.user.findUnique({
+                where: { edvanceId: reservedEdvanceId },
+                select: { id: true, email: true },
+              });
+              if (existingUser) {
+                const existingStudent = await tx.student.findUnique({
+                  where: { userId: existingUser.id },
+                  select: STUDENT_SELECT,
+                });
+                if (existingStudent) {
+                  return {
+                    student: existingStudent,
+                    loginEmail: existingUser.email,
+                    alreadyExisted: true,
+                  };
+                }
+              }
+            }
+
+            const edvanceId = reservedEdvanceId ?? (await nextEdvanceId(tx, 'STU'));
             const loginEmail = `${edvanceId.toLowerCase()}@${STUDENT_LOGIN_EMAIL_DOMAIN}`;
             const user = await tx.user.create({
               data: { name: dto.name, email: loginEmail, edvanceId, passwordHash, roleId: role.id },
@@ -160,7 +200,7 @@ export class StudentsService {
               },
               select: STUDENT_SELECT,
             });
-            return { student, loginEmail };
+            return { student, loginEmail, alreadyExisted: false };
           },
           // Generous margin over Prisma's 2s/5s defaults — this transaction
           // is 3 sequential round-trips, and on a remote DB host with no
@@ -168,19 +208,25 @@ export class StudentsService {
           { maxWait: 10000, timeout: 15000 },
         ),
       );
-      await this.audit.record({
-        entityType: 'Student',
-        entityId: student.id,
-        action: 'CREATE',
-        userId: actorId,
-        newValues: student,
-      });
+      // Skip the audit write too — it already ran on whichever earlier
+      // attempt actually created this row.
+      if (!alreadyExisted) {
+        await this.audit.record({
+          entityType: 'Student',
+          entityId: student.id,
+          action: 'CREATE',
+          userId: actorId,
+          newValues: student,
+        });
+      }
       return {
         ...this.toView(student),
         login: {
           email: loginEmail,
           alias: edvanceLoginAlias(student.user!.edvanceId),
-          temporaryPassword,
+          temporaryPassword: alreadyExisted
+            ? '(unavailable — this row was already imported by an earlier attempt)'
+            : temporaryPassword,
         },
       };
     } catch (error) {
