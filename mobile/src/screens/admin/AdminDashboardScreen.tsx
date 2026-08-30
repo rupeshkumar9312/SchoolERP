@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import type { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
 import { StyleSheet, Text, View } from 'react-native';
@@ -8,13 +8,16 @@ import { useAuth } from '../../auth/AuthContext';
 import { ATTENDANCE_STATUS_META } from '../../constants';
 import { Button } from '../../components/Button';
 import { Card } from '../../components/Card';
+import { ClassBarChart } from '../../components/ClassBarChart';
+import { DateField } from '../../components/DateField';
 import { DonutChart } from '../../components/DonutChart';
 import { ErrorView } from '../../components/ErrorView';
 import { LoadingView } from '../../components/LoadingView';
 import { Screen } from '../../components/Screen';
 import { StatTile } from '../../components/StatTile';
+import { AttendanceTrendChart } from '../../components/TrendChart';
 import { colors, fonts, radius, spacing } from '../../theme';
-import { formatLongDate, greeting } from '../../utils/format';
+import { formatLongDate, greeting, shiftIsoDate, todayIsoDate } from '../../utils/format';
 import type { AdminTabsParamList } from '../../navigation/types';
 
 type Props = BottomTabScreenProps<AdminTabsParamList, 'Dashboard'>;
@@ -70,28 +73,46 @@ function AttendanceChart(props: BreakdownProps): React.JSX.Element {
   );
 }
 
+const TODAY_ISO = todayIsoDate();
+
 export function AdminDashboardScreen({ navigation }: Props): React.JSX.Element {
   const { user } = useAuth();
   const [summary, setSummary] = useState<AdminSummary | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [trendFrom, setTrendFrom] = useState(() => shiftIsoDate(TODAY_ISO, -13));
+  const [trendTo, setTrendTo] = useState(TODAY_ISO);
 
   const load = useCallback(async () => {
     setError(null);
     try {
-      setSummary(await getAdminSummary());
+      setSummary(await getAdminSummary(trendFrom, trendTo));
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not load dashboard');
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [trendFrom, trendTo]);
 
   useFocusEffect(
     useCallback(() => {
       load();
     }, [load]),
   );
+
+  // A trend-range change while the screen is already focused (picking a
+  // date doesn't blur/refocus the tab) needs its own trigger — focus alone
+  // wouldn't fire again. Skips its first run since useFocusEffect above
+  // already covers the initial load.
+  const didMountTrendEffect = useRef(false);
+  useEffect(() => {
+    if (!didMountTrendEffect.current) {
+      didMountTrendEffect.current = true;
+      return;
+    }
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [trendFrom, trendTo]);
 
   if (loading) return <LoadingView />;
   if (error || !summary) return <Screen><ErrorView message={error ?? 'No data'} onRetry={load} /></Screen>;
@@ -118,6 +139,27 @@ export function AdminDashboardScreen({ navigation }: Props): React.JSX.Element {
 
       <Card style={styles.card}>
         <View style={styles.cardHead}>
+          <Text style={styles.cardTitle}>Attendance trend</Text>
+        </View>
+        <View style={styles.trendRangeRow}>
+          <View style={styles.trendRangeField}>
+            <DateField label="From" value={trendFrom} maximumDate={new Date(`${trendTo}T00:00:00`)} onChange={setTrendFrom} />
+          </View>
+          <View style={styles.trendRangeField}>
+            <DateField
+              label="To"
+              value={trendTo}
+              minimumDate={new Date(`${trendFrom}T00:00:00`)}
+              maximumDate={new Date(`${TODAY_ISO}T00:00:00`)}
+              onChange={setTrendTo}
+            />
+          </View>
+        </View>
+        <AttendanceTrendChart points={summary.studentAttendanceTrend} />
+      </Card>
+
+      <Card style={styles.card}>
+        <View style={styles.cardHead}>
           <Text style={styles.cardTitle}>Student attendance today</Text>
           <Text style={styles.muted}>{sa.date}</Text>
         </View>
@@ -138,6 +180,14 @@ export function AdminDashboardScreen({ navigation }: Props): React.JSX.Element {
           <Text style={styles.muted}>{ta.date}</Text>
         </View>
         <AttendanceChart {...ta} />
+      </Card>
+
+      <Card style={styles.card}>
+        <View style={styles.cardHead}>
+          <Text style={styles.cardTitle}>Enrollment vs. attendance by class</Text>
+        </View>
+        <Text style={styles.muted}>Today, lowest attendance first</Text>
+        <ClassBarChart classes={summary.classAttendanceToday} />
       </Card>
 
       <Card style={styles.card}>
@@ -167,6 +217,8 @@ const styles = StyleSheet.create({
   greeting: { fontSize: 22, fontFamily: fonts.headingBold, color: colors.text },
   date: { fontSize: 14, fontFamily: fonts.body, color: colors.textMuted, marginTop: 2 },
   subtext: { fontSize: 14, fontFamily: fonts.body, color: colors.textMuted, marginTop: spacing.xs },
+  trendRangeRow: { flexDirection: 'row', gap: spacing.sm },
+  trendRangeField: { flex: 1 },
   statsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
   card: { gap: spacing.sm },
   cardHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm },

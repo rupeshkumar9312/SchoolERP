@@ -10,6 +10,21 @@ interface AttendanceBreakdown {
   presentPercent: number | null;
 }
 
+export interface AttendanceTrendPoint {
+  date: string;
+  presentPercent: number | null;
+  totalMarked: number;
+}
+
+export interface ClassAttendanceToday {
+  classId: number;
+  className: string;
+  presentPercent: number | null;
+  totalMarked: number;
+  presentCount: number;
+  totalStudents: number;
+}
+
 export interface AdminSummary {
   academicYear: { id: number; name: string } | null;
   totals: { students: number; teachers: number; classes: number; sections: number };
@@ -20,6 +35,8 @@ export interface AdminSummary {
     totalSections: number;
   };
   teacherAttendanceToday: AttendanceBreakdown & { date: string; totalTeachers: number };
+  studentAttendanceTrend: AttendanceTrendPoint[];
+  classAttendanceToday: ClassAttendanceToday[];
 }
 
 export interface TeacherClass {
@@ -58,8 +75,12 @@ export interface StudentSummary {
   }>;
 }
 
-export function getAdminSummary(): Promise<AdminSummary> {
-  return apiGet<AdminSummary>('/dashboard/admin-summary');
+export function getAdminSummary(trendFrom?: string, trendTo?: string): Promise<AdminSummary> {
+  const params = new URLSearchParams();
+  if (trendFrom) params.set('trendFrom', trendFrom);
+  if (trendTo) params.set('trendTo', trendTo);
+  const qs = params.toString();
+  return apiGet<AdminSummary>(`/dashboard/admin-summary${qs ? `?${qs}` : ''}`);
 }
 
 export function getTeacherSummary(): Promise<TeacherSummary> {
