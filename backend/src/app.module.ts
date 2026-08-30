@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
-import { APP_INTERCEPTOR } from '@nestjs/core';
+import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
+import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { AcademicModule } from './academic/academic.module';
 import { AnnouncementsModule } from './announcements/announcements.module';
 import { AssignmentsModule } from './assignments/assignments.module';
@@ -28,6 +29,13 @@ import { UsersModule } from './users/users.module';
       isGlobal: true,
       validate: validateEnv,
     }),
+    // Global request-rate cap, applied per client IP. Route-specific
+    // overrides (tighter on login/refresh) live via @Throttle() on those
+    // handlers; @SkipThrottle() exempts the health-check routes so an
+    // uptime prober can never trip it. See ThrottlerGuard registration
+    // below — trust-proxy is enabled in main.ts so this reads the real
+    // client IP behind Render's load balancer, not the proxy's.
+    ThrottlerModule.forRoot([{ name: 'default', ttl: 60_000, limit: 100 }]),
     PrismaModule,
     HealthModule,
     AuditModule,
@@ -47,6 +55,9 @@ import { UsersModule } from './users/users.module';
     PushNotificationsModule,
     ExamsModule,
   ],
-  providers: [{ provide: APP_INTERCEPTOR, useClass: LoggingInterceptor }],
+  providers: [
+    { provide: APP_INTERCEPTOR, useClass: LoggingInterceptor },
+    { provide: APP_GUARD, useClass: ThrottlerGuard },
+  ],
 })
 export class AppModule {}

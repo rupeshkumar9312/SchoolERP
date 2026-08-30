@@ -10,6 +10,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { Throttle } from '@nestjs/throttler';
 import type { Request, Response } from 'express';
 import type { LoginContext } from './auth.service';
 import { AuthService } from './auth.service';
@@ -61,6 +62,13 @@ export class AuthController {
     private readonly config: ConfigService,
   ) {}
 
+  // No JwtAuthGuard here (can't require a token to get a token) — this is
+  // the one route on the whole API anyone on the internet can call with
+  // just a guess, and bcrypt.compare() makes each guess deliberately
+  // CPU-expensive. Tighter than the app-wide default so a brute-force
+  // script gets shut down fast without the global limit having to be low
+  // enough to also protect this route.
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @Post('login')
   @HttpCode(200)
   async login(
@@ -77,6 +85,9 @@ export class AuthController {
     };
   }
 
+  // Also unauthenticated by nature (the refresh token itself is the proof),
+  // so it gets the same tight cap as login rather than the app-wide default.
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @Post('refresh')
   @HttpCode(200)
   async refresh(

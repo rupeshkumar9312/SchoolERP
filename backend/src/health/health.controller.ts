@@ -1,4 +1,5 @@
 import { Controller, Get, Logger } from '@nestjs/common';
+import { SkipThrottle } from '@nestjs/throttler';
 import { PrismaService } from '../prisma/prisma.service';
 
 type DependencyStatus = 'up' | 'down';
@@ -19,6 +20,10 @@ export interface LivenessResponse {
   timestamp: string;
 }
 
+// A platform health probe or uptime monitor polls these on its own schedule,
+// often well under a minute apart — subjecting it to the app-wide rate
+// limit could get it 429'd and mistaken for the service being down.
+@SkipThrottle()
 @Controller('health')
 export class HealthController {
   private readonly logger = new Logger(HealthController.name);
