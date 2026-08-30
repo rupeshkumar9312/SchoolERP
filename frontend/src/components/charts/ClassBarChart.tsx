@@ -15,29 +15,25 @@ const HEIGHT = 240;
 const PAD = { top: 26, right: 12, bottom: 30, left: 12 };
 const PLOT_W = WIDTH - PAD.left - PAD.right;
 const PLOT_H = HEIGHT - PAD.top - PAD.bottom;
-const GRID_LINES = [0, 25, 50, 75, 100];
+const GRID_LINES = 4; // evenly-spaced lines, count scale is per-render (max enrollment varies)
 const BASE_Y = PAD.top + PLOT_H;
 
-function toneFor(percent: number): string {
+function toneFor(percent: number | null): string {
+  if (percent === null) return 'var(--color-text-muted)';
   if (percent >= 90) return 'var(--color-success)';
   if (percent >= 75) return 'var(--color-warning)';
   return 'var(--color-danger)';
-}
-
-function yAt(percent: number): number {
-  return PAD.top + (1 - percent / 100) * PLOT_H;
 }
 
 function truncate(name: string): string {
   return name.length > 8 ? `${name.slice(0, 7)}…` : name;
 }
 
-/** Today's per-class present %, lowest first — the class that needs a
- * follow-up call is the one an admin wants to see without scrolling, so
- * this deliberately doesn't sort "nicest number first." Classes with
- * nothing marked yet are already excluded upstream (dashboard.service.ts).
- * Drawn as an actual bar chart (shared grid/axis with the trend chart)
- * rather than a stack of flat-colored progress rows. */
+/** Today's per-class attendance next to each class's total enrollment —
+ * lowest attendance % first, so the class that needs a follow-up call is
+ * the one an admin sees without scrolling. Two bars per class (enrolled vs
+ * present) rather than a percent alone, so a "100%" class of 3 doesn't
+ * read the same as a "100%" class of 40. */
 export function ClassBarChart({ classes = NO_CLASSES }: ClassBarChartProps) {
   const [grown, setGrown] = useState(false);
 
@@ -56,39 +52,83 @@ export function ClassBarChart({ classes = NO_CLASSES }: ClassBarChartProps) {
   const hiddenCount = sorted.length - shown.length;
 
   if (shown.length === 0) {
-    return <p className="muted">No class has marked attendance yet today.</p>;
+    return <p className="muted">No students enrolled in any class yet.</p>;
   }
 
+  const maxCount = Math.max(...shown.map((c) => c.totalStudents), 1);
+  // Round the axis ceiling up to a tidy number above the tallest bar, so it
+  // never touches the top edge and gridlines land on round-ish values.
+  const axisMax = Math.ceil((maxCount * 1.15) / 5) * 5 || 5;
+  const yAt = (count: number) => PAD.top + (1 - count / axisMax) * PLOT_H;
+
   const slot = PLOT_W / shown.length;
-  const barWidth = Math.min(64, slot * 0.5);
+  const barWidth = Math.min(26, slot * 0.24);
+  const barGap = Math.max(3, barWidth * 0.25);
 
   return (
     <div className="class-bar-chart">
+      <div className="class-bar-legend">
+        <span className="class-bar-legend-item">
+          <span className="class-bar-legend-dot class-bar-legend-dot-total" /> Total students
+        </span>
+        <span className="class-bar-legend-item">
+          <span className="class-bar-legend-dot class-bar-legend-dot-present" /> Present today
+        </span>
+      </div>
       <svg viewBox={`0 0 ${WIDTH} ${HEIGHT}`} preserveAspectRatio="none" className="class-bar-chart-svg">
-        {GRID_LINES.map((g) => (
-          <line key={g} className="trend-chart-grid" x1={PAD.left} x2={WIDTH - PAD.right} y1={yAt(g)} y2={yAt(g)} />
+        {Array.from({ length: GRID_LINES + 1 }, (_, i) => (axisMax / GRID_LINES) * i).map((g) => (
+          <line
+            key={g}
+            className="trend-chart-grid"
+            x1={PAD.left}
+            x2={WIDTH - PAD.right}
+            y1={yAt(g)}
+            y2={yAt(g)}
+          />
         ))}
         {shown.map((c, i) => {
-          const pct = c.presentPercent ?? 0;
-          const cx = PAD.left + slot * i + slot / 2;
-          const barX = cx - barWidth / 2;
-          const barY = grown ? yAt(pct) : BASE_Y;
-          const barHeight = grown ? BASE_Y - yAt(pct) : 0;
+          const groupCenter = PAD.left + slot * i + slot / 2;
+          const totalBarX = groupCenter - barGap / 2 - barWidth;
+          const presentBarX = groupCenter + barGap / 2;
+
+          const totalY = grown ? yAt(c.totalStudents) : BASE_Y;
+          const totalHeight = grown ? BASE_Y - yAt(c.totalStudents) : 0;
+          const presentY = grown ? yAt(c.presentCount) : BASE_Y;
+          const presentHeight = grown ? BASE_Y - yAt(c.presentCount) : 0;
+
           return (
             <g key={c.classId}>
               <rect
-                className="class-bar-rect"
-                x={barX}
-                y={barY}
+                className="class-bar-rect class-bar-rect-total"
+                x={totalBarX}
+                y={totalY}
                 width={barWidth}
-                height={barHeight}
-                rx={6}
-                fill={toneFor(pct)}
+                height={totalHeight}
+                rx={4}
               />
-              <text x={cx} y={barY - 8} textAnchor="middle" className="class-bar-value-label">
-                {pct}%
+              <text x={totalBarX + barWidth / 2} y={totalY - 6} textAnchor="middle" className="class-bar-value-label">
+                {c.totalStudents}
               </text>
-              <text x={cx} y={BASE_Y + 20} textAnchor="middle" className="class-bar-name-label">
+
+              <rect
+                className="class-bar-rect"
+                x={presentBarX}
+                y={presentY}
+                width={barWidth}
+                height={presentHeight}
+                rx={4}
+                fill={toneFor(c.presentPercent)}
+              />
+              <text
+                x={presentBarX + barWidth / 2}
+                y={presentY - 6}
+                textAnchor="middle"
+                className="class-bar-value-label"
+              >
+                {c.presentPercent === null ? '—' : c.presentCount}
+              </text>
+
+              <text x={groupCenter} y={BASE_Y + 20} textAnchor="middle" className="class-bar-name-label">
                 {truncate(c.className)}
               </text>
             </g>

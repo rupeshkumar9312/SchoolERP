@@ -21,6 +21,8 @@ export interface ClassAttendanceToday {
   className: string;
   presentPercent: number | null;
   totalMarked: number;
+  presentCount: number;
+  totalStudents: number;
 }
 
 export interface AdminSummary {

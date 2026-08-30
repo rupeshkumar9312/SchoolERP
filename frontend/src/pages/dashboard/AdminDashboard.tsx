@@ -179,8 +179,8 @@ export function AdminDashboard() {
 
       <section className="card">
         <div className="card-head">
-          <h2>Attendance by class</h2>
-          <span className="muted">Today, lowest first</span>
+          <h2>Enrollment vs. attendance by class</h2>
+          <span className="muted">Today, lowest attendance first</span>
         </div>
         <ClassBarChart classes={summary.classAttendanceToday} />
       </section>

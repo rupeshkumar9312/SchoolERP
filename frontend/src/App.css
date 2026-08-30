@@ -1307,6 +1307,35 @@ button.danger:hover:not(:disabled) {
   margin-top: 0.5rem;
 }
 
+.class-bar-legend {
+  display: flex;
+  gap: 1.1rem;
+  margin-bottom: 0.5rem;
+}
+
+.class-bar-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.78rem;
+  color: var(--color-text-muted);
+}
+
+.class-bar-legend-dot {
+  width: 0.6rem;
+  height: 0.6rem;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
+.class-bar-legend-dot-total {
+  background: var(--color-border);
+}
+
+.class-bar-legend-dot-present {
+  background: var(--color-primary);
+}
+
 .class-bar-chart-svg {
   display: block;
   width: 100%;
@@ -1317,6 +1346,10 @@ button.danger:hover:not(:disabled) {
   transition:
     height 0.7s var(--ease-premium),
     y 0.7s var(--ease-premium);
+}
+
+.class-bar-rect-total {
+  fill: var(--color-border);
 }
 
 .class-bar-value-label {

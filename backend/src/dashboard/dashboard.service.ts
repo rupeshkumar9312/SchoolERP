@@ -22,6 +22,11 @@ export interface ClassAttendanceToday {
   className: string;
   presentPercent: number | null;
   totalMarked: number;
+  presentCount: number;
+  /** Total active enrollment for the class — independent of today's
+   * attendance, so a class that hasn't marked yet still shows its roster
+   * size rather than disappearing from the comparison. */
+  totalStudents: number;
 }
 
 export interface AdminSummaryView {
@@ -40,9 +45,11 @@ export interface AdminSummaryView {
    * `presentPercent: null` rather than 0, so the chart can render it as a
    * gap instead of a misleading dip to zero. */
   studentAttendanceTrend: AttendanceTrendPoint[];
-  /** Today's present % per class, classes with nothing marked yet omitted
-   * — an all-zero bar next to real ones reads as "attendance crashed,"
-   * not "not marked yet." */
+  /** Today's present count/% per class alongside each class's total
+   * enrollment — every class with at least one active student is
+   * included, even ones that haven't marked attendance yet (presentCount
+   * 0, presentPercent null), so the enrollment-vs-attendance comparison on
+   * the dashboard doesn't just silently drop them. */
   classAttendanceToday: ClassAttendanceToday[];
 }
 
@@ -104,15 +111,23 @@ export class DashboardService {
     const classWhere = currentYear ? { academicYearId: currentYear.id } : {};
     const { from: trendStart, to: trendEnd } = this.resolveTrendRange(trendFrom, trendTo);
 
-    const [totalStudents, totalTeachers, totalClasses, totalSections, classList] = await Promise.all([
-      this.prisma.student.count({ where: { isActive: true, class: classWhere } }),
-      this.prisma.teacher.count({ where: { user: { isActive: true } } }),
-      this.prisma.class.count({ where: classWhere }),
-      this.prisma.section.count({ where: { class: classWhere } }),
-      this.prisma.class.findMany({ where: classWhere, select: { id: true, name: true } }),
-    ]);
+    const [totalStudents, totalTeachers, totalClasses, totalSections, classList] =
+      await Promise.all([
+        this.prisma.student.count({ where: { isActive: true, class: classWhere } }),
+        this.prisma.teacher.count({ where: { user: { isActive: true } } }),
+        this.prisma.class.count({ where: classWhere }),
+        this.prisma.section.count({ where: { class: classWhere } }),
+        this.prisma.class.findMany({ where: classWhere, select: { id: true, name: true } }),
+      ]);
 
-    const [studentRows, sectionsMarkedRows, teacherRows, trendRows, classTodayRows] = await Promise.all([
+    const [
+      studentRows,
+      sectionsMarkedRows,
+      teacherRows,
+      trendRows,
+      classTodayRows,
+      classEnrollmentRows,
+    ] = await Promise.all([
       this.prisma.studentAttendance.groupBy({
         by: ['status'],
         where: { date: new Date(today), student: { class: classWhere } },
@@ -130,12 +145,20 @@ export class DashboardService {
       }),
       this.prisma.studentAttendance.groupBy({
         by: ['date', 'status'],
-        where: { date: { gte: new Date(trendStart), lte: new Date(trendEnd) }, student: { class: classWhere } },
+        where: {
+          date: { gte: new Date(trendStart), lte: new Date(trendEnd) },
+          student: { class: classWhere },
+        },
         _count: { _all: true },
       }),
       this.prisma.studentAttendance.groupBy({
         by: ['classId', 'status'],
         where: { date: new Date(today), student: { class: classWhere } },
+        _count: { _all: true },
+      }),
+      this.prisma.student.groupBy({
+        by: ['classId'],
+        where: { isActive: true, class: classWhere },
         _count: { _all: true },
       }),
     ]);
@@ -157,7 +180,7 @@ export class DashboardService {
       },
       teacherAttendanceToday: { ...this.toBreakdown(teacherRows), date: today, totalTeachers },
       studentAttendanceTrend: this.toTrend(trendRows, trendStart, trendEnd),
-      classAttendanceToday: this.toClassBreakdown(classTodayRows, classList),
+      classAttendanceToday: this.toClassBreakdown(classTodayRows, classEnrollmentRows, classList),
     };
   }
 
@@ -364,34 +387,41 @@ export class DashboardService {
       return {
         date,
         totalMarked,
-        presentPercent: totalMarked === 0 ? null : Math.round(((bucket?.present ?? 0) / totalMarked) * 100),
+        presentPercent:
+          totalMarked === 0 ? null : Math.round(((bucket?.present ?? 0) / totalMarked) * 100),
       };
     });
   }
 
   private toClassBreakdown(
-    rows: Array<{ classId: number; status: AttendanceStatus; _count: { _all: number } }>,
+    attendanceRows: Array<{ classId: number; status: AttendanceStatus; _count: { _all: number } }>,
+    enrollmentRows: Array<{ classId: number; _count: { _all: number } }>,
     classes: Array<{ id: number; name: string }>,
   ): ClassAttendanceToday[] {
     const buckets = new Map<number, { present: number; totalMarked: number }>();
-    for (const row of rows) {
+    for (const row of attendanceRows) {
       const bucket = buckets.get(row.classId) ?? { present: 0, totalMarked: 0 };
       const count = row._count._all;
       bucket.totalMarked += count;
       if (row.status === 'PRESENT') bucket.present += count;
       buckets.set(row.classId, bucket);
     }
+    const enrollmentByClass = new Map(enrollmentRows.map((r) => [r.classId, r._count._all]));
+
     return classes
       .map((c) => {
         const bucket = buckets.get(c.id);
         const totalMarked = bucket?.totalMarked ?? 0;
+        const presentCount = bucket?.present ?? 0;
         return {
           classId: c.id,
           className: c.name,
           totalMarked,
-          presentPercent: totalMarked === 0 ? null : Math.round(((bucket?.present ?? 0) / totalMarked) * 100),
+          presentCount,
+          presentPercent: totalMarked === 0 ? null : Math.round((presentCount / totalMarked) * 100),
+          totalStudents: enrollmentByClass.get(c.id) ?? 0,
         };
       })
-      .filter((c) => c.totalMarked > 0);
+      .filter((c) => c.totalStudents > 0);
   }
 }
