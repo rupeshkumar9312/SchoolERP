@@ -18,6 +18,11 @@ export class UpdateStudentDto {
   @IsOptional()
   @IsString()
   @MinLength(1)
+  aadharNumber?: string;
+
+  @IsOptional()
+  @IsString()
+  @MinLength(1)
   name?: string;
 
   @IsOptional()

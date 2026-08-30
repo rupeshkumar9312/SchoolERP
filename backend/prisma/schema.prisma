@@ -272,6 +272,10 @@ model AssignmentSubmission {
 model Student {
   id                    Int                    @id @default(autoincrement())
   admissionNo           String?                @unique
+  /// Optional — many admissions happen before the guardian has it on hand.
+  /// Unique when present; MySQL's unique index allows any number of NULLs,
+  /// same as admissionNo above, so leaving it blank never collides.
+  aadharNumber          String?                @unique
   name                  String
   dateOfBirth           DateTime?
   gender                String?

@@ -7,6 +7,11 @@ export class CreateStudentDto {
   @MinLength(1)
   admissionNo?: string;
 
+  @IsOptional()
+  @IsString()
+  @MinLength(1)
+  aadharNumber?: string;
+
   @IsString()
   @MinLength(1)
   name!: string;

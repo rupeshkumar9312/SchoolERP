@@ -26,6 +26,7 @@ const STUDENT_LOGIN_EMAIL_DOMAIN = 'student.edvance.edu';
 export interface StudentView {
   id: number;
   admissionNo: string | null;
+  aadharNumber: string | null;
   name: string;
   dateOfBirth: Date | null;
   gender: string | null;
@@ -56,6 +57,7 @@ export interface StudentCreateResult extends StudentView {
 const STUDENT_SELECT = {
   id: true,
   admissionNo: true,
+  aadharNumber: true,
   name: true,
   dateOfBirth: true,
   gender: true,
@@ -186,6 +188,7 @@ export class StudentsService {
             const student = await tx.student.create({
               data: {
                 admissionNo: dto.admissionNo,
+                aadharNumber: dto.aadharNumber,
                 name: dto.name,
                 dateOfBirth: dto.dateOfBirth ? new Date(dto.dateOfBirth) : undefined,
                 gender: dto.gender,
@@ -251,6 +254,7 @@ export class StudentsService {
         where: { id },
         data: {
           admissionNo: dto.admissionNo,
+          aadharNumber: dto.aadharNumber,
           name: dto.name,
           dateOfBirth: dto.dateOfBirth ? new Date(dto.dateOfBirth) : undefined,
           gender: dto.gender,
@@ -351,6 +355,7 @@ export class StudentsService {
     return {
       id: student.id,
       admissionNo: student.admissionNo,
+      aadharNumber: student.aadharNumber,
       name: student.name,
       dateOfBirth: student.dateOfBirth,
       gender: student.gender,
@@ -370,7 +375,24 @@ export class StudentsService {
 
   private mapError(error: unknown, conflictMessage: string): Error {
     if (error instanceof Prisma.PrismaClientKnownRequestError) {
-      if (error.code === 'P2002') return new ConflictException(conflictMessage);
+      if (error.code === 'P2002') {
+        // Two unique columns now (admissionNo, aadharNumber) can trigger this
+        // — check which one actually collided instead of always blaming
+        // admissionNo, since that's just wrong when it was the Aadhaar
+        // number. Prisma's `target` is a field-name array on most
+        // providers; MySQL sometimes reports the constraint name as a bare
+        // string instead, hence checking both shapes.
+        const target = error.meta?.target;
+        const collided = Array.isArray(target)
+          ? target.join(',')
+          : typeof target === 'string'
+            ? target
+            : '';
+        if (collided.toLowerCase().includes('aadhar')) {
+          return new ConflictException('A student with this Aadhar number already exists');
+        }
+        return new ConflictException(conflictMessage);
+      }
       if (error.code === 'P2025') return new NotFoundException('Not found');
     }
     return error as Error;

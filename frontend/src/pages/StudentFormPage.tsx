@@ -15,6 +15,7 @@ export function StudentFormPage() {
   const [sections, setSections] = useState<academic.Section[]>([]);
 
   const [admissionNo, setAdmissionNo] = useState('');
+  const [aadharNumber, setAadharNumber] = useState('');
   const [name, setName] = useState('');
   const [dateOfBirth, setDateOfBirth] = useState('');
   const [gender, setGender] = useState('');
@@ -62,6 +63,7 @@ export function StudentFormPage() {
     getStudent(Number(id))
       .then(async (student) => {
         setAdmissionNo(student.admissionNo ?? '');
+        setAadharNumber(student.aadharNumber ?? '');
         setName(student.name);
         setDateOfBirth(student.dateOfBirth?.slice(0, 10) ?? '');
         setGender(student.gender ?? '');
@@ -95,6 +97,7 @@ export function StudentFormPage() {
     try {
       const payload = {
         admissionNo: admissionNo.trim() || undefined,
+        aadharNumber: aadharNumber.trim() || undefined,
         name,
         dateOfBirth: dateOfBirth || undefined,
         gender: gender || undefined,
@@ -178,6 +181,11 @@ export function StudentFormPage() {
         <label className="field">
           <span>Admission number</span>
           <input value={admissionNo} onChange={(e) => setAdmissionNo(e.target.value)} />
+        </label>
+
+        <label className="field">
+          <span>Aadhar number</span>
+          <input value={aadharNumber} onChange={(e) => setAadharNumber(e.target.value)} />
         </label>
 
         <label className="field">
