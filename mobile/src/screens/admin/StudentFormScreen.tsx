@@ -33,6 +33,7 @@ export function StudentFormScreen({ route, navigation }: Props): React.JSX.Eleme
   const [sections, setSections] = useState<academic.Section[]>([]);
 
   const [admissionNo, setAdmissionNo] = useState(existing?.admissionNo ?? '');
+  const [aadharNumber, setAadharNumber] = useState(existing?.aadharNumber ?? '');
   const [name, setName] = useState(existing?.name ?? '');
   const [dateOfBirth, setDateOfBirth] = useState(existing?.dateOfBirth?.slice(0, 10) ?? '');
   const [gender, setGender] = useState(existing?.gender ?? '');
@@ -104,6 +105,7 @@ export function StudentFormScreen({ route, navigation }: Props): React.JSX.Eleme
     try {
       const payload = {
         admissionNo: admissionNo.trim() || undefined,
+        aadharNumber: aadharNumber.trim() || undefined,
         name: name.trim(),
         dateOfBirth: dateOfBirth.trim() || undefined,
         gender: gender || undefined,
@@ -177,6 +179,11 @@ export function StudentFormScreen({ route, navigation }: Props): React.JSX.Eleme
         <View>
           <Text style={styles.label}>Admission number</Text>
           <TextInput style={styles.input} value={admissionNo} onChangeText={setAdmissionNo} placeholderTextColor={colors.textMuted} />
+        </View>
+
+        <View>
+          <Text style={styles.label}>Aadhar number</Text>
+          <TextInput style={styles.input} value={aadharNumber} onChangeText={setAadharNumber} placeholderTextColor={colors.textMuted} />
         </View>
 
         <View>

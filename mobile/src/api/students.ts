@@ -4,6 +4,7 @@ import { appendPageParams, PageParams, Paginated } from './pagination';
 export interface Student {
   id: number;
   admissionNo: string | null;
+  aadharNumber: string | null;
   name: string;
   dateOfBirth: string | null;
   gender: string | null;
@@ -35,6 +36,7 @@ export interface StudentFilters extends PageParams {
 
 export interface CreateStudentPayload {
   admissionNo?: string;
+  aadharNumber?: string;
   name: string;
   dateOfBirth?: string;
   gender?: string;
@@ -49,6 +51,7 @@ export interface CreateStudentPayload {
 
 export interface UpdateStudentPayload {
   admissionNo?: string;
+  aadharNumber?: string;
   name?: string;
   dateOfBirth?: string;
   gender?: string;
